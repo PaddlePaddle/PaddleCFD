@@ -1,0 +1,85 @@
+hydra:
+  run:
+    # dynamic output directory according to running time and override name
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  job:
+    name: ${mode} # name of logfile
+    chdir: false # keep current working direcotry unchaned
+  sweep:
+    # output directory for multirun
+    dir: ${hydra.run.dir}
+    subdir: ./
+
+# Setting
+mode: "train"
+seed: 2024
+process: "interpolation"
+output_dir: ${hydra:run.dir}
+
+ckpt_dir: './results/checkpoints/'
+ckpt_path: null
+
+DATA:
+  root_data_dir: "/home/lijialin03/DYffusion/dyffusion/data/physical-nn-benchmark/"
+  dataset:
+    physical_system: 'navier-stokes'
+    window: 1
+    horizon: 16
+    multi_horizon: true
+    num_trajectories: null
+  dataloader:
+    batch_size:
+      train: 32
+      val: 4
+      test: 1
+    num_workers: 0
+    drop_last: false
+  num_test_obstacles: 1
+  test_out_of_distribution: false
+
+INTERPOLATION:
+  window: ${DATA.dataset.window}
+  horizon: ${DATA.dataset.horizon}
+  stack_window_to_channel_dim: true
+  num_predictions: 20
+  prediction_inputs_noise: 0.0
+
+MODEL:
+  model_name: SimpleUnet
+  input_channels: 3
+  output_channels: 3
+  spatial_channels: [221, 42]
+  num_conditional_channels: 2
+  dim: 64
+  input_dropout: 0.0
+  dropout: 0.15
+  upsample_dims: [256, 256]
+  outer_sample_mode: bilinear
+  with_time_emb: true
+
+TRAIN:
+  epochs: 200   # 总训练轮次
+  accumulate_steps: 2   # 梯度累积步数
+  save_freq: 10
+  batch_size: ${DATA.dataloader.batch_size.train}
+  optim:
+    name: "AdamW"
+    learning_rate: 0.0003
+    beta1: 0.9
+    beta2: 0.99
+    epsilon: 1e-08
+    weight_decay: 0.0001
+    grad_clip: ["norm", 1.0]  # 梯度裁剪阈值和算法
+  ckpt_no_suffix: "../scripts/init_paddle"
+
+EVAL:
+  batch_size: ${DATA.dataloader.batch_size.val}
+  ema:  # EMA
+    use_ema: false
+    decay: 0.9999
+  enable_infer_dropout: true
+  prediction_horizon: 64
+  prediction_num_predictions: 50
+  # ckpt_no_suffix: "../scripts/init_paddle"
+  ckpt_no_suffix: "./ckpts/interpolation/3/interpolation_199"
+  verbose: false
