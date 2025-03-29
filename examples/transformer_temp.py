@@ -7,8 +7,6 @@ from typing import Tuple
 import paddle
 import paddle.nn as nn
 
-from ppsci.arch import activation as act_mod
-from ppsci.arch import base
 
 
 def transpose_aux_func(dims, dim0, dim1):
