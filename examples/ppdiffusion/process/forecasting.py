@@ -1,37 +1,36 @@
-from typing import Any, Dict, Sequence
+import math
+from typing import Any, Dict
 
-import numpy as np
 import paddle
 from omegaconf import DictConfig
 
+from .base_process import BaseProcess
 
-class Forecasting:
-    """
-    DYffusion model with a pretrained interpolator
 
-    Args:
-        interpolator: the interpolator model
-        lambda_rec_base: the weight of the reconstruction loss
-        lambda_rec_fb: the weight of the reconstruction loss (using the predicted xt_last as feedback)
-    """
-
+class Forecasting(BaseProcess):
     def __init__(self, cfg: DictConfig):
-        self.cfg = cfg
+        super().__init__(
+            cfg=cfg,
+            num_predictions=cfg.FORECASTING.num_predictions,
+            inputs_noise=cfg.FORECASTING.prediction_inputs_noise,
+        )
+
         self.CHANNEL_DIM = -3
         self.window = cfg.FORECASTING.window
         self.horizon = cfg.FORECASTING.horizon
         self.stack_window_to_channel_dim = cfg.FORECASTING.stack_window_to_channel_dim
         self.num_timesteps = cfg.FORECASTING.num_timesteps
-        self.inputs_noise = cfg.FORECASTING.prediction_inputs_noise
         self.pred_timesteps = cfg.FORECASTING.pred_timesteps
-        self.num_predictions = cfg.FORECASTING.num_predictions
-        self.USE_TIME_AS_EXTRA_INPUT = False
+        self.use_time_as_extra_input = False
 
         self.forward_cond = cfg.FORECASTING.forward_cond
         fcond_options = ["data", "none", "data+noise"]
         assert (
             self.forward_cond in fcond_options
         ), f"Error: forward_cond should be one of {fcond_options} but got {self.forward_cond}."
+
+    def set_model(self, model):
+        self.model = model
 
     def model_cfg_transform(self, cfg_model):
         # TODO: maybe params change
@@ -40,30 +39,6 @@ class Forecasting:
         cfg_new["num_input_channels"] = cfg_model["input_channels"]
         cfg_new["num_output_channels"] = cfg_model["output_channels"]
         return cfg_new
-
-    def get_ensemble_inputs(self, inputs_raw, add_noise=True, flatten_into_batch_dim=True):
-        """Get the inputs for the ensemble predictions"""
-        if inputs_raw is None:
-            return None
-        if self.num_timesteps <= 1:
-            return inputs_raw
-
-        # create a batch of inputs for the ensemble predictions
-        if isinstance(inputs_raw, dict):
-            return {k: self.get_ensemble_inputs(v, add_noise, flatten_into_batch_dim) for k, v in inputs_raw.items()}
-
-        if isinstance(inputs_raw, Sequence):
-            inputs = np.array([inputs_raw] * self.num_timesteps)
-        elif add_noise:
-            noise = self.inputs_noise * paddle.randn(shape=inputs_raw.shape, dtype=inputs_raw.dtype)
-            inputs = paddle.stack([inputs_raw + noise for _ in range(self.num_timesteps)], axis=0)
-        else:
-            inputs = paddle.stack([inputs_raw for _ in range(self.num_timesteps)], axis=0)
-
-        if flatten_into_batch_dim:
-            # flatten num_timesteps and batch dimensions
-            inputs = inputs.reshape([-1] + list(inputs.shape[2:]))
-        return inputs
 
     def transform_inputs(
         self, inputs: paddle.Tensor, time: paddle.Tensor = None, ensemble: bool = True, **kwargs
@@ -80,12 +55,12 @@ class Forecasting:
         data_dict: Dict[str, paddle.Tensor],
         time: paddle.Tensor,
         ensemble: bool,
-        is_autoregressive: bool = False,
+        is_ar_mode: bool = False,
     ) -> Dict[str, Any]:
         dynamics_shape = data_dict["dynamics"].shape  # b, dyn_len, c, h, w = dynamics.shape
         extra_kwargs = {}
-        ensemble_k = ensemble and not is_autoregressive
-        if self.USE_TIME_AS_EXTRA_INPUT:
+        ensemble_k = ensemble and not is_ar_mode
+        if self.use_time_as_extra_input:
             data_dict["time"] = time
         for k, v in data_dict.items():
             if k == "dynamics":
@@ -106,29 +81,20 @@ class Forecasting:
                 extra_kwargs[k] = self.get_ensemble_inputs(v, add_noise=False) if ensemble else v
         return extra_kwargs
 
-    def get_evaluation_inputs(self, data_dict, ensemble=False):
-        dynamics = data_dict["dynamics"]  # dynamics is a (b, t, c, h, w) tensor
-        inputs = dynamics[:, : self.window, ...]
-        inputs = self.transform_inputs(inputs, ensemble=False)
-        x_last = data_dict["dynamics"][:, -1, ...]
-        return x_last
-
-    def get_extra_kwargs(self, data_dict, time=None, ensemble=False):
+    def data_transform(self, data_dict, time=None, ensemble=False, is_ar_mode=False):
         extra_kwargs = self.get_extra_model_kwargs(
             data_dict,
             time=time,
             ensemble=ensemble,
+            is_ar_mode=is_ar_mode,
         )
-        b = data_dict["dynamics"].shape[0]
-        kwargs = {}
-        kwargs["static_cond"] = extra_kwargs["condition"]
-        kwargs["condition"] = inputs
-        kwargs["time"] = (
-            extra_kwargs["time"]
-            if "time" in extra_kwargs
-            else paddle.randint(low=0, high=self.num_timesteps, shape=(b,), dtype="int64")
-        )
-        return kwargs
+        if not is_ar_mode:
+            dynamics = data_dict["dynamics"]  # dynamics is a (b, t, c, h, w) tensor
+            inputs = dynamics[:, : self.window, ...]
+            inputs = self.transform_inputs(inputs, ensemble=ensemble)
+            return inputs, extra_kwargs
+        else:
+            return None, extra_kwargs
 
     def add_noise(self, condition):
         if self.forward_cond == "data":
@@ -145,9 +111,6 @@ class Forecasting:
             noise = paddle.randn_like(condition) * (1 - time_factor)
             return time_factor * condition + noise
 
-    def set_model(self, model):
-        self.model = model
-
     def boundary_conditions(
         self,
         preds: paddle.Tensor,
@@ -155,26 +118,29 @@ class Forecasting:
         metadata,
         time: float = None,
     ) -> paddle.Tensor:
-        print("### datamodule.boundary_conditions")
         batch_size = targets.shape[0]
         for b_i in range(batch_size):
             t_i = time if isinstance(time, float) else time[b_i].item()
-            print("type(t_i)", type(t_i))
-            in_velocity = float(metadata["in_velocity"][b_i].item())
-            fixed_mask_solutions_pressures = metadata["fixed_mask"][b_i, ...]
+            in_vel = float(metadata["in_velocity"][b_i].item())
+            fixed_mask_sol_press = metadata["fixed_mask"][b_i, ...]
             assert (
-                fixed_mask_solutions_pressures.shape == preds.shape[-3:]
-            ), f"fixed_mask_solutions_pressures={fixed_mask_solutions_pressures.shape}, predictions={preds.shape}"
+                fixed_mask_sol_press.shape == preds.shape[-3:]
+            ), f"fixed_mask_sol_press={fixed_mask_sol_press.shape}, predictions={preds.shape}"
             vertex_y = metadata["vertices"][b_i, 1, 0, :]
 
-            left_boundary_indexing = paddle.zeros((3, 221, 42), dtype=paddle.bool)
-            left_boundary_indexing[0, 0, :] = True  # only for first p
-            left_boundary = in_velocity * 4 * vertex_y * (0.41 - vertex_y) / (0.41**2) * (1 - math.exp(-5 * t_i))
-            left_boundary = left_boundary.unsqueeze(0)
+            lb_idx = paddle.zeros((3, 221, 42), dtype=paddle.bool)  # left boundary
+            lb_idx[0, 0, :] = True  # only for first p
+            lb = in_vel * 4 * vertex_y * (0.41 - vertex_y) / (0.41**2) * (1 - math.exp(-5 * t_i))
+            lb = lb.unsqueeze(0)
 
             # the predictions should be of shape (*, 3, 221, 42)
-            preds[b_i, ..., fixed_mask_solutions_pressures] = 0
-            preds[b_i, ..., left_boundary_indexing] = left_boundary
+            preds1 = paddle.where(
+                fixed_mask_sol_press.broadcast_to(preds[b_i].shape), paddle.zeros_like(preds[b_i]), preds[b_i]
+            )
+            preds[b_i] = preds1.reshape(preds[b_i].shape)
+
+            preds2 = paddle.where(lb_idx.broadcast_to(preds[b_i].shape), lb.broadcast_to(preds[b_i].shape), preds[b_i])
+            preds[b_i] = preds2.reshape(preds[b_i].shape)
         return preds
 
     def get_bc_kwargs(self, data_dict):

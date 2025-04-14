@@ -98,7 +98,7 @@ class UNet(BaseModel):
         dim: int,
         num_input_channels: int,
         num_output_channels: int,
-        num_conditional_channels: int = 0,
+        num_cond_channels: int = 0,
         with_time_emb: bool = False,
         outer_sample_mode: str = "bilinear",  # bilinear or nearest
         upsample_dims: tuple = (256, 256),  # (256, 256) or (128, 128)
@@ -106,13 +106,13 @@ class UNet(BaseModel):
         input_dropout: float = 0.0,
         **kwargs,
     ):
-        super().__init__(num_input_channels, num_output_channels, num_conditional_channels)
+        super().__init__(num_input_channels, num_output_channels, num_cond_channels)
         self.outer_sample_mode = outer_sample_mode
         if upsample_dims is None:
             self.upsampler = paddle.nn.Identity()
         else:
             self.upsampler = paddle.nn.Upsample(size=tuple(upsample_dims), mode=self.outer_sample_mode)
-        in_channels = self.num_input_channels + self.num_conditional_channels
+        in_channels = self.num_input_channels + self.num_cond_channels
         if with_time_emb:
             self.time_dim = dim * 2
             self.time_emb_mlp = get_time_embedder(self.time_dim, dim, learned_sinusoidal_cond=False)
@@ -211,15 +211,8 @@ class UNet(BaseModel):
         return x
 
     def forward(self, inputs, time=None, condition=None, return_time_emb: bool = False, **kwargs):
-        # DEBUG
-        # print("## inputs", float(inputs.mean()), float(inputs.std()))
-        # print("## condition", float(condition.mean()), float(condition.std()))
-        # print("## num_conditional_channels", self.num_conditional_channels)
-        # print("## time", time)
-        # print("### UNet forward")
-
         # Preprocess inputs for shape
-        if self.num_conditional_channels > 0:
+        if self.num_cond_channels > 0:
             x = paddle.concat(x=[inputs, condition], axis=1)
         else:
             x = inputs

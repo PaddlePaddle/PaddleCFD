@@ -1,19 +1,26 @@
-from typing import Dict, List, Sequence
+from typing import Dict, List
 
 import numpy as np
 import paddle
 from einops import rearrange
 from omegaconf import DictConfig
 
+from .base_process import BaseProcess
 
-class Interpolation:
+
+class Interpolation(BaseProcess):
     def __init__(self, cfg: DictConfig):
-        self.cfg = cfg
+        super().__init__(
+            cfg=cfg,
+            num_predictions=cfg.INTERPOLATION.num_predictions,
+            inputs_noise=cfg.INTERPOLATION.prediction_inputs_noise,
+        )
         self.window = cfg.INTERPOLATION.window
         self.horizon = cfg.INTERPOLATION.horizon
         self.stack_window_to_channel_dim = cfg.INTERPOLATION.stack_window_to_channel_dim
-        self.num_predictions = cfg.INTERPOLATION.num_predictions
-        self.inputs_noise = cfg.INTERPOLATION.prediction_inputs_noise
+
+    def set_model(self, model):
+        self.model = model
 
     def model_cfg_transform(self, cfg_model):
         ratio = (self.window + 1) if self.stack_window_to_channel_dim else 2
@@ -23,7 +30,8 @@ class Interpolation:
         return cfg_new
 
     def get_inputs_from_dynamics(self, dynamics):
-        """Get the inputs from the dynamics tensor.
+        """
+        Get the inputs from the dynamics tensor.
         Since we are doing interpolation, this consists of the first window frames plus the last frame.
         """
         assert dynamics.shape[1] == self.window + self.horizon, "dynamics must have shape (b, t, c, h, w)"
@@ -43,37 +51,11 @@ class Interpolation:
 
         possible_times = paddle.to_tensor(np.arange(1, self.horizon), dtype=paddle.int64)  # (h,)
         # take random choice of time
-        # DEBUG
-        # t = possible_times[[0]]
         t = possible_times[paddle.randint(0, len(possible_times), shape=[b], dtype=paddle.int64)]  # (b,)
         # t = paddle.randint(start_t, max_t, (b,), dtype=paddle.int64)  # (b,)
         targets = dynamics[paddle.arange(b), self.window + t - 1, ...]  # (b, c, h, w)
         data_dict.update({"inputs": inputs, "targets": targets, "time": t})
         return data_dict
-
-    def get_ensemble_inputs(self, inputs_raw, add_noise=True, flatten_into_batch_dim=True):
-        """Get the inputs for the ensemble predictions"""
-        if inputs_raw is None:
-            return None
-        if self.num_predictions <= 1:
-            return inputs_raw
-
-        # create a batch of inputs for the ensemble predictions
-        if isinstance(inputs_raw, dict):
-            return {k: self.get_ensemble_inputs(v, add_noise, flatten_into_batch_dim) for k, v in inputs_raw.items()}
-
-        if isinstance(inputs_raw, Sequence):
-            inputs = np.array([inputs_raw] * self.num_predictions)
-        elif add_noise:
-            noise = self.inputs_noise * paddle.randn(shape=inputs_raw.shape, dtype=inputs_raw.dtype)
-            inputs = paddle.stack([inputs_raw + noise for _ in range(self.num_predictions)], axis=0)
-        else:
-            inputs = paddle.stack([inputs_raw for _ in range(self.num_predictions)], axis=0)
-
-        if flatten_into_batch_dim:
-            # flatten num_predictions and batch dimensions "N B ... -> (N B) ..."
-            inputs = inputs.reshape([-1] + list(inputs.shape[2:]))
-        return inputs
 
     def get_evaluation_inputs(self, dynamics, **kwargs):
         inputs = self.get_inputs_from_dynamics(dynamics)
@@ -87,14 +69,6 @@ class Interpolation:
                 extra_kwargs[k] = self.get_ensemble_inputs(v, add_noise=False)
         return extra_kwargs
 
-    def reshape_preds(self, preds: paddle.Tensor):
-        N, C, W, H = preds.shape
-        assert (
-            N % self.num_predictions == 0
-        ), f"Number of samples {N} must be divisible by ensemble size {self.num_predictions}"
-        preds = preds.reshape([self.num_predictions, -1, C, W, H])
-        return preds
-
     def concat_results(self, outputs: List[Dict]):
         results = {}
         for key in outputs[0].keys():
@@ -107,9 +81,6 @@ class Interpolation:
 
             results[key] = paddle.concat(data_list, axis=batch_axis)
         return results
-
-    def set_model(self, model):
-        self.model = model
 
     def forward(self, data_dict):
         data_dict = self.data_transform(data_dict)
@@ -138,8 +109,8 @@ class Interpolation:
             preds = self.reshape_preds(preds)
             results = {f"t{t_step}_preds": preds, f"t{t_step}_targets": targets}
             return_dict.update(results)
-            if self.num_predictions > 1:
-                preds = paddle.mean(preds, axis=0)
+            # if self.num_predictions > 1:
+            #     preds = paddle.mean(preds, axis=0)
             # metric = metric_fn(preds, targets)
         #     t_step_metrics[f"t{t_step}_mse_mean(all_samples)"].append(metric)
         # val_meter_verbose.update(t_step_metrics)

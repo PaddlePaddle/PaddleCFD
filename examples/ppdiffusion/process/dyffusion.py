@@ -1,7 +1,10 @@
+import math
 from typing import Optional
 
+import numpy as np
 import paddle
 from omegaconf import DictConfig
+from tqdm import tqdm
 
 from .forecasting import Forecasting
 from .interpolation import Interpolation
@@ -36,11 +39,6 @@ class DYffusion:
         ipol_handles = [self.interp_obj.model]
         self.sampling_obj.update_handles(ipol_handles, do_enable)
 
-    def data_transform(self, data_dict):
-        x_last = self.forecast_obj.get_evaluation_inputs(data_dict)
-        kwargs = self.forecast_obj.get_extra_kwargs(data_dict)
-        return x_last, kwargs
-
     def _interpolate(
         self,
         init_cond: paddle.Tensor,
@@ -60,35 +58,19 @@ class DYffusion:
         # interp_preds = self.interp_obj.reshape_preds(interp_preds)    # do not reshape for training
         return interp_preds
 
-    def gen_inputs_kst(
-        self,
-        xt_last: paddle.Tensor,
-        time_selected: paddle.Tensor,
-        condition: paddle.Tensor,
-        time: paddle.Tensor,
-        static_cond: paddle.Tensor = None,
-        kst: int = 0,
-    ):
-        """Generate the inputs for the forecasting model.
-
-        Args:
-            xt_last (paddle.Tensor): the start/target data  (time = horizon)
-            condition (paddle.Tensor): the initial condition data  (time = 0)
-            time (paddle.Tensor): the time step of the diffusion process
-            static_cond (paddle.Tensor, optional): the static condition data (if any). Defaults to None.
-        """
-        if paddle.any(time_selected):
-            cond_sub = condition[time_selected]
-            xt_last_sub = xt_last[time_selected]
-            time_sub = time[time_selected] + kst
-            static_cond_sub = None if static_cond is None else static_cond[time_selected]
-            return self.sampling_obj.q_sample(
-                x_end=cond_sub,
-                x0=xt_last_sub,
-                time=time_sub,
-                static_cond=static_cond_sub,
-                num_predictions=1,
-            ).astype(condition.dtype)
+    def encode_time(self, time):
+        time_encoding = self.sampling_obj.time_encoding
+        assert time_encoding in [
+            "discrete",
+            "normalized",
+            "dynamics",
+        ], f"Invalid time_encoding: {time_encoding}."
+        if time_encoding == "discrete":
+            return time.astype("float32")
+        if time_encoding == "normalized":
+            return time.astype("float32") / self.num_timesteps
+        if time_encoding == "dynamics":
+            return self.sampling_obj.diffu_to_interp_step(time)
 
     def predict_x_last(
         self,
@@ -102,14 +84,28 @@ class DYffusion:
         forward_cond = self.forecast_obj.add_noise(condition)
         if static_cond is not None:
             forward_cond = static_cond if forward_cond is None else paddle.concat([forward_cond, static_cond], axis=1)
-
-        time = self.sampling_obj.encode_time(time)
+        time = self.encode_time(time)
         x_last_pred = self.forecast_obj.model(x_t, time=time, condition=forward_cond)
         return x_last_pred
 
     def forward(self, data_dict):
-        x_last, kwargs = self.data_transform(data_dict)
-        condition, time, static_cond = kwargs["condition"], kwargs["time"], kwargs["static_cond"]
+        """forward of training.
+
+        Args:
+            data_dict (Dict): data dict of dynamics, conditions and metadata and others(if exist).
+                The "condition" in data_dict actually refers to the static condition,
+                which represents information such as the obstacle mask.
+        """
+        dynamics = data_dict["dynamics"]
+        inputs, extra_kwargs = self.forecast_obj.data_transform(data_dict, ensemble=False)
+        condition = inputs
+        time = (
+            extra_kwargs["time"]
+            if "time" in extra_kwargs
+            else paddle.randint(low=0, high=self.num_timesteps, shape=(dynamics.shape[0],), dtype="int64")
+        )
+        static_cond = extra_kwargs["condition"] if "condition" in extra_kwargs else None
+        x_last = dynamics[:, -1, ...]
 
         def _gen_inputs_kst(time_mask: paddle.Tensor, time_offset: int = 0):
             if not time_mask.any():
@@ -126,14 +122,18 @@ class DYffusion:
         #   1. For t=0, simply use the initial conditions
         x_t = condition.clone()
         #   2. For t>0, we need to interpolate the data using the interpolator
-        x_t[time > 0] = _gen_inputs_kst(time_mask=time > 0)
+        time_mask = time > 0
+        if time_mask.any():
+            x_t[time_mask] = _gen_inputs_kst(time_mask=time_mask)
+
+        # Train the forward predictions (i.e. predict xt_last from xt_t)
         xt_last_pred = self.predict_x_last(x_t, condition=condition, time=time, static_cond=static_cond)
         preds = [xt_last_pred]
         targets = [x_last]
 
-        # Train the forward predictions (i.e. predict xt_last from xt_t)
-        if self.lambda_rec_fb > 0:
-            time_mask_sec = time <= self.num_timesteps - 2
+        # Train the forward predictions II by emulating one more step of the diffusion process
+        time_mask_sec = time <= self.num_timesteps - 2
+        if self.lambda_rec_fb > 0 and time_mask_sec.any():
             x_interp_sec = _gen_inputs_kst(time_mask=time_mask_sec, time_offset=1)
             xt_last_pred_sec = self.predict_x_last(
                 x_interp_sec,
@@ -150,16 +150,33 @@ class DYffusion:
         loss_2 = loss_fn(preds[1], targets[1]) if len(preds) == 2 else 0.0
         return loss_1 * self.lambda_rec_base + loss_2 * self.lambda_rec_fb
 
+    def predict(self, inputs, reshape_ensemble_dim=True, **kwargs):
+        kwargs["static_cond"] = kwargs.pop("condition") if "condition" in kwargs else None
+        kwargs["sampling_fn"] = self.predict_x_last
+        kwargs["num_input_channels"] = self.forecast_obj.model.num_input_channels
+        if "num_predictions" not in kwargs:
+            kwargs["num_predictions"] = self.forecast_obj.num_predictions
+        # print(inputs.shape,inputs.mean().item(),inputs.std().item())
+        # print(kwargs.keys())
+        # print(kwargs["static_cond"].shape,kwargs["static_cond"].mean().item(),kwargs["static_cond"].std().item())
+        # print(kwargs["num_input_channels"],kwargs["num_predictions"])
+        # exit()
+        preds_dict = self.sampling_obj.sample(inputs, **kwargs)
+        return_dict = {k: self.forecast_obj.reshape_preds(v) for k, v in preds_dict.items()}
+        return return_dict
+
     @paddle.no_grad()
     def eval(
         self,
         data_dict,
         pred_horizon=64,
         metric_fn=None,
+        enable_ar: bool = False,
+        ar_steps: int = 0,
     ):
+        dynamics = data_dict["dynamics"].clone()
         return_dict = dict()
-        inputs = self.forecast_obj.get_evaluation_inputs(data_dict, ensemble=ensemble)
-        extra_kwargs = self.forecast_obj.get_extra_kwargs(data_dict, ensemble=ensemble)
+        with_bc = hasattr(self.forecast_obj, "boundary_conditions")
         if with_bc:
             kwargs = self.forecast_obj.get_bc_kwargs(data_dict)
             total_t = kwargs["t0"]
@@ -168,43 +185,82 @@ class DYffusion:
             total_t = 0.0
             dt = 1.0
 
-        # TODO: predict
-        sampling_data_dict = self.predict(inputs, **extra_kwargs, **kwargs)
-
-        # TODO: enable autoregressive
-        # n_outer_loops = 1  # Simple evaluation without autoregressive steps
-        self.pred_timesteps = list(np.arange(1, self.horizon + 1))
+        forecast_horizon = self.forecast_obj.horizon
+        self.pred_timesteps = list(np.arange(1, forecast_horizon + 1))
         predicted_range_last = [0.0] + self.pred_timesteps[:-1]
+        ar_window_steps_t = self.pred_timesteps[-self.forecast_obj.window :]  # autoregressive window steps,
 
-        results = {}
-        for t_step_last, t_step in zip(predicted_range_last, self.pred_timesteps):
-            if t_step > pred_horizon:
-                # May happen if we have a prediction horizon that is not a multiple of the true horizon
-                break
-            total_t += dt * (t_step - t_step_last)  # update time, by default this is == dt
-            target_time = self.forecast_obj.window + int(t_step) - 1
-            targets = dynamics[:, target_time, ...]
-            if with_bc:
-                preds = self.forecast_obj.boundary_conditions(
-                    preds=sampling_data_dict[f"t{t_step}_preds"],
-                    targets=targets,
-                    metadata=data_dict.get("metadata", None),
-                    time=total_t,
-                )
-            else:
-                preds = sampling_data_dict[f"t{t_step}_preds"]
+        ar_inputs = None
+        ar_loops = 1
+        if enable_ar:
+            if dynamics.shape[1] < pred_horizon:
+                raise ValueError(f"Prediction horizon {pred_horizon} exceeds dynamics shape {dynamics.shape}")
+            ar_loops = (
+                max(1, math.ceil(pred_horizon / forecast_horizon))
+                if ar_steps == 0 and pred_horizon is not None
+                else ar_steps + 1
+            )
 
-            results = {f"t{t_step}_preds": preds, f"t{t_step}_targets": targets}
-            return_dict.update(results)
-            if self.forecast_obj.num_predictions > 1:
-                preds = paddle.mean(preds, axis=0)
+        # enable autoregressive
+        for ar_step in tqdm(
+            range(ar_loops),
+            desc="Autoregressive Step",
+            position=0,
+            leave=True,
+            disable=ar_loops <= 1,
+        ):
+            is_ar_mode = ar_inputs is not None
+            inputs, extra_kwargs = self.forecast_obj.data_transform(
+                data_dict,
+                ensemble=True,
+                is_ar_mode=is_ar_mode,
+            )
+            if is_ar_mode:
+                inputs = ar_inputs
+                extra_kwargs["num_predictions"] = 1
+            sampling_data_dict = self.predict(inputs, **extra_kwargs)
 
-    def predict(self, inputs, reshape_ensemble_dim=True, **kwargs):
-        kwargs["static_condition"] = condition
-        inital_condition = inputs
-        results = self.sampling_obj.sample(inital_condition, **kwargs)
-        results = {"preds": results}
+            ar_window_steps = []
+            results = {}
+            for t_step_last, t_step in zip(predicted_range_last, self.pred_timesteps):
+                total_horizon = ar_step * forecast_horizon + t_step
+                if total_horizon > pred_horizon:
+                    # May happen if we have a prediction horizon that is not a multiple of the true horizon
+                    break
+                total_t += dt * (t_step - t_step_last)  # update time, by default this is == dt
+                if with_bc and float(total_horizon).is_integer():
+                    target_time = self.forecast_obj.window + int(total_horizon) - 1
+                    targets = dynamics[:, target_time, ...]
+                    preds = self.forecast_obj.boundary_conditions(
+                        preds=sampling_data_dict[f"t{t_step}_preds"],
+                        targets=targets,
+                        metadata=data_dict.get("metadata", None),
+                        time=total_t,
+                    )
+                else:
+                    targets = None
+                    preds = sampling_data_dict[f"t{t_step}_preds"]
 
-        results = self.reshape_predictions(results, reshape_ensemble_dim)
-        results = self.unpack_predictions(results)
-        return results
+                results = {f"t{total_horizon}_preds": preds, f"t{total_horizon}_targets": targets}
+                return_dict.update(results)
+
+                if t_step in ar_window_steps_t:
+                    # if predicted_range == self.horizon_range and window == 1, then this is just the last step :)
+                    # Need to keep the last window steps that are INTEGER steps!
+                    # [20, 4, 3, 221, 42] --> [80, 1, 3, 221, 42]
+                    ar_window_steps += [preds.reshape([-1, 1, *preds.shape[-3:]])]  # keep t,c,h,w
+
+                if self.forecast_obj.num_predictions > 1:
+                    preds = paddle.mean(preds, axis=0)
+                    assert preds.shape == targets.shape, (
+                        f"After averaging over ensemble dim: "
+                        f"preds.shape={preds.shape} != targets.shape={targets.shape}"
+                    )
+                # metric = metric_fn(preds, targets)
+
+            if ar_step < ar_loops - 1:  # if not last step, then update dynamics
+                ar_inputs = paddle.concat(ar_window_steps, axis=1)  # shape (b, window, c, h, w)
+                ar_inputs = self.forecast_obj.transform_inputs(ar_inputs, ensemble=False)
+                data_dict["dynamics"] *= 1e6  # become completely dummy after first multistep prediction
+
+        return return_dict
