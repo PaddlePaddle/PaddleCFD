@@ -13,7 +13,7 @@ hydra:
 # Setting
 mode: "train"
 seed: 2024
-process: "interpolation"
+process: "dyffusion"
 output_dir: ${hydra:run.dir}
 
 ckpt_dir: './results/checkpoints/'
@@ -29,8 +29,8 @@ DATA:
     num_trajectories: null
   dataloader:
     batch_size:
-      train: 32
-      val: 4
+      train: 16
+      val: 1
       test: 1
     num_workers: 0
     drop_last: false
@@ -38,28 +38,71 @@ DATA:
   test_out_of_distribution: false
 
 INTERPOLATION:
-  window: ${DATA.dataset.window}
-  horizon: ${DATA.dataset.horizon}
+  window: 1
+  horizon: 16
   stack_window_to_channel_dim: true
   num_predictions: 20
   prediction_inputs_noise: 0.0
+  MODEL:
+    model_name: SimpleUnet
+    input_channels: 3
+    output_channels: 3
+    spatial_channels: [221, 42]
+    num_cond_channels: 2
+    dim: 64
+    input_dropout: 0.0
+    dropout: 0.15
+    upsample_dims: [256, 256]
+    outer_sample_mode: bilinear
+    with_time_emb: true
+  loss_fn: "l1"
+  ckpt_no_suffix: "../scripts/init_paddle"
 
-MODEL:
-  model_name: SimpleUnet
-  input_channels: 3
-  output_channels: 3
-  spatial_channels: [221, 42]
-  num_conditional_channels: 2
-  dim: 64
-  input_dropout: 0.0
-  dropout: 0.15
-  upsample_dims: [256, 256]
-  outer_sample_mode: bilinear
-  with_time_emb: true
+FORECASTING:
+  lass_name: DYffusion
+  window: 1
+  horizon: 16
+  stack_window_to_channel_dim: true
+  num_timesteps: 16
+  prediction_inputs_noise: 0.0
+  lambda_rec_base: 0.5
+  lambda_rec_fb: 0.5
+  forward_cond: "none"
+  pred_timesteps: null
+  num_predictions: 20
+  MODEL:
+    model_name: SimpleUnet
+    input_channels: 3
+    output_channels: 3
+    spatial_channels: [221, 42]
+    num_cond_channels: 2
+    dim: 64
+    input_dropout: 0.0
+    dropout: 0.0
+    upsample_dims: [256, 256]
+    outer_sample_mode: bilinear
+    with_time_emb: true
+  loss_fn: "mse"
+
+SAMPLING:
+  num_timesteps: 16
+  # sampling_timesteps: null
+  time_encoding: "dynamics"
+  schedule: before_t1_only
+  addl_interp_steps: 0
+  addl_interp_steps_fac: 0
+  interp_before_t1: true
+  enable_interp_dropout: true
+  sampling_type: cold
+  sampling_schedule: null
+  refine_interm_preds: true
+  use_cold_sampling_for_last_step: false
+  log_every_t: null
+  pred_timesteps: null
 
 TRAIN:
-  epochs: 200   # 总训练轮次
-  accumulate_steps: 2   # 梯度累积步数
+  epochs: 200
+  accumulate_steps: 2
   save_freq: 10
   batch_size: ${DATA.dataloader.batch_size.train}
   optim:
@@ -69,8 +112,9 @@ TRAIN:
     beta2: 0.99
     epsilon: 1e-08
     weight_decay: 0.0001
-    grad_clip: ["norm", 1.0]  # 梯度裁剪阈值和算法
-  ckpt_no_suffix: "../scripts/init_paddle"
+    grad_clip: ["norm", 1.0]
+  # ckpt_no_suffix: "../scripts/init_paddle"
+  ckpt_no_suffix: "./ckpts/interpolation/3/interpolation_199"
 
 EVAL:
   batch_size: ${DATA.dataloader.batch_size.val}
@@ -80,6 +124,8 @@ EVAL:
   enable_infer_dropout: true
   prediction_horizon: 64
   prediction_num_predictions: 50
-  # ckpt_no_suffix: "../scripts/init_paddle"
-  ckpt_no_suffix: "./ckpts/interpolation/3/interpolation_199"
+  autoregressive_steps: 0
+  ckpt_no_suffix: "../scripts/init_paddle"
+  ckpt_no_suffix_forecast: "../scripts/init_paddle_forecast"
   verbose: false
+  save_dir: ${output_dir}

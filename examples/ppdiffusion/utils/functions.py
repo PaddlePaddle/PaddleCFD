@@ -1,8 +1,25 @@
 import os
+from typing import Dict
 
+import matplotlib.pyplot as plt
+import models
+import numpy as np
 import paddle
 from datamodules import PhysicalDataLoader, PhysicalDatastet
 from omegaconf import DictConfig, OmegaConf
+
+
+# Random seed (if not using pypaddle-lightning)
+def set_seed(seed, device="gpu"):
+    """
+    Sets the random seed for the given device.
+    """
+    # setting seeds
+    random.seed(seed)
+    np.random.seed(seed)
+    paddle.seed(seed)
+    if device != "cpu" and paddle.is_compiled_with_cuda():
+        paddle.set_device("gpu")
 
 
 def get_data_dir(
@@ -101,3 +118,78 @@ def get_scheduler(cfg_sched: DictConfig, optimizer):
     else:
         raise ValueError(f"Scheduler {sched_name} not supported now.")
     return scheduler(**cfg_sched)
+
+
+def dynamic_import(model_name: str):
+    try:
+        ModelClass = getattr(models, model_name)
+    except AttributeError:
+        raise ValueError(f"Model {model_name} not found in models")
+    return ModelClass
+
+
+def initialize_models(cfg, models_lst=["interp"], interp_obj=None, forecast_obj=None):
+    init_models = []
+
+    if "interp" in models_lst:
+        assert interp_obj is not None, "interp_obj should not be None if 'interp' in models_lst"
+        # load interpolation model
+        interp_model = dynamic_import(cfg.INTERPOLATION.MODEL.model_name)
+        model_interp_cfg = interp_obj.model_cfg_transform(cfg.INTERPOLATION.MODEL)
+        model_interp = interp_model(**model_interp_cfg)
+        # load ckpt
+        ckpt = getattr(cfg.INTERPOLATION, "ckpt_no_suffix", None)
+        if ckpt:
+            state_dict = paddle.load(f"{ckpt}.pdparams")
+            model_interp.set_state_dict(state_dict)
+        init_models.append(model_interp)
+
+    if "forecast" in models_lst:
+        assert forecast_obj is not None, "forecast_obj should not be None if 'forecast' in models_lst"
+        # init forecasting model
+        forecast_model = dynamic_import(cfg.FORECASTING.MODEL.model_name)
+        model_forecast_cfg = forecast_obj.model_cfg_transform(cfg.FORECASTING.MODEL)
+        model_forecast = forecast_model(**model_forecast_cfg)
+        # load ckpt
+        ckpt = getattr(cfg.FORECASTING, "ckpt_no_suffix_forecast", None)
+        if ckpt:
+            state_dict = paddle.load(f"{ckpt}.pdparams")
+            model_forecast.set_state_dict(state_dict)
+        init_models.append(model_forecast)
+
+    return init_models
+
+
+def save_arrays_as_line_plot(
+    x_array: np.ndarray,
+    key_to_array: Dict[str, np.ndarray],
+    save_dir: str = "./plots",
+    x_label: str = "x",
+    y_label: str = "y",
+    figsize: tuple = (10, 6),
+    dpi: int = 300,
+    format: str = "png",
+    show_grid: bool = True,
+    line_style: str = "-",
+):
+    os.makedirs(save_dir, exist_ok=True)
+    filename = f"plot_{x_label}_vs_{y_label}.{format}"
+    save_path = os.path.join(save_dir, filename)
+
+    plt.figure(figsize=figsize, dpi=dpi)
+
+    for label, y_array in key_to_array.items():
+        if isinstance(y_array, paddle.Tensor):
+            y_array = y_array.numpy()
+        plt.plot(x_array, y_array, line_style, label=label)
+
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.legend()
+
+    if show_grid:
+        plt.grid(True)
+
+    plt.savefig(save_path, bbox_inches="tight", format=format)
+    plt.close()
+    print(f"Plot saved to: {save_path}")

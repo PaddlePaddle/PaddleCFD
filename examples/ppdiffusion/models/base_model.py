@@ -5,21 +5,24 @@ import paddle
 
 
 class BaseModel(paddle.nn.Layer):
-    """Base class for all models.
-    - :func:`__init__`
-    - :func:`forward`
+    """Base class for all models including some basic functions.
+
+    Args:
+        num_input_channels (int): number of input channels.
+        num_output_channels (int): number of output channels.
+        num_cond_channels (int, optional): number of condition channels. Defaults to 0.
     """
 
     def __init__(
         self,
         num_input_channels: int,
         num_output_channels: int,
-        num_conditional_channels: int = 0,
+        num_cond_channels: int = 0,
     ):
         super().__init__()
         self.num_input_channels = num_input_channels
         self.num_output_channels = num_output_channels
-        self.num_conditional_channels = num_conditional_channels
+        self.num_cond_channels = num_cond_channels
 
         # get dropout layers
         self.dropout_layers = [
@@ -32,15 +35,11 @@ class BaseModel(paddle.nn.Layer):
         return sum(p.size for p in self.parameters() if not p.stop_gradient)
 
     def forward(self, X: paddle.Tensor, condition: Optional[paddle.Tensor] = None, **kwargs) -> paddle.Tensor:
-        r"""Forward
+        """Forward
 
         Args:
-            X (Tensor): Input data tensor of shape :math:`(B, *, C_{in})`
-        Shapes:
-            - Input: :math:`(B, *, C_{in})`,
-
-            where :math:`B` is the batch size, :math:`*` is the spatial dimension(s) of the data,
-            and :math:`C_{in}` is the number of input features/channels.
+            X (paddle.Tensor): input data tensor of shape (B, *, C_{in}).
+            condition (Optional[paddle.Tensor], optional): condition data tensor of shape (B, *, C_{in}). Defaults to None.
         """
         raise NotImplementedError
 
@@ -57,15 +56,22 @@ class BaseModel(paddle.nn.Layer):
         self.train()
 
     def enable_infer_dropout(self):
+        """Adjust all dropout layers to training state"""
         for layer in self.dropout_layers:
             layer.training = True
 
     def disable_infer_dropout(self):
+        """Adjust all dropout layers to non-training state"""
         for layer in self.dropout_layers:
             layer.training = False
 
     @contextmanager
     def dropout_controller(self, enable):
+        """Controls the temporary enable/disable state of the Dropout layer during the model inference phase.
+
+        Args:
+            enable (bool): Whether to turn on the controller.
+        """
         if enable:
             self.enable_infer_dropout()
         try:
