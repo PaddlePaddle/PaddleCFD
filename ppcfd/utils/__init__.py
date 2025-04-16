@@ -13,8 +13,7 @@
 # limitations under the License.
 
 
-from ppcfd.data.downloader import download
-from ppcfd.data.loader import load_dataset
+from ppcfd.utils import logger
 
 
-__all__ = ["load_dataset", "download"]
+__all__ = ["logger"]
