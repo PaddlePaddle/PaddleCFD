@@ -1,0 +1,3 @@
+[submodule "ppcfd/models/pptransformer"]
+	path = ppcfd/models/pptransformer
+	url = git@github.com:wangguan1995/DNNFluid-Car.git
