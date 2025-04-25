@@ -12,9 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ppcfd import data  # isort:skip
+from ppcfd import models  # isort:skip
+from ppcfd import utils  # isort:skip
 
-from ppcfd.data.downloader import download
-from ppcfd.data.loader import load_dataset
-
-
-__all__ = ["load_dataset", "download"]
+__all__ = [
+    "data",
+    "models",
+    "utils",
+]

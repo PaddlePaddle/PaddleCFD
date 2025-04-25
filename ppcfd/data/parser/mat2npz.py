@@ -12,37 +12,43 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Authors: lijialin03(lijialin03@baidu.com)
-Date:    2025/04/01
-"""
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import h5py
 import numpy as np
 import scipy.io as sio
 
+from ppcfd.data.parser.base_parser import BaseTransition, DataParserFactory
 
-class MatTransition:
+
+@DataParserFactory.register_loader("msh")
+class MatTransition(BaseTransition):
     """Transition class for .mat file.
 
     Args:
-        file_path (str): path of .mat file.
+        file_path (Union[str, Path]): path of .mat file.
         save_path (Optional[str], optional): path of saved .npz file. Defaults to None.
         save_data (Optional[bool], optional): Whether to save the .npz file. Defaults to True.
     """
 
+    file_format = "mat"
+    # be empty because `file_path` could be set by loader and all other prarmeters have default value
+    required_params = []
+
     def __init__(
         self,
-        file_path: str,
+        file_path: Union[str, Path],
         save_path: Optional[str] = None,
         save_data: Optional[bool] = True,
+        **kwargs,
     ):
-        super().__init__()
-        self.file_path = file_path
-        self.save_path = save_path
+        super().__init__(file_path)
+        if save_path is not None:
+            self.output_path = Path(save_path).absolute()
+        else:
+            self.output_path = self.file_path
 
         try:
             self.data = self.load_data()
@@ -104,17 +110,16 @@ class MatTransition:
         return group
 
     def save_npz(self):
-        if self.save_path is not None:
-            output_path = Path(self.save_path)
-        else:
-            output_path = Path(self.file_path)
-        output_path = output_path.with_suffix(".npz")
+        output_path = self.output_path.with_suffix(".npz")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(output_path, **self.data)
 
+    def get_data(self):
+        return self.data
+
 
 if __name__ == "__main__":
-    path = "./burgers.mat"
+    path = "../burgers.mat"
     # save_path = './burgers.npz'
     # save_path = './burgers'
     # trans_obj = MatTransition(path, save_path)

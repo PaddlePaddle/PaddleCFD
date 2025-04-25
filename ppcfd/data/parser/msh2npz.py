@@ -12,10 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Authors: lijialin03(lijialin03@baidu.com)
-Date:    2025/04/01
-"""
 
 import re
 from enum import Enum
@@ -23,6 +19,8 @@ from pathlib import Path
 from typing import Optional, Union
 
 import numpy as np
+
+from ppcfd.data.parser.base_parser import BaseTransition, DataParserFactory
 
 
 class MeshSource(Enum):
@@ -45,26 +43,34 @@ class MeshSource(Enum):
     GENERAL = "general"
 
 
-class MshTransition:
+@DataParserFactory.register_loader("msh")
+class MshTransition(BaseTransition):
     """Transition class for .msh file.
 
     Args:
-        file_path (str): path of .msh file.
+        file_path (Union[str, Path]): path of .msh file.
         save_path (Optional[str], optional): path of saved .npz file. Defaults to None.
         save_data (Optional[bool], optional): Whether to save the .npz file. Defaults to True.
         source (Optional[Union[MeshSource, str]], optional): source of .msh file such as openfoam. Defaults to MeshSource.AUTO.
     """
 
+    file_format = "msh"
+    # be empty because `file_path` could be set by loader and all other prarmeters have default value
+    required_params = []
+
     def __init__(
         self,
-        file_path: str,
-        save_path: Optional[str] = None,
-        save_data: Optional[bool] = True,
+        file_path: Union[str, Path],
+        save_path: Optional[Union[str, Path]] = None,
+        save_data: bool = True,
         source: Optional[Union[MeshSource, str]] = MeshSource.AUTO,
+        **kwargs,
     ):
-        super().__init__()
-        self.file_path = file_path
-        self.save_path = save_path
+        super().__init__(file_path)
+        if save_path is not None:
+            self.output_path = Path(save_path).absolute()
+        else:
+            self.output_path = self.file_path
 
         if isinstance(source, str):
             try:
@@ -75,15 +81,15 @@ class MshTransition:
             self.source = MeshSource.AUTO
 
         try:
-            self.data = self.load_data(file_path)
+            self.data = self.load_data()
         except Exception as e:
             raise ValueError(f"Failed to parse the file: {e}")
 
         if save_data:
             self.save_npz()
 
-    def load_data(self, file_path):
-        with open(file_path, "r") as f:
+    def load_data(self):
+        with open(self.file_path, "r") as f:
             lines = [line.strip() for line in f.readlines()]
 
         data = {"nodes": None, "elements": None, "element_types": None}
@@ -266,13 +272,12 @@ class MshTransition:
                     pass
 
     def save_npz(self):
-        if self.save_path is not None:
-            output_path = Path(self.save_path)
-        else:
-            output_path = Path(self.file_path)
-        output_path = output_path.with_suffix(".npz")
+        output_path = self.output_path.with_suffix(".npz")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(output_path, **self.data)
+
+    def get_data(self):
+        return self.data
 
 
 if __name__ == "__main__":
