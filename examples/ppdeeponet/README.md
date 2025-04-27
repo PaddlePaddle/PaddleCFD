@@ -1,8 +1,6 @@
 # 2D-LDC(2D Lid Driven Cavity Flow)
 
-<a href="https://aistudio.baidu.com/aistudio/projectdetail/6137973" class="md-button md-button--primary" style>AI Studio快速体验</a>
-
-在运行代码前先安装依赖库[PaddleScience](https://paddlescience-docs.readthedocs.io/zh-cn/latest/)，请在终端运行以下命令：
+在运行代码前先安装依赖库[PaddleScience](https://paddlescience-docs.readthedocs.io/zh-cn/latest/)，可按照官网上的安装使用进行安装，或在终端运行以下命令：
  ``` sh
  python -m pip install -U paddlesci -i https://pypi.tuna.tsinghua.edu.cn/simple
  ```
@@ -57,10 +55,10 @@
     | 预训练模型  | $Re$  | 指标 |
     | :-- | :-- | :-- |
     | - | 100 | U_validator/loss: 0.00011<br>U_validator/L2Rel.U: 0.03896 |
-    | - | 400 | U_validator/loss: 0.00071<br>U_validator/L2Rel.U: 0.09288 |
-    | - | 1000 | U_validator/loss: 0.00191<br>U_validator/L2Rel.U: 0.14797 |
-    | - | 1600 | U_validator/loss: 0.00276<br>U_validator/L2Rel.U: 0.17360 |
-    | [**ldc_re3200_piratenet_pretrained.pdparams**](https://paddle-org.bj.bcebos.com/paddlescience/models/ldc/ldc_re3200_piratenet_pretrained.pdparams) | 3200 | **U_validator/loss: 0.00016<br>U_validator/L2Rel.U: 0.04166** |
+    | - | 400 | U_validator/loss: 0.00024<br>U_validator/L2Rel.U: 0.05432 |
+    | - | 1000 | U_validator/loss: 0.00020<br>U_validator/L2Rel.U: 0.04845 |
+    | - | 1600 | U_validator/loss: 0.00080<br>U_validator/L2Rel.U: 0.09351 |
+    | [**ldc_re3200_piratenet_pretrained.pdparams**](https://paddle-org.bj.bcebos.com/paddlescience/models/ldc/ldc_re3200_piratenet_pretrained.pdparams) | 3200 | **U_validator/loss: 0.00013<br>U_validator/L2Rel.U: 0.03713** |
 
 !!! 说明
 
@@ -130,6 +128,8 @@ $$
 ### 3.1 物理信息残差自适应网络（PirateNets）
 
 虽然物理信息神经网络（PINNs）已成为解决由偏微分方程（PDEs）支配的正问题和逆问题的流行深度学习框架，但当使用更大和更深的神经网络架构时，其性能已知会下降。研究发现，这种反直觉行为的根源在于使用了不适合的初始化方案的多层感知器（MLP）架构，这导致网络导数的可训练性差，最终导致 PDE 残差损失的不稳定最小化。近年来，为了解决PINNs训练病态问题（谱偏差、不平衡的反向传播梯度和因果关系违反等），许多研究集中在通过改进神经网络架构和训练算法来增强 PINNs 的性能，同时，在开发新的神经网络架构以提高 PINNs 的表现能力方面也取得了重大进展。尽管如此，但大多数现有的 PINNs 工作倾向于使用小型且浅层的网络架构，未能充分利用深层网络的巨大潜力。为了解决这个问题，我们引入了物理信息残差自适应网络（PirateNets），这是一种新颖的架构，旨在促进深 PINN 模型的稳定高效训练。
+
+![PirateNets](./images/PirateNets.png)
 
 物理信息残差自适应网络（PirateNets）是一种旨在解决上述初始化问题的新型架构。图中展示了PirateNet前向传播的主要模块。具体而言，输入坐标$\mathbf{x}$首先通过嵌入函数$\Phi(\mathbf{x})$映射到高维特征空间。在这里，我们采用随机傅里叶特征：
 $$
@@ -214,20 +214,17 @@ $$
 
 为了减少计算开销，预处理器 $L_t$ 和 $R_t$ 在实践中以频率 $f$ 进行更新。
 
-## 5. 结果展示
+## 4. 结果展示
 
-下方展示了模型对于边长为 1 的正方形计算域的内部点进行预测的结果 $U=\sqrt{u^2+v^2}$。
+下图展示了模型对于边长为 1 的正方形计算域的内部点进行预测的结果 $U=\sqrt{u^2+v^2}$。
 
-=== "Re=3200"
 
-    <figure markdown>
-    ![ldc_re3200_piratenet_ac](https://paddle-org.bj.bcebos.com/paddlescience/docs/ldc/ldc_re3200_piratenet_ac.png){ loading=lazy }
-    <figcaption></figcaption>
-    </figure>
+![Re=3200](./images/Re=3200.png)
 
-    可以看到在 $Re=3200$ 下，预测结果与求解器的结果基本相同（L2 相对误差为 4.1%）。
 
-## 6. 参考资料
+可以看到在 $Re=3200$ 下，预测结果与求解器的结果基本相同（L2 相对误差为 3.7%）。
+
+## 5. 参考资料
 
 - [PIRATENETS: PHYSICS-INFORMED DEEP LEARNING WITHRESIDUAL ADAPTIVE NETWORKS](https://arxiv.org/pdf/2402.00326.pdf)
 - [Gradient Alignment in Physics-informed Neural Networks: A Second-Order Optimization Perspective](https://arxiv.org/abs/2502.00604)
