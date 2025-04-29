@@ -13,14 +13,12 @@ hydra:
 # Setting
 mode: "train"
 seed: 2024
-process: "dyffusion"
+process: "interpolation"
+# process: "dyffusion"
 output_dir: ${hydra:run.dir}
 
-ckpt_dir: './results/checkpoints/'
-ckpt_path: null
-
 DATA:
-  root_data_dir: "/home/lijialin03/DYffusion/dyffusion/data/physical-nn-benchmark/"
+  root_data_dir: "./data/"
   dataset:
     physical_system: 'navier-stokes'
     window: 1
@@ -29,8 +27,8 @@ DATA:
     num_trajectories: null
   dataloader:
     batch_size:
-      train: 16
-      val: 1
+      train: 32
+      val: 4
       test: 1
     num_workers: 0
     drop_last: false
@@ -55,8 +53,8 @@ INTERPOLATION:
     upsample_dims: [256, 256]
     outer_sample_mode: bilinear
     with_time_emb: true
-  loss_fn: "l1"
-  ckpt_no_suffix: "../scripts/init_paddle"
+  loss_fn: "mse"
+  ckpt_no_suffix: null
 
 FORECASTING:
   lass_name: DYffusion
@@ -78,15 +76,15 @@ FORECASTING:
     num_cond_channels: 2
     dim: 64
     input_dropout: 0.0
-    dropout: 0.0
+    dropout: 0.15
     upsample_dims: [256, 256]
     outer_sample_mode: bilinear
     with_time_emb: true
-  loss_fn: "mse"
+  loss_fn: "l1"
+  ckpt_no_suffix: null
 
 SAMPLING:
   num_timesteps: 16
-  # sampling_timesteps: null
   time_encoding: "dynamics"
   schedule: before_t1_only
   addl_interp_steps: 0
@@ -113,8 +111,7 @@ TRAIN:
     epsilon: 1e-08
     weight_decay: 0.0001
     grad_clip: ["norm", 1.0]
-  # ckpt_no_suffix: "../scripts/init_paddle"
-  ckpt_no_suffix: "./ckpts/interpolation/3/interpolation_199"
+  metric_fns: ["mse", "crps", "ssr"]
 
 EVAL:
   batch_size: ${DATA.dataloader.batch_size.val}
@@ -122,10 +119,13 @@ EVAL:
     use_ema: false
     decay: 0.9999
   enable_infer_dropout: true
-  prediction_horizon: 64
+  prediction_horizon: 16
   prediction_num_predictions: 50
   autoregressive_steps: 0
-  ckpt_no_suffix: "../scripts/init_paddle"
-  ckpt_no_suffix_forecast: "../scripts/init_paddle_forecast"
   verbose: false
   save_dir: ${output_dir}
+  metric_fns: ["mse", "ssr"]
+  enable_ar: false
+  calc_ensemble_metrics: true
+  calc_batch_metrics: true
+  visual_metrics: true

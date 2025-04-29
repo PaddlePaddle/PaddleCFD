@@ -1,4 +1,6 @@
+import logging
 import os
+import random
 from typing import Dict
 
 import matplotlib.pyplot as plt
@@ -6,6 +8,7 @@ import models
 import numpy as np
 import paddle
 from datamodules import PhysicalDataLoader, PhysicalDatastet
+from matplotlib.animation import FuncAnimation
 from omegaconf import DictConfig, OmegaConf
 
 
@@ -22,7 +25,7 @@ def set_seed(seed, device="gpu"):
         paddle.set_device("gpu")
 
 
-def get_data_dir(
+def get_data_path(
     root_data_dir: str,
     physical_system: str = "navier-stokes",
     num_test_obstacles: int = 1,
@@ -31,7 +34,7 @@ def get_data_dir(
 ):
     ood_infix = "outdist-" if test_out_of_distribution else ""
     if physical_system == "navier-stokes":
-        _first_subdir = "navier-stokes-multi"
+        # _first_subdir = "navier-stokes-multi"
         assert num_test_obstacles in [
             1,
             4,
@@ -47,17 +50,15 @@ def get_data_dir(
     else:
         raise NotImplementedError(f"Physical system {physical_system} is not implemented yet.")
 
-    # self.root_data_dir = os.path.join(self.root_data_dir, _first_subdir)
-    _first_subdir = os.path.join(_first_subdir, "run", "data_gen")
-    data_dir_train = os.path.join(root_data_dir, _first_subdir, subdirs["train"])
-    data_dir_val = os.path.join(root_data_dir, _first_subdir, subdirs["val"])
-    data_dir_test = os.path.join(root_data_dir, _first_subdir, subdirs["test"])
+    data_dir_train = os.path.join(root_data_dir, subdirs["train"])
+    data_dir_val = os.path.join(root_data_dir, subdirs["val"])
+    data_dir_test = os.path.join(root_data_dir, subdirs["test"])
     return {"train": data_dir_train, "val": data_dir_val, "test": data_dir_test}
 
 
-def get_dataloader(cfg_data: DictConfig, modes=["train"]):
+def get_dataloader(cfg_data: DictConfig, modes=["train", "val", "test"]):
     # get datadirs
-    data_dir_dict = get_data_dir(root_data_dir=cfg_data.root_data_dir, **cfg_data.dataset)
+    data_dir_dict = get_data_path(root_data_dir=cfg_data.root_data_dir, **cfg_data.dataset)
     # get batch_size
     cfg_dataloader = OmegaConf.to_container(cfg_data.dataloader, resolve=True)
     batch_size = cfg_dataloader.pop("batch_size", None)
@@ -171,9 +172,10 @@ def save_arrays_as_line_plot(
     format: str = "png",
     show_grid: bool = True,
     line_style: str = "-",
+    extra_info: str = "",
 ):
     os.makedirs(save_dir, exist_ok=True)
-    filename = f"plot_{x_label}_vs_{y_label}.{format}"
+    filename = f"{x_label}_vs_{y_label}{extra_info}.{format}"
     save_path = os.path.join(save_dir, filename)
 
     plt.figure(figsize=figsize, dpi=dpi)
@@ -193,3 +195,68 @@ def save_arrays_as_line_plot(
     plt.savefig(save_path, bbox_inches="tight", format=format)
     plt.close()
     print(f"Plot saved to: {save_path}")
+
+
+def save_arrays_as_gif(
+    preds,
+    targets,
+    save_dir: str = "./plots",
+    titles=["u", "v", "p"],
+    extra_info: str = "",
+):
+    logging.getLogger("matplotlib.animation").setLevel(logging.WARNING)
+    os.makedirs(save_dir, exist_ok=True)
+
+    T, B, C, _, _ = targets.shape
+    assert C == len(titles), f"Error: targets' features is {C} != titles' num {len(titles)}."
+
+    preds = preds.transpose(0, 1, 2, 4, 3)
+    targets = targets.transpose(0, 1, 2, 4, 3)
+    diffs = np.abs(preds - targets)
+
+    for f in range(C):
+        fig, axs = plt.subplots(3, 1, figsize=(9, 6), constrained_layout=True)
+        fig.suptitle(f"Frame: 0/{T} ({titles[f]}) of Pred/Target/Diff", fontsize=14)
+
+        gif_data = [
+            preds[:, 0, f, :, :],
+            targets[:, 0, f, :, :],
+            diffs[:, 0, f, :, :],
+        ]
+
+        current_channel_data = np.concatenate([d.flatten() for d in gif_data])
+        data_min = np.min(current_channel_data)
+        data_max = np.max(current_channel_data)
+        for i in range(3):
+            gif_data[i] = (gif_data[i] - data_min) / (data_max - data_min + 1e-8)
+            gif_data[i] = np.clip(gif_data[i], 0, 1)
+
+        norm = plt.Normalize(vmin=0, vmax=1)
+
+        imgs = []
+        for row in range(3):
+            ax = axs[row]
+            img = ax.imshow(gif_data[row][0], norm=norm, cmap="coolwarm", aspect="auto")
+            imgs.append(img)
+
+        fig.colorbar(imgs[-1], ax=axs, orientation="vertical", pad=0.02)
+
+        def update(t):
+            for i in range(3):
+                imgs[i].set_data(gif_data[i][t])
+            fig.suptitle(f"Frame: {t+1}/{T} ({titles[f]}) of Pred/Target/Diff", fontsize=14)
+            return imgs
+
+        ani = FuncAnimation(
+            fig,
+            update,
+            frames=T,
+            interval=1000,
+            blit=False,
+        )
+
+        filename = f"{titles[f]}{extra_info}.gif"
+        save_path = os.path.join(save_dir, filename)
+        ani.save(save_path, writer="pillow", fps=2)
+        plt.close(fig)
+        print(f"GIF saved to: {save_path}")
