@@ -22,7 +22,9 @@ class DataParserMeta(ABCMeta):
     def __init__(cls, name, bases, attrs):
         super().__init__(name, bases, attrs)
         if hasattr(cls, "file_format"):
-            DataParserFactory.register_loader(cls.file_format)(cls)
+            formats = cls.file_format if isinstance(cls.file_format, list) else [cls.file_format]
+            for fmt in formats:
+                DataParserFactory.register_loader(fmt)(cls)
 
 
 class DataParserFactory:
