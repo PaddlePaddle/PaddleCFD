@@ -1,0 +1,73 @@
+hydra:
+  run:
+    # dynamic output directory according to running time and override name
+    dir: outputs_gino/${now:%Y-%m-%d-%H-%M-%S}
+  job:
+    name: ${mode} # name of logfile
+    chdir: false # keep current working direcotry unchaned
+  sweep:
+    # output directory for multirun
+    dir: ${hydra.run.dir}
+    subdir: ./
+
+# Setting
+mode: "train"
+checkpoint: null
+resume_ep: -1
+log: "log"
+logger_types: "tensorboard"
+seed: 0
+no_fabric: false  # not used
+device: 0
+output_dir: ${hydra:run.dir}
+
+
+# Model
+model: "Transolver"
+space_dim: 6  # input_dim
+n_layers: 5   # depth
+n_hidden: 256
+dropout: 0
+n_head: 8
+act: "gelu"
+mlp_ratio: 1
+fun_dim: 0
+out_dim: 4
+slice_num: 32
+ref: 8
+n_iter: 1
+unified_pos: false
+batch_size: 1
+sdf_spatial_resolution: [64, 64, 64] # or [70, 70, 70]
+
+
+# Run
+run_name: "Transovler"
+project_name: "DNNFluid-Car"
+
+
+# Hyper-parameters
+lr: 0.001
+lr_schedular: "CosineAnnealingLR"
+num_epochs: 300 # 300
+n_train_num: 500 # 2772 # 2776-"0978/1034/2860/3641"
+n_val_num: 1 # 595
+n_test_num: 1 # 595
+enable_ddp: false
+enable_mp: false
+enable_pp: false
+only_save_sdf: false
+lazy_loading: true
+cd_finetune: false
+
+
+# DataSet
+data_module: "pointcloud"
+data_path: "../gino_data/6_DrivAir_p"
+out_channels: [1,] # pressure+wss
+out_keys: ["pressure",]
+train_sample_number: 70000
+
+# Physics
+mass_density: 1.0
+flow_speed: 30.0

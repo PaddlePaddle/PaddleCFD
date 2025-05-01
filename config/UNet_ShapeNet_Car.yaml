@@ -1,0 +1,75 @@
+hydra:
+  run:
+    # dynamic output directory according to running time and override name
+    dir: outputs_gino/${now:%Y-%m-%d-%H-%M-%S}
+  job:
+    name: ${mode} # name of logfile
+    chdir: false # keep current working direcotry unchaned
+  sweep:
+    # output directory for multirun
+    dir: ${hydra.run.dir}
+    subdir: ./
+
+# setting
+mode: "train"
+checkpoint: null
+resume_ep: -1
+log: "log"
+logger_types: "tensorboard"
+seed: 0
+no_fabric: false  # not used
+device: 0
+output_dir: ${hydra:run.dir}
+save_freq: 10
+
+
+# model
+model: "UNet"
+use_position_input: True
+num_levels: 4
+subsample_train: 1
+subsample_eval: 1
+weighted_kernel: false
+embed_dim: 32
+hidden_channels: 64
+in_channels: 4
+# out_channels: [1, 3] # wss + pressure
+fno_modes: [32, 32, 32]
+fno_hidden_channels: 64
+fno_out_channels: 64
+max_in_points: 5000
+sdf_spatial_resolution: [64, 64, 64] # or [70, 70, 70]
+
+batch_size: 1
+
+# eval
+# n_test_num: 1 # 51
+test_plot_interval: true
+
+# run
+run_name: "UNet ShapeNet Car"
+project_name: "car-body"
+
+# custom settings for debugging for "drivaer"
+lr: 0.0005
+radius_in: 0.045
+radius_out: 0.045
+num_epochs: 100 # 300
+n_train_num: 10 # 2772 # 2776-"0978/1034/2860/3641"
+n_val_num: 1 # 595
+n_test_num: 50 # 595
+data_module: "CFDSDFDataModule"
+enable_ddp: false
+enable_mp: false
+enable_pp: false
+only_save_sdf: false
+lazy_loading: true
+
+data_path: "../gino_data/1_ShapeNetCar/car-pressure-data/"
+test_data_dir: "../gino_data/1_ShapeNetCar/car-pressure-data/"
+out_channels: [1] #out_channels = out_channels[0]
+out_keys: ["pressure"]
+
+# Physics
+mass_density: 1.0
+flow_speed: 30.0
