@@ -14,12 +14,12 @@
 
 
 from ppcfd.data.parser.base_parser import DataParserFactory
-from ppcfd.data.parser.mat2npz import MatTransition
+from ppcfd.data.parser.h5_mat2npz import H5MatTransition
 from ppcfd.data.parser.msh2npz import MshTransition
 
 
 __all__ = [
     "DataParserFactory",
+    "H5MatTransition",
     "MshTransition",
-    "MatTransition",
 ]

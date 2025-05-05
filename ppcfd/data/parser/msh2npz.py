@@ -20,7 +20,7 @@ from typing import Optional, Union
 
 import numpy as np
 
-from ppcfd.data.parser.base_parser import BaseTransition, DataParserFactory
+from ppcfd.data.parser.base_parser import BaseTransition
 
 
 class MeshSource(Enum):
@@ -43,14 +43,13 @@ class MeshSource(Enum):
     GENERAL = "general"
 
 
-@DataParserFactory.register_loader("msh")
 class MshTransition(BaseTransition):
     """Transition class for .msh file.
 
     Args:
         file_path (Union[str, Path]): path of .msh file.
         save_path (Optional[str], optional): path of saved .npz file. Defaults to None.
-        save_data (Optional[bool], optional): Whether to save the .npz file. Defaults to True.
+        save_data (Optional[bool], optional): Whether to save the .npz file. Defaults to False.
         source (Optional[Union[MeshSource, str]], optional): source of .msh file such as openfoam. Defaults to MeshSource.AUTO.
     """
 
@@ -62,7 +61,7 @@ class MshTransition(BaseTransition):
         self,
         file_path: Union[str, Path],
         save_path: Optional[Union[str, Path]] = None,
-        save_data: bool = True,
+        save_data: bool = False,
         source: Optional[Union[MeshSource, str]] = MeshSource.AUTO,
         **kwargs,
     ):
@@ -278,16 +277,3 @@ class MshTransition(BaseTransition):
 
     def get_data(self):
         return self.data
-
-
-if __name__ == "__main__":
-    path = "./SAE_BA11.0_DA3.0.msh"
-    # save_path = './SAE_BA11.0_DA3.0.npz'
-    # trans_obj = MshTransition(path, save_path)
-    # trans_obj = MshTransition(path, source='gmsh')
-    trans_obj = MshTransition(path, source="auto")
-    for key, value in trans_obj.data.items():
-        if isinstance(value, np.ndarray):
-            print(f"{key}: shape: {value.shape}")
-        else:
-            print(f"{key}: type: {type(value)}")
