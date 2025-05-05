@@ -23,7 +23,8 @@ class SinusoidalPosEmb(paddle.nn.Layer):
     def forward(self, x):
         half_dim = self.dim // 2
         emb = math.log(10000) / (half_dim - 1)
-        emb = paddle.exp(x=paddle.arange(end=half_dim) * -emb).astype(x.dtype)
+        emb = paddle.exp(x=paddle.arange(end=half_dim) * -emb)
+        x = x.astype(emb.dtype)
         emb = x[:, None] * emb[None, :]
         emb = paddle.concat(x=(emb.sin(), emb.cos()), axis=-1)
         return emb

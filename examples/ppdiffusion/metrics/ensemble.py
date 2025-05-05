@@ -54,7 +54,7 @@ class EnsembleMetrics:
         crps = xs.crps_ensemble(
             observations=targets_da, forecasts=preds_da, member_dim=member_dim, dim=mean_dims
         ).values  # shape: ()
-        return float(crps) if self.mean_over_samples else paddle.to_tensor(crps)
+        return paddle.to_tensor(crps)
 
     def ssr(self, preds, targets, skill_metric: float = None, mean_axis=None):
         variance = paddle.var(preds, axis=0).mean(axis=mean_axis)
@@ -110,7 +110,8 @@ class EnsembleMetrics:
 
         # SSR
         if "ssr" in self.metric_fns:
-            ssr = self.ssr(preds, targets, skill_metric=paddle.sqrt(mse), mean_axis=mean_axis)
+            skill_metric = paddle.sqrt(mse) if "mse" in self.metric_fns else None
+            ssr = self.ssr(preds, targets, skill_metric=skill_metric, mean_axis=mean_axis)
             metric_dict["ssr"] = ssr
 
         # compute negative log-likelihood

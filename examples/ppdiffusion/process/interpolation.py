@@ -109,9 +109,4 @@ class Interpolation(BaseProcess):
             preds = self.reshape_preds(preds)
             results = {f"t{t_step}_preds": preds, f"t{t_step}_targets": targets}
             return_dict.update(results)
-            # if self.num_predictions > 1:
-            #     preds = paddle.mean(preds, axis=0)
-            # metric = metric_fn(preds, targets)
-        #     t_step_metrics[f"t{t_step}_mse_mean(all_samples)"].append(metric)
-        # val_meter_verbose.update(t_step_metrics)
         return return_dict

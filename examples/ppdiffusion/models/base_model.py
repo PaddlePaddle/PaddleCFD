@@ -23,11 +23,7 @@ class BaseModel(paddle.nn.Layer):
         self.num_input_channels = num_input_channels
         self.num_output_channels = num_output_channels
         self.num_cond_channels = num_cond_channels
-
-        # get dropout layers
-        self.dropout_layers = [
-            m for m in self.sublayers() if isinstance(m, paddle.nn.Dropout) or isinstance(m, paddle.nn.Dropout2D)
-        ]
+        self.dropout_layers = None
 
     @property
     def num_params(self):
@@ -55,6 +51,9 @@ class BaseModel(paddle.nn.Layer):
             param.stop_gradient = False
         self.train()
 
+    def get_dropout_layers(self):
+        self.dropout_layers = [m for m in self.sublayers() if isinstance(m, (paddle.nn.Dropout, paddle.nn.Dropout2D))]
+
     def enable_infer_dropout(self):
         """Adjust all dropout layers to training state"""
         for layer in self.dropout_layers:
@@ -72,6 +71,9 @@ class BaseModel(paddle.nn.Layer):
         Args:
             enable (bool): Whether to turn on the controller.
         """
+        if self.dropout_layers is None:
+            self.get_dropout_layers()
+
         if enable:
             self.enable_infer_dropout()
         try:
