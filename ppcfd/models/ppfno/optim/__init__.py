@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ppcfd.models.ppfno.optim import schedulers
+from ppcfd.models.ppfno.optim.schedulers import instantiate_scheduler
 
-__all__ = ["schedulers"]
+__all__ = ["instantiate_scheduler"]
     

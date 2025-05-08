@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ppcfd.models.ppfno.utils import average_meter
-from ppcfd.models.ppfno.utils import dot_dict
+from ppcfd.models.ppfno.utils.average_meter import AverageMeter
+from ppcfd.models.ppfno.utils.average_meter import AverageMeterDict
+from ppcfd.models.ppfno.utils.dot_dict import DotDict
+from ppcfd.models.ppfno.utils.dot_dict import flatten_dict
 
-__all__ = ["average_meter", "dot_dict"]
+__all__ = ["AverageMeter", "AverageMeterDict", 'DotDict', "flatten_dict"]
