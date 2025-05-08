@@ -20,6 +20,7 @@ if __name__ == "__main__":
                 "examples",
             )
         ),
+        include_package_data=True,   
         description='PaddleCFD is a deep learning toolkit for surrogate modeling, equation discovery, shape optimization and flow-control strategy discovery in the field of fluid mechanics.',
         long_description=open('README.md', encoding="utf-8").read(),
         long_description_content_type='text/markdown',
@@ -29,8 +30,11 @@ if __name__ == "__main__":
         install_requires=get_requirements(),
         classifiers=[
             'Programming Language :: Python :: 3',
-            'License :: OSI Approved :: Apache-2.0 license',
+            'License :: OSI Approved :: Apache Software License',
             'Operating System :: OS Independent',
         ],
+        license_file="LICENSE",
         python_requires='>=3.10',
     )
+    print("PaddleCFD has been installed successfully.")
+    print("Please check https://github.com/PaddlePaddle/PaddleCFD for more information.")
