@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ppcfd.models.ppfno.optim import schedulers
+from ppcfd.models.ppfno.utils import average_meter
+from ppcfd.models.ppfno.utils import dot_dict
 
-__all__ = ["schedulers"]
-    
+__all__ = ["average_meter", "dot_dict"]

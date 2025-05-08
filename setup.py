@@ -12,7 +12,7 @@ def get_requirements() -> list:
 if __name__ == "__main__":
     setup(
         name='ppcfd',
-        version='0.1.0',
+        version='0.1.0.1',
         packages=find_packages(
             exclude=(
                 "config",
