@@ -13,5 +13,5 @@ ignore = ["E501", "F821"]
 select = ["E", "F", "I", "W"]
 
 [tool.ruff.lint.isort]
+force-single-line = true
 lines-after-imports = 2
-known-first-party = ["dyffusion"]

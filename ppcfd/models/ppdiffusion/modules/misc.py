@@ -1,4 +1,19 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import math
+from typing import Any, Callable, Optional
 
 import paddle
 from einops import rearrange
@@ -70,3 +85,27 @@ def get_time_embedder(
         paddle.nn.Linear(in_features=time_dim, out_features=time_dim),
     )
     return time_emb_mlp
+
+
+def default(val: Optional[Any], d: Callable[[], Any] | Any) -> Any:
+    return val if val is not None else (d() if callable(d) else d)
+
+
+def get_normalization_layer(name, dims, num_groups=None, *args, **kwargs):
+    if not isinstance(name, str) or name.lower() == "none":
+        return None
+    elif "batch_norm" == name:
+        return paddle.nn.BatchNorm2D(num_features=dims, *args, **kwargs)
+    elif "layer_norm" == name:
+        return paddle.nn.LayerNorm(dims, *args, **kwargs)
+    elif "instance" in name:
+        return paddle.nn.InstanceNorm1D(num_features=dims, *args, **kwargs)
+    elif "group" in name:
+        if num_groups is None:
+            pos_groups = [int(dims / N) for N in range(2, 17) if dims % N == 0]
+            if len(pos_groups) == 0:
+                raise NotImplementedError(f"Group norm could not infer the number of groups for dim={dims}")
+            num_groups = max(pos_groups)
+        return paddle.nn.GroupNorm(num_groups=num_groups, num_channels=dims)
+    else:
+        raise ValueError("Unknown normalization name", name)

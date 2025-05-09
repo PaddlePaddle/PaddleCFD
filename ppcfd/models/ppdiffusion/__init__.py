@@ -12,10 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ppcfd.models import ppdiffusion
-from ppcfd.models import ppfno
-from ppcfd.models import ppkan
-from ppcfd.models import pptransformer
+from ppcfd.models.ppdiffusion import modules
+from ppcfd.models.ppdiffusion.base_model import BaseModel
+from ppcfd.models.ppdiffusion.unet_simple import UNet as SimpleUnet
 
 
-__all__ = ["ppfno", "ppkan", "pptransformer", "ppdiffusion"]
+__all__ = [
+    "BaseModel",
+    "SimpleUnet",
+    "modules",
+]
