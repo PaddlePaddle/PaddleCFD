@@ -4,12 +4,13 @@ import random
 from typing import Dict
 
 import matplotlib.pyplot as plt
-import models
 import numpy as np
 import paddle
 from datamodules import PhysicalDataLoader, PhysicalDatastet
 from matplotlib.animation import FuncAnimation
 from omegaconf import DictConfig, OmegaConf
+
+from ppcfd.models import ppdiffusion as models
 
 
 # Random seed (if not using pypaddle-lightning)

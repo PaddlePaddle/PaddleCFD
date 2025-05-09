@@ -7,19 +7,19 @@ import hydra
 import numpy as np
 import paddle
 from metrics import EnsembleMetrics
-from models import LitEma
 from omegaconf import DictConfig
-from process import DYffusion, Interpolation
-from utils import (
-    AverageMeterDict,
-    get_dataloader,
-    get_optimizer,
-    get_scheduler,
-    initialize_models,
-    save_arrays_as_gif,
-    save_arrays_as_line_plot,
-    set_seed,
-)
+from process import DYffusion
+from process import Interpolation
+from utils import AverageMeterDict
+from utils import get_dataloader
+from utils import get_optimizer
+from utils import get_scheduler
+from utils import initialize_models
+from utils import save_arrays_as_gif
+from utils import save_arrays_as_line_plot
+from utils import set_seed
+
+from ppcfd.models.ppdiffusion.modules import LitEma
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
