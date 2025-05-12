@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ppcfd.models import ppdiffusion
 from ppcfd.models import ppfno
 from ppcfd.models import ppkan
 from ppcfd.models import pptransformer
 
-__all__ = ["ppfno", "ppkan", "pptransformer"]
+__all__ = ["ppfno", "ppkan", "pptransformer", "ppdiffusion"]
