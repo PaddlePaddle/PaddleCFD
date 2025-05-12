@@ -45,9 +45,9 @@ def sub_wget(command):
 
 
 def get_free_space_in_gb(local_dir):
-    # 获取磁盘使用情况
+    # get disk space
     usage = shutil.disk_usage(local_dir)
-    # 将字节转换为GB（使用1024^3作为1GB）
+    # to GB
     free_space_gb = usage.free / (1024 ** 3)
     return free_space_gb
 
@@ -89,18 +89,18 @@ def _dfc_hub_download_to_local_dir(
         local_dir_subdir = local_dir / data.RUN_LOCAL_DIR
         Path(local_dir_subdir).mkdir(parents=True, exist_ok=True)
         file_types_list[0].append(['wget', '-c', '-O', (local_dir_subdir/ Path(f"force_mom_{data.INDEX}.csv",)).as_posix() , f"https://{data.MIRROR}/datasets/{data.HF_OWNER}/{data.HF_PREFIX}/resolve/main/{data.RUN_LOCAL_DIR.as_posix()}/force_mom_{data.INDEX}.csv"])
-        # 解除注释以下载更多数据
+        # uncomment for more data
         # file_types_list[1].append(['wget', '-c', '-O', (local_dir_subdir/ Path(f"drivaer_{data.INDEX}.stl",)).as_posix() , f"https://{data.MIRROR}/datasets/{data.HF_OWNER}/{data.HF_PREFIX}/resolve/main/{data.RUN_LOCAL_DIR.as_posix()}/drivaer_{data.INDEX}.stl"])
         # file_types_list[2].append(['wget', '-c', '-O', (local_dir_subdir/ Path(f"boundary_{data.INDEX}.vtp",)).as_posix() , f"https://{data.MIRROR}/datasets/{data.HF_OWNER}/{data.HF_PREFIX}/resolve/main/{data.RUN_LOCAL_DIR.as_posix()}/boundary_{data.INDEX}.vtp"])
         # file_types_list[3].append(['wget', '-c', '-O', (local_dir_subdir/ Path(f"volume_{data.INDEX}.vtu.00.part",)).as_posix() , f"https://{data.MIRROR}/datasets/{data.HF_OWNER}/{data.HF_PREFIX}/resolve/main/{data.RUN_LOCAL_DIR.as_posix()}/volume_{data.INDEX}.vtu.00.part"])
         # file_types_list[4].append(['wget', '-c', '-O', (local_dir_subdir/ Path(f"volume_{data.INDEX}.vtu.01.part",)).as_posix() , f"https://{data.MIRROR}/datasets/{data.HF_OWNER}/{data.HF_PREFIX}/resolve/main/{data.RUN_LOCAL_DIR.as_posix()}/volume_{data.INDEX}.vtu.01.part"])
     
     for command_list in file_types_list:
-        # 使用ProcessPoolExecutor来限制并发数，例如最大3个并发下载
+        # concurrency limit
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             futures = [executor.submit(subprocess.run, cmd) for cmd in command_list]
             for future in futures:
-                future.result()  # 等待每个任务完成，并处理异常（如果有的话）
+                future.result()  # handle exception
 
 
 def dfc_hub_download(
@@ -150,15 +150,14 @@ def dfc_hub_download(
                 max_workers=max_workers
             )
 std = time.time()
-# 从DNNFluid-Car Hub下载数据集（使用1个并发进程）
-# 解除注释以下载更多数据
+# Download from PPCFD-hub
 dfc_hub_download(
-    repo_id="DNNFluid-Car/DrivAerML",  # 存储库唯一标识符（格式：组织名/仓库名）
-    filename=None,                     # 不指定具体文件名（下载仓库内所有文件）
-    repo_type="dataset",               # 明确仓库类型为数据集（可选值：dataset/model等）
-    local_dir=Path("./downloaded_dataset"),  # 指定本地保存路径（使用Path对象处理路径）
-    max_workers=1                      # 设置最大并发进程数为5（加速下载）
+    repo_id="DNNFluid-Car/DrivAerML",  #  repo sign
+    filename=None,                     #  specify certain files to download
+    repo_type="dataset",               #  specify download type（option：dataset/model...）
+    local_dir=Path("./downloaded_dataset"),  # local saving dir（Pathlib）
+    max_workers=1                      #  concurrency == 5
 )
 print("Time taken: ", time.time()-std,"seconds")
-# 使用1个并发进程下载15个文件, max_workers=1 : Time taken:  9.841650009155273 seconds
-# 使用5个并发进程下载15个文件, max_workers=5 : Time taken:  2.601330518722534 seconds
+# 1 process   for 15 files, max_workers=1 : Time taken:  9.841650009155273 seconds
+# 5 processes for 15 files, max_workers=5 : Time taken:  2.601330518722534 seconds
