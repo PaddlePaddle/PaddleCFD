@@ -24,7 +24,6 @@ from pathlib import Path
 from typing import Any, BinaryIO, Dict, Literal, NoReturn, Optional, Tuple, Union
 import os 
 import subprocess
-os.environ['WGET_USER_AGENT'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 
 @dataclass
 class DataCard():
@@ -150,6 +149,7 @@ def dfc_hub_download(
                 max_workers=max_workers
             )
 std = time.time()
+os.environ['WGET_USER_AGENT'] = 'Google search : [get my user agent]'
 # Download from PPCFD-hub
 dfc_hub_download(
     repo_id="DNNFluid-Car/DrivAerML",  #  repo sign
