@@ -233,7 +233,7 @@ class Trainer:
             t2 - t1,
             self.val_meter.message(),
         )
-        if self.cfg.EVAL.verbose:
+        if self.cfg.EVAL.verbose and self.calc_ensemble_metrics:
             logging.info(self.val_meter_verbose.message_verbose())
 
     def test(self):
