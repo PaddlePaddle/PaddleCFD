@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/home/chenkai26/PaddleScience-AeroShapeOpt/paddle_project')
+sys.path.append('/home/paddle_project')
 import paddle
 import os
 from typing import List, Optional, Union
