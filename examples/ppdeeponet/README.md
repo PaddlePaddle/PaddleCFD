@@ -94,17 +94,17 @@ $$
 $$
 
 为了避免在两个角落处的顶部滑盖边界条件的不连续性，我们将边界条件设置如下：
-- **顶盖（$y = L$）**：
+- 顶盖（$y = L$）：
 
-  $$
-  u(x, L) = 1-\frac{\cosh \left(C_0(\frac{x}{L}-0.5)\right)}{\cosh \left(0.5 C_0\right)}, \quad v(x, L) = 0.
-  $$
+$$
+u(x, L) = 1-\frac{\cosh \left(C_0(\frac{x}{L}-0.5)\right)}{\cosh \left(0.5 C_0\right)}, \quad v(x, L) = 0.
+$$
 
-- **其余壁面（$x=0, x=L, y=0$）**：无滑移条件（速度为零）：
+- 其余壁面（$x=0, x=L, y=0$）：无滑移条件（速度为零）：
 
-  $$
-  u = v = 0.
-  $$
+$$
+u = v = 0.
+$$
 
 引入无量纲变量：
 
@@ -117,6 +117,7 @@ $$
 $$
 \nabla^* \cdot \mathbf{u}^* = 0,
 $$
+
 $$
 \frac{\partial \mathbf{u}^*}{\partial t^*} + (\mathbf{u}^* \cdot \nabla^*) \mathbf{u}^* = -\nabla^* p^* + \frac{1}{Re} \nabla^{*2} \mathbf{u}^*,
 $$
@@ -127,7 +128,7 @@ $$
 Re = \frac{U_0 L}{\nu}.
 $$  
 
-在此我们考虑稳态流场问题，即忽略时间项，$\frac{\partial \mathbf{u}}{\partial t} = 0$。同时设$L=1$，$C_0 = 50$，$Re=3200$. 我们的目标是获得对应于雷诺数为 3200 的速度和压力场。
+在此我们考虑稳态流场问题，即忽略时间项，$\frac{\partial \mathbf{u}}{\partial t} = 0$。同时设 $L=1$，$C_0 = 50$，$Re=3200$. 我们的目标是获得对应于雷诺数为 3200 的速度和压力场。
 
 
 ## 3. 模型设计
@@ -138,7 +139,7 @@ $$
 
 ![PirateNets](./images/PirateNets.png)
 
-物理信息残差自适应网络（PirateNets）是一种旨在解决上述初始化问题的新型架构。图中展示了PirateNet前向传播的主要模块。具体而言，输入坐标$\mathbf{x}$首先通过嵌入函数$\Phi(\mathbf{x})$映射到高维特征空间。在这里，我们采用随机傅里叶特征：
+物理信息残差自适应网络（PirateNets）是一种旨在解决上述初始化问题的新型架构。图中展示了PirateNet前向传播的主要模块。具体而言，输入坐标 $\mathbf{x}$首先通过嵌入函数 $\Phi(\mathbf{x})$ 映射到高维特征空间。在这里，我们采用随机傅里叶特征：
 
 $$
 \Phi(\mathbf{x})= \begin{bmatrix}
@@ -147,7 +148,7 @@ $$
 \end{bmatrix},
 $$
 
-其中 $\mathbf{B} \in \R^{m \times d}$ 的每个元素是从高斯分布 $\mathcal{N}(0, s^2)$ 中独立同分布采样的，标准差 $s > 0$ 为用户指定的超参数。这样的嵌入已被广泛验证能在PINNs的训练中减少频谱偏差，从而更有效地逼近高频解。
+其中 $\mathbf{B} \in R^{m \times d}$ 的每个元素是从高斯分布 $\mathcal{N}(0, s^2)$ 中独立同分布采样的，标准差 $s > 0$ 为用户指定的超参数。这样的嵌入已被广泛验证能在PINNs的训练中减少频谱偏差，从而更有效地逼近高频解。
 
 然后，嵌入的坐标 $\Phi(\mathbf{x})$ 被送入两个密集层：
 
@@ -230,8 +231,8 @@ $$
 
 - 在旋转空间中应用 Adam 更新：
 
-    $$\widetilde{W}_{t+1} = \widetilde{W}_{t} - \eta \, \operatorname{Adam}(\widetilde{G}_t).$$
-    
+    $$\widetilde{W}_{t+1} = \widetilde{W}_{t} - \eta \operatorname{Adam}(\widetilde{G}_t).$$
+
 - 变换回原始参数空间：
 
     $$W_{t+1} = Q_L \widetilde{W}_{t+1} Q_R^T.$$
