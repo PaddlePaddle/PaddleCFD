@@ -118,7 +118,7 @@ $$
 \nabla^* \cdot \mathbf{u}^* = 0,
 $$
 $$
-\frac{\partial \mathbf{u}^*}{\partial t^*} + (\mathbf{u}^* \cdot \nabla^* ) \mathbf{u}^* = -\nabla^* p^* + \frac{1}{Re} \nabla^{* 2} \mathbf{u}^*,
+\frac{\partial \mathbf{u}^* }{\partial t^*} + (\mathbf{u}^* \cdot \nabla^* ) \mathbf{u}^* = -\nabla^* p^* + \frac{1}{Re} \nabla^{* 2} \mathbf{u}^*,
 $$
 
 其中 **雷诺数（Reynolds number）** 定义为：
@@ -231,7 +231,7 @@ $$
 
 - 在旋转空间中应用 Adam 更新：
 
-    $$\widetilde{W}_{t+1} = \widetilde{W}_t - \eta \operatorname{Adam}(\widetilde{G}_t).$$
+    $$\widetilde{W}_{t+1} = \widetilde{W}_t - \eta Adam(\widetilde{G}_t).$$
 
 - 变换回原始参数空间：
 
