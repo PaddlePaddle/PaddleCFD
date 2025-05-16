@@ -20,20 +20,19 @@ import h5py
 import numpy as np
 import scipy.io as sio
 
-from ppcfd.data.parser.base_parser import BaseTransition, DataParserFactory
+from ppcfd.data.parser.base_parser import BaseTransition
 
 
-@DataParserFactory.register_loader("msh")
-class MatTransition(BaseTransition):
-    """Transition class for .mat file.
+class H5MatTransition(BaseTransition):
+    """Transition class for .mat and .h5 file.
 
     Args:
-        file_path (Union[str, Path]): path of .mat file.
+        file_path (Union[str, Path]): path of .mat and .h5 file.
         save_path (Optional[str], optional): path of saved .npz file. Defaults to None.
-        save_data (Optional[bool], optional): Whether to save the .npz file. Defaults to True.
+        save_data (Optional[bool], optional): Whether to save the .npz file. Defaults to False.
     """
 
-    file_format = "mat"
+    file_format = ["mat", "h5"]
     # be empty because `file_path` could be set by loader and all other prarmeters have default value
     required_params = []
 
@@ -41,7 +40,7 @@ class MatTransition(BaseTransition):
         self,
         file_path: Union[str, Path],
         save_path: Optional[str] = None,
-        save_data: Optional[bool] = True,
+        save_data: Optional[bool] = False,
         **kwargs,
     ):
         super().__init__(file_path)
@@ -49,6 +48,8 @@ class MatTransition(BaseTransition):
             self.output_path = Path(save_path).absolute()
         else:
             self.output_path = self.file_path
+
+        self.format = self.file_path.suffix[1:].lower()
 
         try:
             self.data = self.load_data()
@@ -59,17 +60,26 @@ class MatTransition(BaseTransition):
             self.save_npz()
 
     def load_data(self):
-        try:
-            # MATLAB < v7.3
-            raw_data = sio.loadmat(self.file_path)
-            raw_data.pop("__header__", None)
-            raw_data.pop("__version__", None)
-            raw_data.pop("__globals__", None)
-            return {k: self._parse_mat_struct(v) for k, v in raw_data.items()}
-        except NotImplementedError:
-            print("The .mat created by MATLAB versions >= 7.3, try to load it using h5py instead.")
-            with h5py.File(self.file_path, "r") as f:
-                return {key: self._parse_hdf5_group(f[key]) for key in f.keys()}
+        if self.format == "h5":
+            return self.load_h5()
+        elif self.format == "mat":
+            try:
+                return self.load_h5()
+            except Exception:
+                print("The .mat created by MATLAB versions < 7.3.")
+                return self.load_mat()
+
+    def load_mat(self):
+        # MATLAB < v7.3
+        raw_data = sio.loadmat(self.file_path)
+        raw_data.pop("__header__", None)
+        raw_data.pop("__version__", None)
+        raw_data.pop("__globals__", None)
+        return {k: self._parse_mat_struct(v) for k, v in raw_data.items()}
+
+    def load_h5(self):
+        with h5py.File(self.file_path, "r") as f:
+            return {key: self._parse_hdf5_group(f[key]) for key in f.keys()}
 
     def _parse_mat_struct(self, struct):
         if isinstance(struct, np.ndarray):
@@ -116,16 +126,3 @@ class MatTransition(BaseTransition):
 
     def get_data(self):
         return self.data
-
-
-if __name__ == "__main__":
-    path = "../burgers.mat"
-    # save_path = './burgers.npz'
-    # save_path = './burgers'
-    # trans_obj = MatTransition(path, save_path)
-    trans_obj = MatTransition(path)
-    for key, value in trans_obj.data.items():
-        if isinstance(value, np.ndarray):
-            print(f"{key}: shape: {value.shape}")
-        else:
-            print(f"{key}: type: {type(value)}")

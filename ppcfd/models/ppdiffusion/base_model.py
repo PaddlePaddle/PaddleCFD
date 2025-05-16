@@ -1,3 +1,17 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from contextlib import contextmanager
 from typing import Optional
 
@@ -23,11 +37,7 @@ class BaseModel(paddle.nn.Layer):
         self.num_input_channels = num_input_channels
         self.num_output_channels = num_output_channels
         self.num_cond_channels = num_cond_channels
-
-        # get dropout layers
-        self.dropout_layers = [
-            m for m in self.sublayers() if isinstance(m, paddle.nn.Dropout) or isinstance(m, paddle.nn.Dropout2D)
-        ]
+        self.dropout_layers = None
 
     @property
     def num_params(self):
@@ -55,6 +65,9 @@ class BaseModel(paddle.nn.Layer):
             param.stop_gradient = False
         self.train()
 
+    def get_dropout_layers(self):
+        self.dropout_layers = [m for m in self.sublayers() if isinstance(m, (paddle.nn.Dropout, paddle.nn.Dropout2D))]
+
     def enable_infer_dropout(self):
         """Adjust all dropout layers to training state"""
         for layer in self.dropout_layers:
@@ -72,6 +85,9 @@ class BaseModel(paddle.nn.Layer):
         Args:
             enable (bool): Whether to turn on the controller.
         """
+        if self.dropout_layers is None:
+            self.get_dropout_layers()
+
         if enable:
             self.enable_infer_dropout()
         try:

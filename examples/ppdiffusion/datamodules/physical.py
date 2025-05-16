@@ -1,16 +1,15 @@
 from __future__ import annotations
 
+import itertools
 from collections import defaultdict
 from typing import Dict
 
 import numpy as np
 import paddle
 from einops import rearrange
+from tqdm import tqdm
 
-
-from tqdm import tqdm  # isort:skip
-
-from .rawdata_ns import TrajectoryDataset
+import ppcfd
 
 
 class PhysicalDatastet(paddle.io.Dataset):
@@ -48,24 +47,19 @@ class PhysicalDatastet(paddle.io.Dataset):
 
     def load_data(self):
         """Load data. Set internal variables: self.dataset, self._data_val, self._data_test."""
-        dataset = TrajectoryDataset(self.data_dir)
-        self.chunk_samples = None
+        dataset = ppcfd.data.load_dataset(self.data_dir + ".h5")[0]
 
         if self.multi_horizon:
             numpy_tensors = self.create_dataset_multi_horizon(dataset, False)
-            self.chunk_samples = numpy_tensors["dynamics"][0].shape[0]
         else:
             numpy_tensors = self.create_dataset_single_horizon(dataset, False)
 
         self.dataset = numpy_tensors
         assert self.dataset is not None, "Could not create dataset"
 
-    def create_dataset_single_horizon(
-        self, dataset: TrajectoryDataset, keep_trajectory_dim: bool = False
-    ) -> Dict[str, np.ndarray]:
-        """Create a dataset from the given TrajectoryDataset and return it."""
+    def create_dataset_single_horizon(self, dataset, keep_trajectory_dim: bool = False) -> Dict[str, np.ndarray]:
+        """Create a dataset from the given dataset and return it."""
         data = self.create_dataset_multi_horizon(dataset, keep_trajectory_dim)
-        # dynamics = data.pop("dynamics")
         dynamics = np.concatenate(data["dynamics"], axis=0).astype(np.float32)
         window, horizon = self.window, self.horizon
         assert (
@@ -75,9 +69,7 @@ class PhysicalDatastet(paddle.io.Dataset):
         targets = dynamics[:, -1, ...]
         return {"inputs": inputs, "targets": targets, **data}
 
-    def create_dataset_multi_horizon(
-        self, dataset: TrajectoryDataset, keep_trajectory_dim: bool = False
-    ) -> Dict[str, np.ndarray]:
+    def create_dataset_multi_horizon(self, dataset, keep_trajectory_dim: bool = False) -> Dict[str, np.ndarray]:
         """Create a numpy dataset from the given xarray dataset and return it."""
         # dataset is 4D tensor with dimensions (grid-box, time, lat, lon)
         # Create a tensor, X, of shape (batch-dim, horizon, lat, lon),
@@ -88,19 +80,17 @@ class PhysicalDatastet(paddle.io.Dataset):
         n_trajectories = len(dataset) if self.num_trajectories is None else min(len(dataset), self.num_trajectories)
 
         print(f"Loading data from {self.data_dir}")
-        # n_trajectories = min(100, n_trajectories)
-        for i in tqdm(range(n_trajectories), desc="Loading"):
-            traj_i = dataset[i]
-            traj_len = traj_i.trajectory_meta["num_time_steps"]
+        for k, traj_i in tqdm(itertools.islice(dataset.items(), n_trajectories), total=n_trajectories, desc="Loading"):
+            traj_len = traj_i["trajectory_meta"]["num_time_steps"]
             time_len = traj_len - horizon - window + 1
 
-            dynamics_i = traj_i.features
+            dynamics_i = traj_i["features"]
             assert (
                 dynamics_i.shape[0] == traj_len
             ), f"Error: shape {dynamics_i.shape} not equal to {traj_len} along axis 0"
 
             # Repeat extra_fixed_mask for each example in the trajectory (it is the same for all examples)
-            extra_fixed_mask = np.repeat(np.expand_dims(traj_i.condition, axis=0), time_len, axis=0)
+            extra_fixed_mask = np.repeat(np.expand_dims(traj_i["condition"], axis=0), time_len, axis=0)
 
             # To save memory, we create the dataset through sliding window views
             dynamics_i = np.lib.stride_tricks.sliding_window_view(dynamics_i, time_len, axis=0)
@@ -115,12 +105,12 @@ class PhysicalDatastet(paddle.io.Dataset):
                 dynamics_i = np.expand_dims(dynamics_i, axis=0)
                 extra_fixed_mask = np.expand_dims(extra_fixed_mask, axis=0)
             # add to the dataset
-            traj_i.trajectory_meta["t"] = traj_i.t
-            traj_i.trajectory_meta["fixed_mask"] = traj_i.fixed_mask
+            traj_i["trajectory_meta"]["t"] = traj_i["t"]
+            traj_i["trajectory_meta"]["fixed_mask"] = traj_i["fixed_mask"]
             if self.physical_system == "navier-stokes":
-                traj_i.trajectory_meta["vertices"] = traj_i.vertices
+                traj_i["trajectory_meta"]["vertices"] = traj_i["vertices"]
 
-            traj_metadata = [traj_i.trajectory_meta] * time_len
+            traj_metadata = [traj_i["trajectory_meta"]] * time_len
             trajectories["dynamics"].append(dynamics_i.astype(np.float32))
             trajectories[self.condition_name].append(extra_fixed_mask.astype(np.float32))
             trajectories["metadata"].extend(traj_metadata)
@@ -128,29 +118,19 @@ class PhysicalDatastet(paddle.io.Dataset):
             self.dataset_len += dynamics_i.shape[0]
 
         # do not concatenate here to avoid excessive memory usage
-        # for key in ["dynamics", self.condition_name]:
-        #     if trajectories[key]:
-        #         trajectories[key] = np.concatenate(trajectories[key], axis=0).astype(np.float32)
+        for key in ["dynamics", self.condition_name]:
+            if trajectories[key]:
+                trajectories[key] = np.concatenate(trajectories[key], axis=0).astype(np.float32)
 
         # print(f'Shapes={trajectories["dynamics"].shape}, {trajectories["extra_condition"].shape}')
         # E.g. with 90 total examples, horizon=5, window=1: Shapes=(90, 6, 3, 221, 42), (90, 2, 221, 42)
         return trajectories
 
     def __len__(self):
-        # any_value = next(iter(self.dataset.values()))
-        # return any_value.shape[0]
         return self.dataset_len
 
     def __getitem__(self, idx):
-        if self.chunk_samples is None:
-            return {key: self.dataset[key][idx] for key in self.dataset.keys()}
-        else:
-            extra_key = set(self.dataset.keys()) - {"dynamics", self.condition_name}
-            res = {key: self.dataset[key][idx] for key in extra_key}
-            chunk_idx = idx // self.chunk_samples
-            sample_idx = idx % self.chunk_samples
-            res.update({key: self.dataset[key][chunk_idx][sample_idx] for key in ["dynamics", self.condition_name]})
-            return res
+        return {key: self.dataset[key][idx] for key in self.dataset.keys()}
 
 
 class PhysicalDataLoader(paddle.io.DataLoader):

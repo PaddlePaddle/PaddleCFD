@@ -20,3 +20,5 @@ def instantiate_network(config):
         print('Model not found')
     print('The model size is ', count_params(model))
     return model
+
+__all__ = ["instantiate_network"]

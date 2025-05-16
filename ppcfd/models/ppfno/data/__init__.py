@@ -11,3 +11,5 @@ def instantiate_datamodule(config, n_train_num, n_val_num, n_test_num):
             only_save_sdf=config.only_save_sdf)
     else:
         raise NotImplementedError(f'Unknown datamodule: {config.data_module}')
+
+__all__ = ["instantiate_datamodule"]

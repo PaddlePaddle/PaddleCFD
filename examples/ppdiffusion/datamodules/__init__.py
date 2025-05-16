@@ -1,12 +1,10 @@
 from __future__ import annotations
 
+from .physical import PhysicalDataLoader
+from .physical import PhysicalDatastet
 
-from .rawdata_ns import TrajectoryDataset  # isort:skip
-from .physical import PhysicalDatastet  # isort:skip
-from .physical import PhysicalDataLoader  # isort:skip
 
 __all__ = [
-    "TrajectoryDataset",
     "PhysicalDatastet",
     "PhysicalDataLoader",
 ]
