@@ -1,9 +1,49 @@
-[tool.black]
-line-length = 119
-target_version = ['py310']
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ppcfd"
+version = "0.0.1.0"
+authors = [
+  { name="AI4S@PaddlePaddle", email="paddlescience@baidu.com" },
+]
+description = "PaddleCFD is a deep learning toolkit for surrogate modeling, equation discovery, shape optimization and flow-control strategy discovery in the field of fluid mechanics."
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = { text = "Apache-2.0" }
+dynamic = ["dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/pypa/sampleproject"
+Issues = "https://github.com/pypa/sampleproject/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = [
+    "doc",
+    "examples",
+]
 
 [tool.ruff]
 line-length = 119
+ignore = ["E501", "E741", "E731"]
+extend-exclude = [
+]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.isort]
+profile = "black"
+
+[tool.black]
+line-length = 119
+target_version = ['py310']
 
 [tool.ruff.lint]
 # Ignored rules:

@@ -1,7 +1,7 @@
 import paddle
 from typing import List, Union
 import sys
-sys.path.append('/home/chenkai26/Paddle-AeroSimOpt/src')
+sys.path.append('/home/src')
 from neuralop.utils import validate_scaling_factor
 
 

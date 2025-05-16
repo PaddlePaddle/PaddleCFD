@@ -156,3 +156,4 @@ data_process/dataset/
 trainedModel/*
 *.nsys-rep
 *.sqlite
+*.pyc
