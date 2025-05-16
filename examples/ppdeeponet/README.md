@@ -117,8 +117,9 @@ $$
 $$
 \nabla^* \cdot \mathbf{u}^* = 0,
 $$
+
 $$
-\frac{\partial \mathbf{u}^* }{\partial t^*} + (\mathbf{u}^* \cdot \nabla^* ) \mathbf{u}^* = -\nabla^* p^* + \frac{1}{Re} \nabla^{* 2} \mathbf{u}^*,
+\frac{\partial \mathbf{u}^* }{\partial t^* } + (\mathbf{u}^* \cdot \nabla^* ) \mathbf{u}^* = -\nabla^* p^* + \frac{1}{Re} \nabla^{* 2} \mathbf{u}^*,
 $$
 
 其中 **雷诺数（Reynolds number）** 定义为：
