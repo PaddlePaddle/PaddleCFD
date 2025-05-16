@@ -120,7 +120,7 @@ $$
 
 $$
 \frac{\partial \mathbf{u}^* }{\partial t^* } + (\mathbf{u}^* \cdot \nabla^* ) \mathbf{u}^* = -\nabla^* p^* + \frac{1}{Re} \nabla^{* 2} \mathbf{u}^*,
-$$git
+$$
 
 其中 **雷诺数（Reynolds number）** 定义为：
 
