@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
-import warnings
 
 import numpy as np
 import vtk
@@ -43,9 +41,7 @@ def read_case(input_file):
         cell_centers = vtk.vtkCellCenters()
         cell_centers.SetInputData(polydata)
         cell_centers.Update()
-        numpy_cell_centers = vtk_to_numpy(
-            cell_centers.GetOutput().GetPoints().GetData()
-        ).astype(np.float32)
+        numpy_cell_centers = vtk_to_numpy(cell_centers.GetOutput().GetPoints().GetData()).astype(np.float32)
         return numpy_cell_centers
 
     centroid_list = []
@@ -74,9 +70,7 @@ def read_case(input_file):
                 elif len(no_partial_block_shape) == 2:  # N,3
                     val = np.zeros([n, 3])
                 else:
-                    raise NotImplementedError(
-                        f"Unknown shape of [{key}] with shape {no_partial_block_shape}."
-                    )
+                    raise NotImplementedError(f"Unknown shape of [{key}] with shape {no_partial_block_shape}.")
             else:
                 val = vtk_to_numpy(val).astype(np.float32)
             if i == 0:

@@ -1,20 +1,33 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
 import os
 import random
-import sys
 import time
-import warnings
 from pathlib import Path
 
 import numpy as np
+import open3d
 import paddle
 import vtk
-from ppcfd.script.starccm_plus.pyfrontal import calculate_frontal_area
-from ppcfd.script.starccm_plus.read_case import read_case
 from vtk.util.numpy_support import numpy_to_vtk
 from vtk.util.numpy_support import vtk_to_numpy
 
-sys.path.append("./PaddleScience/")
-sys.path.append("/home/aistudio/3rd_lib")
+from ppcfd.script.starccm_plus.pyfrontal import calculate_frontal_area
+from ppcfd.script.starccm_plus.read_case import read_case
+from ppcfd.utils.utils import UnitGaussianNormalizer
 
 
 def normalization(locations, min_bounds, max_bounds):
@@ -33,14 +46,10 @@ def load_bound(data_dir, filename):
 
 
 def normalizer(data_dir):
-    p_norm = UnitGaussianNormalizer(
-        paddle.zeros(5), eps=1e-06, reduce_dim=0, verbose=False
-    )
+    p_norm = UnitGaussianNormalizer(paddle.zeros([5]), eps=1e-06, reduce_dim=0, verbose=False)
     mean, std = load_bound(data_dir, filename="train_pressure_mean_std.txt")
     p_norm.mean, p_norm.std = paddle.to_tensor(mean), paddle.to_tensor(std)
-    wss_norm = UnitGaussianNormalizer(
-        paddle.zeros(5), eps=1e-06, reduce_dim=0, verbose=False
-    )
+    wss_norm = UnitGaussianNormalizer(paddle.zeros([5]), eps=1e-06, reduce_dim=0, verbose=False)
     mean, std = load_bound(data_dir, filename="train_wss_mean_std.txt")
     wss_norm.mean, wss_norm.std = paddle.to_tensor(mean), paddle.to_tensor(std)
     return [p_norm.decode, wss_norm.decode], [p_norm.encode, wss_norm.encode]
@@ -84,12 +93,10 @@ def read_vtk(file_path):
     reader.Update()
     polydata = reader.GetOutput()
     point_data_keys = [
-        polydata.GetPointData().GetArrayName(i)
-        for i in range(polydata.GetPointData().GetNumberOfArrays())
+        polydata.GetPointData().GetArrayName(i) for i in range(polydata.GetPointData().GetNumberOfArrays())
     ]
     cell_data_keys = [
-        polydata.GetCellData().GetArrayName(i)
-        for i in range(polydata.GetCellData().GetNumberOfArrays())
+        polydata.GetCellData().GetArrayName(i) for i in range(polydata.GetCellData().GetNumberOfArrays())
     ]
     print("Point Data Keys:", point_data_keys)
     print("Cell Data Keys:", cell_data_keys)
@@ -104,9 +111,7 @@ def get_normals(polydata):
     normals_filter.FlipNormalsOn()
     normals_filter.AutoOrientNormalsOn()
     normals_filter.Update()
-    numpy_cell_normals = vtk_to_numpy(
-        normals_filter.GetOutput().GetCellData().GetNormals()
-    ).astype(np.float32)
+    numpy_cell_normals = vtk_to_numpy(normals_filter.GetOutput().GetCellData().GetNormals()).astype(np.float32)
     return numpy_cell_normals
 
 
@@ -115,9 +120,7 @@ def get_areas(polydata):
     cell_size_filter.SetInputData(polydata)
     cell_size_filter.ComputeAreaOn()
     cell_size_filter.Update()
-    numpy_cell_areas = vtk_to_numpy(
-        cell_size_filter.GetOutput().GetCellData().GetArray("Area")
-    ).astype(np.float32)
+    numpy_cell_areas = vtk_to_numpy(cell_size_filter.GetOutput().GetCellData().GetArray("Area")).astype(np.float32)
     return numpy_cell_areas
 
 
@@ -125,9 +128,7 @@ def get_centroids(polydata):
     cell_centers = vtk.vtkCellCenters()
     cell_centers.SetInputData(polydata)
     cell_centers.Update()
-    numpy_cell_centers = vtk_to_numpy(
-        cell_centers.GetOutput().GetPoints().GetData()
-    ).astype(np.float32)
+    numpy_cell_centers = vtk_to_numpy(cell_centers.GetOutput().GetPoints().GetData()).astype(np.float32)
     return numpy_cell_centers
 
 
@@ -137,9 +138,7 @@ def get_nodes(polydata):
 
 
 def velocity(polydata):
-    vel = vtk_to_numpy(polydata.GetPointData().GetArray("point_vectors")).astype(
-        np.float32
-    )
+    vel = vtk_to_numpy(polydata.GetPointData().GetArray("point_vectors")).astype(np.float32)
     return vel
 
 
@@ -147,9 +146,7 @@ def load_sdf_queries(min_bounds, max_bounds):
     tx = np.linspace(min_bounds[0], max_bounds[0], 64)
     ty = np.linspace(min_bounds[1], max_bounds[1], 64)
     tz = np.linspace(min_bounds[2], max_bounds[2], 64)
-    sdf_query_points = np.stack(np.meshgrid(tx, ty, tz, indexing="ij"), axis=-1).astype(
-        np.float32
-    )
+    sdf_query_points = np.stack(np.meshgrid(tx, ty, tz, indexing="ij"), axis=-1).astype(np.float32)
     return sdf_query_points
 
 
@@ -185,9 +182,7 @@ def read(file_path):
         _, polydata = read_ply(file_path)
         decode, encode = normalizer(file_path.parent / "txt/")
 
-        min_bounds, max_bounds = load_bound(
-            file_path.parent / "txt/", filename="global_bounds.txt"
-        )
+        min_bounds, max_bounds = load_bound(file_path.parent / "txt/", filename="global_bounds.txt")
         sdf_query_points = load_sdf_queries(min_bounds, max_bounds)
         sdf = load_sdf(file_path, sdf_query_points)
         sdf_query_points = (
@@ -202,9 +197,7 @@ def read(file_path):
         flow_normals[:, 0] = -1
 
         direction = paddle.sum(x=normal * flow_normals, axis=1, keepdim=False)
-        centroids = location_normalization(
-            get_centroids(polydata), min_bounds, max_bounds
-        )
+        centroids = location_normalization(get_centroids(polydata), min_bounds, max_bounds)
         centroids = paddle.to_tensor(centroids)
 
         data_dict = {
@@ -221,10 +214,10 @@ def read(file_path):
         }
     elif file_path.suffix == ".vtk":
         _, polydata = read_vtk(file_path)
-        decode, encode = normalizer(file_path.parent / "txt/")
-        data_dir = Path("/home/aistudio/txt")
+        decode, _ = normalizer(file_path.parent / "txt/")
+        data_dir = file_path.parent / "txt/"
         min_bounds, max_bounds = load_bound(data_dir, filename="global_bounds.txt")
-        sdf_query_points = load_sdf_queries()
+        sdf_query_points = load_sdf_queries(min_bounds, max_bounds)
         sdf = load_sdf(file_path, sdf_query_points)
         sdf_query_points = (
             location_normalization(sdf_query_points, min_bounds, max_bounds)
@@ -247,7 +240,6 @@ def read(file_path):
             debug=False,
         )
         data_dict = {
-            # "vtk_data": vtk_data,
             "centroids": paddledict["centroids"],
             "normal": paddledict["normal"],
             "areas": paddledict["areas"],
@@ -267,20 +259,20 @@ def read(file_path):
 def write(polydata, p, var_name, vtk_name):
     np_array = p.numpy()
     vtk_array = numpy_to_vtk(np_array)
-    vtk_array.SetName(var_name)  
+    vtk_array.SetName(var_name)
     polydata.GetCellData().AddArray(vtk_array)
     appendFilter = vtk.vtkAppendFilter()
     appendFilter.AddInputData(polydata)
     appendFilter.Update()
     writer = vtk.vtkUnstructuredGridWriter()
-    writer.SetFileName(vtk_name)  
+    writer.SetFileName(vtk_name)
     writer.SetInputData(appendFilter.GetOutput())
     writer.Write()
 
 
 def write_ply(polydata, filename):
     writer = vtk.vtkPLYWriter()
-    writer.SetFileName(filename)  
+    writer.SetFileName(filename)
     writer.SetInputData(polydata)
     writer.Write()
 

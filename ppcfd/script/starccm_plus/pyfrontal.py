@@ -1,8 +1,18 @@
-###############################################################################
-# The following is a python script that uses VTK to generate fast
-# projections of STL meshes for frontal area calculations.  See README for more
-# information.
-###############################################################################
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
 import argparse
 import os
 import time
@@ -17,7 +27,7 @@ from ppcfd.script.starccm_plus.read_case import read_case
 
 
 def valid_file(param):
-    base, ext = os.path.splitext(param)
+    _, ext = os.path.splitext(param)
     if ext.lower() not in (".stl", ".case"):
         raise argparse.ArgumentTypeError("\n\nERROR: File must be an STL mesh.\n")
     return param
@@ -104,46 +114,31 @@ def calculate_frontal_area(
         polydata_structed = geometryFilter.GetOutput()
         car_surface_data = polydata_structed
         car_surface_data = scale_geo(car_surface_data, 1000)
-        x_bounds, y_bounds, z_bounds = get_bounds(
-            car_surface_data, x_bounds, y_bounds, z_bounds
-        )
+        x_bounds, y_bounds, z_bounds = get_bounds(car_surface_data, x_bounds, y_bounds, z_bounds)
         surfaceMapper = vtk.vtkPolyDataMapper()
         surfaceMapper.SetInputData(car_surface_data)
     elif isinstance(vtk_data, vtk.vtkMultiBlockDataSet):
         multi_blockdata = vtk_data
         for i in range(multi_blockdata.GetNumberOfBlocks()):
-            t0 = time.time()
             u_data = multi_blockdata.GetBlock(i)
             p_data = unstructured_to_poly(u_data)
-            # 创建一个变换过滤器，应用变换
             p_data = scale_geo(p_data, 1000)
-            x_bounds, y_bounds, z_bounds = get_bounds(
-                p_data, x_bounds, y_bounds, z_bounds
-            )
+            x_bounds, y_bounds, z_bounds = get_bounds(p_data, x_bounds, y_bounds, z_bounds)
 
             multi_blockdata.SetBlock(i, p_data)
         car_surface_data = multi_blockdata
         surfaceMapper = vtk.vtkCompositePolyDataMapper()
         surfaceMapper.SetInputDataObject(car_surface_data)
     elif Path(file_name).suffix == ".stl":
-        # Initialize the object that is used to load the .stl file
         stlFileReader = vtk.vtkSTLReader()
-
-        # Specify the .stl file's name.
         stlFileReader.SetFileName(file_name)
-
-        # Load the .stl file.
         stlFileReader.Update()
         car_surface_data = stlFileReader.GetOutput()
         car_surface_data = scale_geo(car_surface_data, 1000)
-        x_bounds, y_bounds, z_bounds = get_bounds(
-            car_surface_data, x_bounds, y_bounds, z_bounds
-        )
-        # Clipping plane for ground
+        x_bounds, y_bounds, z_bounds = get_bounds(car_surface_data, x_bounds, y_bounds, z_bounds)
         plane = vtk.vtkPlane()
         plane.SetNormal(0, 0, 1)
         plane.SetOrigin(0, 0, ground)
-
         clip = vtk.vtkClipPolyData()
         clip.SetClipFunction(plane)
         clip.SetInputData(car_surface_data)
@@ -158,10 +153,7 @@ def calculate_frontal_area(
             u_data = multi_blockdata.GetBlock(i)
             p_data = unstructured_to_poly(u_data)
             p_data = scale_geo(p_data, 1000)
-            x_bounds, y_bounds, z_bounds = get_bounds(
-                p_data, x_bounds, y_bounds, z_bounds
-            )
-
+            x_bounds, y_bounds, z_bounds = get_bounds(p_data, x_bounds, y_bounds, z_bounds)
             multi_blockdata.SetBlock(i, p_data)
         car_surface_data = multi_blockdata
         surfaceMapper = vtk.vtkCompositePolyDataMapper()
@@ -207,9 +199,6 @@ def calculate_frontal_area(
         frame_height = intYdim
     else:
         raise ValueError("proj_axis must be one of [X, Y, Z]")
-
-    minscale = min([frame_width, frame_height])
-    maxscale = max([frame_width, frame_height])
 
     aspect = frame_width / frame_height
 
@@ -310,12 +299,8 @@ def calculate_frontal_area(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("file_name", type=valid_file, help="Filename of STL mesh")
-    parser.add_argument(
-        "-fitfactor", help="Factor to help fit view to model", type=float, default=1.0
-    )
-    parser.add_argument(
-        "-res", help="Render Window Resolution (default 1500px)", type=int, default=1500
-    )
+    parser.add_argument("-fitfactor", help="Factor to help fit view to model", type=float, default=1.0)
+    parser.add_argument("-res", help="Render Window Resolution (default 1500px)", type=int, default=1500)
     parser.add_argument(
         "-ground",
         type=int,
@@ -323,6 +308,4 @@ if __name__ == "__main__":
         help="Ground height clipping in mm from Z=0",
     )
     args = parser.parse_args()
-    frontal_area, bounds = calculate_frontal_area(
-        args.file_name, "X", args.ground, args.res, args.fitfactor, True
-    )
+    frontal_area, bounds = calculate_frontal_area(args.file_name, "X", args.ground, args.res, args.fitfactor, True)
