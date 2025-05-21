@@ -12,3 +12,9 @@ PaddleCFD is a deep learning toolkit for surrogate modeling, equation discovery,
 - `ppcfd/data`: data-process source code
 - `ppcfd/model`: model source code
 - `ppcfd/utils`: util code
+
+## Docker
+```
+wget https://dataset.bj.bcebos.com/PaddleScience/DNNFluid-Car/docker_image/dnnfluid-car_v1.0.tar
+docker load -i dnnfluid-car_v1.0.tar
+```
