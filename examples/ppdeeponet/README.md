@@ -33,7 +33,7 @@
         wget -nc -P ./data/ https://paddle-org.bj.bcebos.com/paddlescience/datasets/ldc/ldc_Re3200.mat
         # windows
         # curl https://paddle-org.bj.bcebos.com/paddlescience/datasets/ldc/ldc_Re3200.mat --create-dirs -o ./data/ldc_Re3200.mat
-        python ldc_2d_Re3200_piratenet.py mode=eval EVAL.pretrained_model_path=https://paddle-org.bj.bcebos.com/paddlescience/models/ldc/ldc_re3200_piratenet_pretrained.pdparams
+        python ldc_2d_Re3200_piratenet.py mode=eval EVAL.pretrained_model_path=https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/pppinn/ldc_2d_Re3200.pdparams
         ```
 
     === "模型导出命令"
@@ -52,17 +52,15 @@
         python ldc_2d_Re3200_piratenet.py mode=infer
         ```
 
-    | 预训练模型  | $Re$  | 指标 |
+    | 预训练模型  | Re  | 指标 |
     | :-- | :-- | :-- |
     | - | 100 | U_validator/loss: 0.00011<br>U_validator/L2Rel.U: 0.03896 |
     | - | 400 | U_validator/loss: 0.00024<br>U_validator/L2Rel.U: 0.05432 |
     | - | 1000 | U_validator/loss: 0.00020<br>U_validator/L2Rel.U: 0.04845 |
     | - | 1600 | U_validator/loss: 0.00080<br>U_validator/L2Rel.U: 0.09351 |
-    | [**ldc_re3200_piratenet_pretrained.pdparams**](https://paddle-org.bj.bcebos.com/paddlescience/models/ldc/ldc_re3200_piratenet_pretrained.pdparams) | 3200 | **U_validator/loss: 0.00013<br>U_validator/L2Rel.U: 0.03713** |
+    | [**ldc_re3200_piratenet_pretrained.pdparams**](https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/pppinn/ldc_2d_Re3200.pdparams) | 3200 | **U_validator/loss: 0.00013<br>U_validator/L2Rel.U: 0.03713** |
 
-!!! 说明
-
-    本案例仅提供 $Re=3200$ 一种情况下的预训练模型，若需要其他雷诺数下的预训练模型，请执行训练命令手动训练即可得到各雷诺数下的模型权重。
+本案例仅提供 $Re=3200$ 一种情况下的预训练模型，若需要其他雷诺数下的预训练模型，请执行训练命令手动训练即可得到各雷诺数下的模型权重。
 
 ## 1. 背景简介
 
@@ -90,37 +88,47 @@ $$
 - $\nu$ 为运动粘度（kinematic viscosity）。
 
 考虑一个 **二维方腔**（边长 $L$），计算域为：
+
 $$
 \Omega = [0, L] \times [0, L].
 $$
 
 为了避免在两个角落处的顶部滑盖边界条件的不连续性，我们将边界条件设置如下：
-- **顶盖（$y = L$）**：
-  $$
-  u(x, L) = 1-\frac{\cosh \left(C_0(\frac{x}{L}-0.5)\right)}{\cosh \left(0.5 C_0\right)}, \quad v(x, L) = 0.
-  $$
-- **其余壁面（$x=0, x=L, y=0$）**：无滑移条件（速度为零）：
-  $$
-  u = v = 0.
-  $$
+- 顶盖（ $y = L$）：
+
+$$
+u(x, L) = 1-\frac{\cosh \left(C_0(\frac{x}{L}-0.5)\right)}{\cosh \left(0.5 C_0\right)}, \quad v(x, L) = 0.
+$$
+
+- 其余壁面（ $x=0, x=L, y=0$）：无滑移条件（速度为零）：
+
+$$
+u = v = 0.
+$$
 
 引入无量纲变量：
+
 $$
 x^* = \frac{x}{L}, \quad y^* = \frac{y}{L}, \quad \mathbf{u}^* = \frac{\mathbf{u}}{U_0}, \quad p^* = \frac{p}{\rho U_0^2}, \quad t^* = \frac{t U_0}{L},
 $$
+
 控制方程变为：
+
 $$
 \nabla^* \cdot \mathbf{u}^* = 0,
 $$
+
 $$
-\frac{\partial \mathbf{u}^*}{\partial t^*} + (\mathbf{u}^* \cdot \nabla^*) \mathbf{u}^* = -\nabla^* p^* + \frac{1}{Re} \nabla^{*2} \mathbf{u}^*,
+\frac{\partial \mathbf{u}^* }{\partial t^* } + (\mathbf{u}^* \cdot \nabla^* ) \mathbf{u}^* = -\nabla^* p^* + \frac{1}{Re} \nabla^{* 2} \mathbf{u}^*,
 $$
+
 其中 **雷诺数（Reynolds number）** 定义为：
+
 $$
 Re = \frac{U_0 L}{\nu}.
 $$  
 
-在此我们考虑稳态流场问题，即忽略时间项，$\frac{\partial \mathbf{u}}{\partial t} = 0$。同时设$L=1$，$C_0 = 50$，$Re=3200$. 我们的目标是获得对应于雷诺数为 3200 的速度和压力场。
+在此我们考虑稳态流场问题，即忽略时间项， $\frac{\partial \mathbf{u}}{\partial t} = 0$。同时设 $L=1$， $C_0 = 50$， $Re=3200$. 我们的目标是获得对应于雷诺数为 3200 的速度和压力场。
 
 
 ## 3. 模型设计
@@ -131,25 +139,29 @@ $$
 
 ![PirateNets](./images/PirateNets.png)
 
-物理信息残差自适应网络（PirateNets）是一种旨在解决上述初始化问题的新型架构。图中展示了PirateNet前向传播的主要模块。具体而言，输入坐标$\mathbf{x}$首先通过嵌入函数$\Phi(\mathbf{x})$映射到高维特征空间。在这里，我们采用随机傅里叶特征：
+物理信息残差自适应网络（PirateNets）是一种旨在解决上述初始化问题的新型架构。图中展示了PirateNet前向传播的主要模块。具体而言，输入坐标 $\mathbf{x}$首先通过嵌入函数 $\Phi(\mathbf{x})$ 映射到高维特征空间。在这里，我们采用随机傅里叶特征：
+
 $$
 \Phi(\mathbf{x})= \begin{bmatrix}
 \cos (\mathbf{B x} ) \\
 \sin (\mathbf{B x} )
 \end{bmatrix},
 $$
-其中 $\mathbf{B} \in \R^{m \times d}$ 的每个元素是从高斯分布 $\mathcal{N}(0, s^2)$ 中独立同分布采样的，标准差 $s > 0$ 为用户指定的超参数。这样的嵌入已被广泛验证能在PINNs的训练中减少频谱偏差，从而更有效地逼近高频解。
+
+其中 $\mathbf{B} \in R^{m \times d}$ 的每个元素是从高斯分布 $\mathcal{N}(0, s^2)$ 中独立同分布采样的，标准差 $s > 0$ 为用户指定的超参数。这样的嵌入已被广泛验证能在PINNs的训练中减少频谱偏差，从而更有效地逼近高频解。
 
 然后，嵌入的坐标 $\Phi(\mathbf{x})$ 被送入两个密集层：
+
 $$
 \mathbf{U} = \sigma(\mathbf{W}_1 \Phi(\mathbf{x}) + \mathbf{b}_1  ), \quad
 \mathbf{V} = \sigma(\mathbf{W}_2 \Phi(\mathbf{x}) + \mathbf{b}_2  ),
 $$
+
 其中 $\sigma$ 表示逐点激活函数。这两个编码映射在架构的每个残差块中充当门控。此步骤被广泛用于增强MLP的可训练性和提高PINNs的收敛性。
 
 设 $\mathbf{x}^{(l)}$ 表示第 $l$ 个块的输入，其中 $1 \le l \le L$。每个PirateNet块的前向传播通过以下迭代定义：
-$$
 
+$$
 \begin{align}
     \mathbf{f}^{(l)}  &= \sigma\big(\mathbf{W}^{(l)}_1 \mathbf{x}^{(l)} + \mathbf{b}^{(l)}_1\big), \\
     \mathbf{z}^{(l)}_1 &= \mathbf{f}^{(l)} \odot \mathbf{U} + (1 - \mathbf{f}^{(l)}) \odot \mathbf{V},  \\
@@ -158,30 +170,36 @@ $$
       \mathbf{h}^{(l)}  &= \sigma\big(\mathbf{W}^{(l)}_3 \mathbf{z}_2^{(l)} + \mathbf{b}^{(l)}_3\big), \\
     \mathbf{x}^{(l+1)} &= \alpha^{(l)}  \mathbf{h}^{(l)} + (1 - \alpha^{(l)})   \mathbf{x}^{(l)},
 \end{align}
+\tag{1}
 $$
-其中 $\odot$ 表示逐点乘法，$\alpha^{(l)} \in \mathbb{R}$ 是可训练参数。所有权重均通过Glorot方案初始化，偏置初始化为零。
+
+其中 $\odot$ 表示逐点乘法， $\alpha^{(l)} \in \mathbb{R}$ 是可训练参数。所有权重均通过Glorot方案初始化，偏置初始化为零。
 
 一个包含 $L$ 个残差块的PirateNet的最终输出为：
+
 $$
 \mathbf{u}_{\mathbf{\theta}} = \mathbf{W}^{(L+1)} \mathbf{x}^{(L)}.
 $$
 
 值得注意的是，从前向传播过程（1-6）可以看出，每个残差块由三个密集层和两个门控操作组成，后跟跨堆叠层的自适应残差连接。因此，一个包含 $L$ 个残差块的PirateNet的深度为 $3L$，其总的可训练参数数量与相同深度的MLP相当。
 
-PirateNets的一个关键方面是跳跃连接中的可训练参数 $\alpha^{(l)}$，它决定了第 $l$ 个块的非线性程度。具体而言，当 $\alpha^{(l)}=0$ 时，由前向传播过程（1-6）得 $\mathbf{x}^{(l+1)} = \mathbf{x}^{(l)}$，这意味着在这种情况下，第 $l$ 个块是一个恒等映射。相反，当 $\alpha^{(l)} = 1$ 时，映射变得完全非线性，没有任何捷径。在本研究的所有实验中，我们将所有块的 $\alpha^{(l)}$ 初始化为零，从而使得在初始化时，PirateNet的最终输出 $\mathbf{u}_{\mathbf{\theta}}$ 是第一层嵌入的线性组合，即：
+PirateNets的一个关键方面是跳跃连接中的可训练参数 $\alpha^{(l)}$，它决定了第 $l$ 个块的非线性程度。具体而言，当 $\alpha^{(l)}=0$ 时，由前向传播过程（1）得 $\mathbf{x}^{(l+1)} = \mathbf{x}^{(l)}$，这意味着在这种情况下，第 $l$ 个块是一个恒等映射。相反，当 $\alpha^{(l)} = 1$ 时，映射变得完全非线性，没有任何捷径。在本研究的所有实验中，我们将所有块的 $\alpha^{(l)}$ 初始化为零，从而使得在初始化时，PirateNet的最终输出 $\mathbf{u}_{\mathbf{\theta}}$ 是第一层嵌入的线性组合，即：
+
 $$
-\begin{align}
 \mathbf{u}_{\mathbf{\theta}}(\mathbf{x}) = \mathbf{W}^{(L+1)}\Phi(\mathbf{x}).
-\end{align}
+\tag{2}
 $$
+
 通过这样做，我们规避了深度网络的初始化病态问题。PirateNets在训练过程中根据PDE系统学习编码在 $\alpha$ 中的必要非线性。因此，它们的可训练性和表达能力得以恢复，模型的前向传播变得更加非线性和深层。事实上，PDE解可以通过一个小型浅层网络甚至一些基的线性组合简单地逼近，类似于谱和有限元方法。使用深度神经网络的基本原理在于利用额外的非线性来最小化PDE残差，从而使网络能够相应地学习解及其导数。
 
-从公式(7)可以得到另一个关键的观察结果，即PirateNets在初始化时可以看作是基函数的线性组合。这不仅允许通过适当选择基函数来控制网络的归纳偏差，还可以在网络的初始化阶段整合各种类型的现有数据。具体来说，给定一组解的测量值，记为 $\mathbf{Y} = \{y_i \}_{i=1}^n$，那么可以通过以下最小二乘问题初始化模型的最后一层线性层：
+从公式(2)可以得到另一个关键的观察结果，即PirateNets在初始化时可以看作是基函数的线性组合。这不仅允许通过适当选择基函数来控制网络的归纳偏差，还可以在网络的初始化阶段整合各种类型的现有数据。具体来说，给定一组解的测量值，记为 $\mathbf{Y} = \{y_i \}_{i=1}^n$，那么可以通过以下最小二乘问题初始化模型的最后一层线性层：
+
 $$
 \begin{align}
     \min_{\mathbf{W}} \left\| \mathbf{W} \Phi  - \mathbf{Y} \right\|_2^2.
 \end{align}
 $$
+
 因此，PirateNets基于可用数据在 $L^2$ 意义上提供了一个最优的初始猜测。需要注意的是，用于这种初始化的数据可以来自多种来源，包括实验测量、初始和边界条件、由替代模型推导出的解，或者通过逼近线性化PDE的解。事实上，我们可以将相同的初始化过程应用于任何带有线性最终层的网络架构，而主要的考虑是随机初始化的基函数可能在准确拟合数据方面表现欠佳。综上所述，该方法为通过适当的网络初始化将物理先验知识整合到机器学习流程中开辟了新的途径。
 
 ### 3.2 二阶优化SOAP(Shampoo with Adam in the Preconditioner)
@@ -192,24 +210,32 @@ PINNs 在训练过程中面临竞争梯度的基本挑战，这种挑战以两�
 
 当梯度冲突发生时，通常表明改善一个目标需要在多个参数上进行协调变化——这些信息编码在 Hessian 矩阵的非对角元素中。
 SOAP 以两种互补的方式近似这种二阶信息：
-(i) 其块对角结构自然地捕捉了每个网络层内的参数相互作用；(ii) 其自适应预处理器累积了有关训练步骤中梯度相关性的信息。这使得 SOAP 可以隐式识别并利用参数更新方向，从而同时改善多个目标。SOAP 不仅仅是简单地跟随平均梯度，而是利用局部损失景观的几何结构，寻找更直接的路径以获得良好的解决方案。
+- 其块对角结构自然地捕捉了每个网络层内的参数相互作用；
+- 其自适应预处理器累积了有关训练步骤中梯度相关性的信息。这使得 SOAP 可以隐式识别并利用参数更新方向，从而同时改善多个目标。SOAP 不仅仅是简单地跟随平均梯度，而是利用局部损失景观的几何结构，寻找更直接的路径以获得良好的解决方案。
 
-SOAP通过在与预处理器主方向对齐的变换空间中进行优化，增强了 Shampoo 的效率。对于每层的权重矩阵 $W_t$ 和梯度 $G_t \in \R^{m \times n}$，SOAP 使用指数移动平均维护两个协方差矩阵：
+SOAP通过在与预处理器主方向对齐的变换空间中进行优化，增强了 Shampoo 的效率。对于每层的权重矩阵 $W_t$ 和梯度 $G_t \in R^{m \times n}$，SOAP 使用指数移动平均维护两个协方差矩阵：
+
 $$
 \begin{align}
     L_{t} = \beta_2 L_{t-1}+\left(1-\beta_2\right) G_{t} G_t^T, \\
     R_{t} =  \beta_2 R_{t-1} +\left(1-\beta_2\right) G_t^T G_t\,.
 \end{align}
 $$
+
 这些矩阵然后被进行特征分解为 $L_t = Q_L \Lambda_L Q_L^T$ 和 $R_t = Q_R \Lambda_R Q_R^T$，其中 $\Lambda_L$ 和 $\Lambda_R$ 包含捕捉损失景观主曲率方向的特征值。
 
 在每个迭代 $t$ 中，SOAP 使用相应的梯度 $G_t$ 更新每层的权重矩阵 $W_t$，如下所示：
 
 - 将梯度投影到特征空间： 
+
     $$\widetilde{G}_t = Q_L^T G_t Q_R.$$
+
 - 在旋转空间中应用 Adam 更新：
-    $$\widetilde{W}_{t+1} = \widetilde{W}_{t} - \eta \, \operatorname{Adam}(\widetilde{G}_t).$$
+
+    $$\widetilde{W}_{t+1} = \widetilde{W}_t - \eta Adam(\widetilde{G}_t).$$
+
 - 变换回原始参数空间：
+
     $$W_{t+1} = Q_L \widetilde{W}_{t+1} Q_R^T.$$
 
 为了减少计算开销，预处理器 $L_t$ 和 $R_t$ 在实践中以频率 $f$ 进行更新。
