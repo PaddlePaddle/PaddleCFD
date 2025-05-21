@@ -6,9 +6,11 @@ from typing import Dict
 import matplotlib.pyplot as plt
 import numpy as np
 import paddle
-from datamodules import PhysicalDataLoader, PhysicalDatastet
+from datamodules import PhysicalDataLoader
+from datamodules import PhysicalDatastet
 from matplotlib.animation import FuncAnimation
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
+from omegaconf import OmegaConf
 
 from ppcfd.models import ppdiffusion as models
 
@@ -43,7 +45,7 @@ def get_data_path(
         test_t = {(1): 65, (4): 16, (16): 4}[num_test_obstacles]
         test_set_name = f"ns-runs_eval-{ood_infix}cors{num_test_obstacles}-navier-stokes-n5-t{test_t}-n0_tagcors{num_test_obstacles}_00001"
         subdirs = {
-            "train": "ns-runs_train-navier-stokes-n100-t65-n0_00001",
+            "train": "ns-runs_train-navier-stokes-n25-t65-n0_00001",
             "val": "ns-runs_val-navier-stokes-n2-t65-n0_00001",
             "test": test_set_name,
         }
@@ -144,6 +146,7 @@ def initialize_models(cfg, models_lst=["interp"], interp_obj=None, forecast_obj=
         if ckpt:
             state_dict = paddle.load(f"{ckpt}.pdparams")
             model_interp.set_state_dict(state_dict)
+            logging.info(f"Finish loading checkpoint {ckpt}.pdparams")
         init_models.append(model_interp)
 
     if "forecast" in models_lst:
@@ -153,10 +156,11 @@ def initialize_models(cfg, models_lst=["interp"], interp_obj=None, forecast_obj=
         model_forecast_cfg = forecast_obj.model_cfg_transform(cfg.FORECASTING.MODEL)
         model_forecast = forecast_model(**model_forecast_cfg)
         # load ckpt
-        ckpt = getattr(cfg.FORECASTING, "ckpt_no_suffix_forecast", None)
+        ckpt = getattr(cfg.FORECASTING, "ckpt_no_suffix", None)
         if ckpt:
             state_dict = paddle.load(f"{ckpt}.pdparams")
             model_forecast.set_state_dict(state_dict)
+            logging.info(f"Finish loading checkpoint {ckpt}.pdparams")
         init_models.append(model_forecast)
 
     return init_models
@@ -195,7 +199,7 @@ def save_arrays_as_line_plot(
 
     plt.savefig(save_path, bbox_inches="tight", format=format)
     plt.close()
-    print(f"Plot saved to: {save_path}")
+    logging.info(f"Plot saved to: {save_path}")
 
 
 def save_arrays_as_gif(
@@ -219,45 +223,44 @@ def save_arrays_as_gif(
         fig, axs = plt.subplots(3, 1, figsize=(9, 6), constrained_layout=True)
         fig.suptitle(f"Frame: 0/{T} ({titles[f]}) of Pred/Target/Diff", fontsize=14)
 
-        gif_data = [
-            preds[:, 0, f, :, :],
-            targets[:, 0, f, :, :],
-            diffs[:, 0, f, :, :],
-        ]
-
-        current_channel_data = np.concatenate([d.flatten() for d in gif_data])
-        data_min = np.min(current_channel_data)
-        data_max = np.max(current_channel_data)
-        for i in range(3):
-            gif_data[i] = (gif_data[i] - data_min) / (data_max - data_min + 1e-8)
-            gif_data[i] = np.clip(gif_data[i], 0, 1)
-
-        norm = plt.Normalize(vmin=0, vmax=1)
+        gif_data = [preds[:, 0, f], targets[:, 0, f], diffs[:, 0, f]]
+        combined_data = np.concatenate([arr.flatten() for arr in gif_data])
+        data_min, data_max = np.percentile(combined_data, [1, 99])
+        norm = plt.Normalize(vmin=data_min, vmax=data_max)
 
         imgs = []
         for row in range(3):
             ax = axs[row]
-            img = ax.imshow(gif_data[row][0], norm=norm, cmap="coolwarm", aspect="auto")
+            img = ax.imshow(gif_data[row][0], norm=norm, cmap="coolwarm", aspect="auto", interpolation="bilinear")
             imgs.append(img)
 
-        fig.colorbar(imgs[-1], ax=axs, orientation="vertical", pad=0.02)
+        cbar = fig.colorbar(imgs[0], ax=axs, orientation="vertical", pad=0.02)
+        cbar.set_label("Normalized Value")
 
         def update(t):
-            for i in range(3):
-                imgs[i].set_data(gif_data[i][t])
+            for i, img in enumerate(imgs):
+                img.set_data(gif_data[i][t])
+                img.set_norm(norm)
             fig.suptitle(f"Frame: {t+1}/{T} ({titles[f]}) of Pred/Target/Diff", fontsize=14)
+            return imgs
+
+        def init():
+            for i, img in enumerate(imgs):
+                img.set_data(gif_data[i][0])
             return imgs
 
         ani = FuncAnimation(
             fig,
             update,
             frames=T,
-            interval=1000,
-            blit=False,
+            interval=500,
+            blit=True,
+            repeat_delay=1000,
+            init_func=init,
         )
 
         filename = f"{titles[f]}{extra_info}.gif"
         save_path = os.path.join(save_dir, filename)
-        ani.save(save_path, writer="pillow", fps=2)
+        ani.save(save_path, writer="pillow", fps=2, dpi=100, savefig_kwargs={"facecolor": "white"})
         plt.close(fig)
-        print(f"GIF saved to: {save_path}")
+        logging.info(f"GIF saved to: {save_path}")

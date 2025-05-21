@@ -1,5 +1,6 @@
 from contextlib import ExitStack
-from typing import Callable, Optional
+from typing import Callable
+from typing import Optional
 
 import numpy as np
 import paddle
@@ -178,30 +179,25 @@ class Sampling:
                 "x0": x0_hat,
                 "x_end": init_cond,
                 "is_artificial_step": not is_dynamics_pred,
-                "reshape_ensemble_dim": not is_last_step,
-                "num_predictions": 1 if is_last_step else num_predictions,
             }
-            # print("### x0_hat",x0_hat.shape,x0_hat.mean().item(),x0_hat.std().item())
-            # print("### init_cond",init_cond.shape,init_cond.mean().item(),init_cond.std().item())
-            # print("### is_dynamics_pred",is_dynamics_pred)
-            # print("### is_last_step",is_last_step)
-            # print("### num_predictions",q_sample_kwargs["num_predictions"])
             if s_next <= self.num_timesteps - 1:
                 step_s_next = paddle.full([batch_size], s_next, dtype="float32")
                 x_interp_s_next = self.q_sample(**q_sample_kwargs, time=step_s_next, **sc_kw)
-                # print("### x_interp_s_next",x_interp_s_next.shape,x_interp_s_next.mean().item(),x_interp_s_next.std().item())
-                # exit()
             else:
                 x_interp_s_next = x0_hat
 
-            assert self.sampling_type == "cold", f"Error: sampling type {self.sampling_type} is not support now."
-            if is_last_step and not self.use_cold_sampling_for_last_step:
-                x_s = x0_hat
+            if self.sampling_type == "cold":
+                if is_last_step and not self.use_cold_sampling_for_last_step:
+                    x_s = x0_hat
+                else:
+                    # D(x_s, s)
+                    x_interp_s = self.q_sample(**q_sample_kwargs, time=step_s, **sc_kw) if s > 0 else x_s
+                    # for s = 0, we have x_s_degraded = x_s, so we just directly return x_s_degraded_next
+                    x_s += x_interp_s_next - x_interp_s
+            elif self.sampling_type == "naive":
+                x_s = x_interpolated_s_next
             else:
-                # D(x_s, s)
-                x_interp_s = self.q_sample(**q_sample_kwargs, time=step_s, **sc_kw) if s > 0 else x_s
-                # for s = 0, we have x_s_degraded = x_s, so we just directly return x_s_degraded_next
-                x_s = x_s - x_interp_s + x_interp_s_next
+                raise ValueError(f"Error: sampling type {self.sampling_type} is not support now.")
 
             dynamics_pred_step = int(time_i_n) if s < self.num_timesteps - 1 else dynamics_pred_step + 1
             if is_dynamics_pred:
@@ -223,9 +219,6 @@ class Sampling:
                     **q_sample_kwargs, time=None, interp_time=i_n_time_tensor, **sc_kw
                 )
 
-        # for k,v in intermediates.items():
-        #     print(k,v.shape,v.mean().item(),v.std().item())
-        # exit()
         if last_i_next_n < self.num_timesteps:
             return x_s, intermediates, x_interp_s_next
         return x0_hat, intermediates, x_s

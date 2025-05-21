@@ -156,11 +156,6 @@ class DYffusion:
         kwargs["num_input_channels"] = self.forecast_obj.model.num_input_channels
         if "num_predictions" not in kwargs:
             kwargs["num_predictions"] = self.forecast_obj.num_predictions
-        # print(inputs.shape,inputs.mean().item(),inputs.std().item())
-        # print(kwargs.keys())
-        # print(kwargs["static_cond"].shape,kwargs["static_cond"].mean().item(),kwargs["static_cond"].std().item())
-        # print(kwargs["num_input_channels"],kwargs["num_predictions"])
-        # exit()
         preds_dict = self.sampling_obj.sample(inputs, **kwargs)
         return_dict = {k: self.forecast_obj.reshape_preds(v) for k, v in preds_dict.items()}
         return return_dict

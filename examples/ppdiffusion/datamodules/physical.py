@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 import itertools
+import logging
 from collections import defaultdict
 from typing import Dict
 
@@ -79,7 +78,7 @@ class PhysicalDatastet(paddle.io.Dataset):
         # go through all trajectories and concatenate them in the 2nd dimension (new axis)
         n_trajectories = len(dataset) if self.num_trajectories is None else min(len(dataset), self.num_trajectories)
 
-        print(f"Loading data from {self.data_dir}")
+        logging.info(f"Loading data from {self.data_dir}")
         for k, traj_i in tqdm(itertools.islice(dataset.items(), n_trajectories), total=n_trajectories, desc="Loading"):
             traj_len = traj_i["trajectory_meta"]["num_time_steps"]
             time_len = traj_len - horizon - window + 1

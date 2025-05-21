@@ -18,7 +18,7 @@ process: "interpolation"
 output_dir: ${hydra:run.dir}
 
 DATA:
-  root_data_dir: "./data/"
+  root_data_dir: null
   dataset:
     physical_system: 'navier-stokes'
     window: 1
