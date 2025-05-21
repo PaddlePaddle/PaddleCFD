@@ -1,0 +1,55 @@
+hydra:
+  run:
+    # dynamic output directory according to running time and override name
+    dir: outputs_gino/${now:%Y-%m-%d-%H-%M-%S}
+  job:
+    name: ${mode} # name of logfile
+    chdir: false # keep current working direcotry unchaned
+  sweep:
+    # output directory for multirun
+    dir: ${hydra.run.dir}
+    subdir: ./
+
+# Setting
+mode: "train"
+checkpoint: null
+resume_ep: -1
+log: "log"
+logger_types: "tensorboard"
+seed: 0
+no_fabric: false  # not used
+device: 0
+output_dir: ${hydra:run.dir}
+
+
+# Model
+model: "KAN"
+input_size: 7
+num_classes: 10
+embed_dim: 3
+batch_size: 1
+
+
+# Run
+run_name: "KAN"
+project_name: "DNNFluid-Car"
+
+
+# Hyper-parameters
+lr: 0.01
+lr_schedular: "CosineAnnealingLR"
+num_epochs: 50 # 300
+n_train_num: 100 # 2772 # 2776-"0978/1034/2860/3641"
+n_val_num: 1 # 595
+n_test_num: 40 # 595
+enable_ddp: false
+only_save_sdf: false
+lazy_loading: true
+cd_finetune: false
+
+
+# DataSet
+data_module: "simcity"
+data_path: "./data_simcity"
+out_channels: [1,] # pressure+wss
+out_keys: ["vel",]
