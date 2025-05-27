@@ -33,10 +33,14 @@ class MLP(paddle.nn.Layer):
         self.n_layers = n_layers
         self.in_channels = in_channels
         self.out_channels = in_channels if out_channels is None else out_channels
-        self.hidden_channels = in_channels if hidden_channels is None else hidden_channels
+        self.hidden_channels = (
+            in_channels if hidden_channels is None else hidden_channels
+        )
         self.non_linearity = non_linearity
         self.dropout = (
-            paddle.nn.LayerList(sublayers=[paddle.nn.Dropout(p=dropout) for _ in range(n_layers)])
+            paddle.nn.LayerList(
+                sublayers=[paddle.nn.Dropout(p=dropout) for _ in range(n_layers)]
+            )
             if dropout > 0.0
             else None
         )
@@ -63,7 +67,6 @@ class MLP(paddle.nn.Layer):
 
 
 class MLPLinear(paddle.nn.Layer):
-
     def __init__(self, layers, non_linearity=paddle.nn.functional.gelu, dropout=0.0):
         super().__init__()
         self.n_layers = len(layers) - 1
@@ -71,12 +74,16 @@ class MLPLinear(paddle.nn.Layer):
         self.fcs = paddle.nn.LayerList()
         self.non_linearity = non_linearity
         self.dropout = (
-            paddle.nn.LayerList(sublayers=[paddle.nn.Dropout(p=dropout) for _ in range(self.n_layers)])
+            paddle.nn.LayerList(
+                sublayers=[paddle.nn.Dropout(p=dropout) for _ in range(self.n_layers)]
+            )
             if dropout > 0.0
             else None
         )
         for j in range(self.n_layers):
-            self.fcs.append(paddle.nn.Linear(in_features=layers[j], out_features=layers[j + 1]))
+            self.fcs.append(
+                paddle.nn.Linear(in_features=layers[j], out_features=layers[j + 1])
+            )
 
     def forward(self, x):
         for i, fc in enumerate(self.fcs):

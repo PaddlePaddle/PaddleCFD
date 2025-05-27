@@ -53,7 +53,9 @@ class BaseModel(paddle.nn.Layer):
         for key in kwargs:
             if key not in sig.parameters:
                 if verbose:
-                    print(f"Given argument key={key} that is not in {model_name}'s signature.")
+                    print(
+                        f"Given argument key={key} that is not in {model_name}'s signature."
+                    )
         for key, value in sig.parameters.items():
             if value.default is not inspect._empty and key not in kwargs:
                 if verbose:
@@ -72,14 +74,18 @@ class BaseModel(paddle.nn.Layer):
     def save_checkpoint(self, save_folder, save_name):
         """Saves the model state and init param in the given folder under the given name"""
         save_folder = Path(save_folder)
-        state_dict_filepath = save_folder.joinpath(f"{save_name}_state_dict.pt").as_posix()
+        state_dict_filepath = save_folder.joinpath(
+            f"{save_name}_state_dict.pt"
+        ).as_posix()
         paddle.save(obj=self.state_dict(), path=state_dict_filepath)
         metadata_filepath = save_folder.joinpath(f"{save_name}_metadata.pkl").as_posix()
         paddle.save(obj=self._init_kwargs, path=metadata_filepath)
 
     def load_checkpoint(self, save_folder, save_name):
         save_folder = Path(save_folder)
-        state_dict_filepath = save_folder.joinpath(f"{save_name}_state_dict.pt").as_posix()
+        state_dict_filepath = save_folder.joinpath(
+            f"{save_name}_state_dict.pt"
+        ).as_posix()
         self.set_state_dict(state_dict=paddle.load(path=str(state_dict_filepath)))
 
     @classmethod
@@ -142,4 +148,6 @@ def get_model(config):
     try:
         return BaseModel._models[arch](**config_arch)
     except KeyError:
-        raise ValueError(f"Got config.arch={arch}, expected one of {available_models()}.")
+        raise ValueError(
+            f"Got config.arch={arch}, expected one of {available_models()}."
+        )

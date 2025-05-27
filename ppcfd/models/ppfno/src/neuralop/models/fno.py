@@ -122,7 +122,7 @@ class FNO(BaseModel, name="FNO"):
         domain_padding_mode="one-sided",
         fft_norm="forward",
         SpectralConv=SpectralConv,
-        **kwargs,
+        **kwargs
     ):
         super().__init__()
         self.n_dim = len(n_modes)
@@ -190,7 +190,7 @@ class FNO(BaseModel, name="FNO"):
             joint_factorization=joint_factorization,
             SpectralConv=SpectralConv,
             n_layers=n_layers,
-            **kwargs,
+            **kwargs
         )
         if self.lifting_channels:
             self.lifting = MLP(
@@ -295,7 +295,7 @@ class FNO1d(FNO):
         domain_padding=None,
         domain_padding_mode="one-sided",
         fft_norm="forward",
-        **kwargs,
+        **kwargs
     ):
         super().__init__(
             n_modes=(n_modes_height,),
@@ -374,7 +374,7 @@ class FNO2d(FNO):
         domain_padding=None,
         domain_padding_mode="one-sided",
         fft_norm="forward",
-        **kwargs,
+        **kwargs
     ):
         super().__init__(
             n_modes=(n_modes_height, n_modes_width),
@@ -457,7 +457,7 @@ class FNO3d(FNO):
         domain_padding=None,
         domain_padding_mode="one-sided",
         fft_norm="forward",
-        **kwargs,
+        **kwargs
     ):
         super().__init__(
             n_modes=(n_modes_height, n_modes_width, n_modes_depth),
@@ -511,7 +511,11 @@ def partialclass(new_name, cls, *args, **kwargs):
     Instead, here, we define dynamically a new class, inheriting from the existing one.
     """
     __init__ = partialmethod(cls.__init__, *args, **kwargs)
-    new_class = type(new_name, (cls,), {"__init__": __init__, "__doc__": cls.__doc__, "forward": cls.forward})
+    new_class = type(
+        new_name,
+        (cls,),
+        {"__init__": __init__, "__doc__": cls.__doc__, "forward": cls.forward},
+    )
     return new_class
 
 

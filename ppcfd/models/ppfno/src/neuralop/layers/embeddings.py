@@ -2,7 +2,6 @@ import paddle
 
 
 class PositionalEmbedding(paddle.nn.Layer):
-
     def __init__(self, num_channels, max_positions=10000, endpoint=False):
         super().__init__()
         self.num_channels = num_channels

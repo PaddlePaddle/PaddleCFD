@@ -4,7 +4,6 @@ from typing import Union
 
 import paddle
 
-
 sys.path.append("/home/src")
 from neuralop.utils import validate_scaling_factor
 
@@ -27,7 +26,12 @@ class DomainPadding(paddle.nn.Layer):
     `(batch-size, channels, d1, ...., dN)`
     """
 
-    def __init__(self, domain_padding, padding_mode="one-sided", output_scaling_factor: Union[int, List[int]] = 1):
+    def __init__(
+        self,
+        domain_padding,
+        padding_mode="one-sided",
+        output_scaling_factor: Union[int, List[int]] = 1,
+    ):
         super().__init__()
         self.domain_padding = domain_padding
         self.padding_mode = padding_mode.lower()
@@ -59,13 +63,19 @@ class DomainPadding(paddle.nn.Layer):
             )
         try:
             padding = self._padding[f"{resolution}"]
-            return paddle.nn.functional.pad(x=x, pad=padding, mode="constant", pad_from_left_axis=False)
+            return paddle.nn.functional.pad(
+                x=x, pad=padding, mode="constant", pad_from_left_axis=False
+            )
         except KeyError:
             padding = [round(p * r) for p, r in zip(self.domain_padding, resolution)]
             if verbose:
-                print(f"Padding inputs of resolution={resolution} with padding={padding}, {self.padding_mode}")
+                print(
+                    f"Padding inputs of resolution={resolution} with padding={padding}, {self.padding_mode}"
+                )
             output_pad = padding
-            output_pad = [round(i * j) for i, j in zip(output_scaling_factor, output_pad)]
+            output_pad = [
+                round(i * j) for i, j in zip(output_scaling_factor, output_pad)
+            ]
             padding = padding[::-1]
             if self.padding_mode == "symmetric":
                 unpad_list = list()
@@ -92,9 +102,13 @@ class DomainPadding(paddle.nn.Layer):
             else:
                 raise ValueError(f"Got padding_mode={self.padding_mode}")
             self._padding[f"{resolution}"] = padding
-            padded = paddle.nn.functional.pad(x=x, pad=padding, mode="constant", pad_from_left_axis=False)
+            padded = paddle.nn.functional.pad(
+                x=x, pad=padding, mode="constant", pad_from_left_axis=False
+            )
             output_shape = tuple(padded.shape)[2:]
-            output_shape = [round(i * j) for i, j in zip(output_scaling_factor, output_shape)]
+            output_shape = [
+                round(i * j) for i, j in zip(output_scaling_factor, output_shape)
+            ]
             self._unpad_indices[f"{[i for i in output_shape]}"] = unpad_indices
             return padded
 

@@ -2,7 +2,6 @@ import paddle
 
 
 class BaseSpectralConv(paddle.nn.Layer):
-
     def __init__(self, device=None, dtype=None):
         """Base Class for Spectral Convolutions
 

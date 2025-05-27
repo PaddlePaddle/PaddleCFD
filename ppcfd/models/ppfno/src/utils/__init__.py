@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from src.ppfno.utils.dot_dict import DotDict
-from src.utils.average_meter import AverageMeter
-from src.utils.average_meter import AverageMeterDict
-from src.utils.dot_dict import flatten_dict
+from .dot_dict import DotDict
+from .average_meter import AverageMeter
+from .average_meter import AverageMeterDict
+from .dot_dict import flatten_dict
 
 
 __all__ = ["AverageMeter", "AverageMeterDict", "DotDict", "flatten_dict"]

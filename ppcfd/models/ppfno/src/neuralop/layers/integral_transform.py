@@ -49,7 +49,11 @@ class IntegralTransform(paddle.nn.Layer):
     """
 
     def __init__(
-        self, mlp=None, mlp_layers=None, mlp_non_linearity=paddle.nn.functional.gelu, transform_type="linear"
+        self,
+        mlp=None,
+        mlp_layers=None,
+        mlp_non_linearity=paddle.nn.functional.gelu,
+        transform_type="linear",
     ):
         super().__init__()
         assert mlp is not None or mlp_layers is not None
@@ -119,10 +123,16 @@ class IntegralTransform(paddle.nn.Layer):
         rep_features = y[neighbors["neighbors_index"]]
         if f_y is not None:
             in_features = f_y[neighbors["neighbors_index"]]
-        num_reps = neighbors["neighbors_row_splits"][1:] - neighbors["neighbors_row_splits"][:-1]
+        num_reps = (
+            neighbors["neighbors_row_splits"][1:]
+            - neighbors["neighbors_row_splits"][:-1]
+        )
         self_features = paddle.repeat_interleave(x=x, repeats=num_reps, axis=0)
         agg_features = paddle.concat(x=[rep_features, self_features], axis=1)
-        if f_y is not None and (self.transform_type == "nonlinear_kernelonly" or self.transform_type == "nonlinear"):
+        if f_y is not None and (
+            self.transform_type == "nonlinear_kernelonly"
+            or self.transform_type == "nonlinear"
+        ):
             agg_features = paddle.concat(x=[agg_features, in_features], axis=1)
         rep_features = self.mlp(agg_features)
         if f_y is not None and self.transform_type != "nonlinear_kernelonly":
@@ -132,5 +142,7 @@ class IntegralTransform(paddle.nn.Layer):
             reduction = "sum"
         else:
             reduction = "mean"
-        out_features = segment_csr(rep_features, neighbors["neighbors_row_splits"], reduce=reduction)
+        out_features = segment_csr(
+            rep_features, neighbors["neighbors_row_splits"], reduce=reduction
+        )
         return out_features

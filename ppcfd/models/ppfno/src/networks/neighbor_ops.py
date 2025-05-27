@@ -1,31 +1,37 @@
+import sys
 
 import unittest
 from typing import Optional
+
+# with paddle-backended open3d
+import open3d.ml.paddle as ml3d
+import paddle
+from .net_utils import MLP
+from open3d.ml.paddle.layers import FixedRadiusSearch
+from .utilities3 import memory_usage
+from .utilities3 import num_of_nans
+from .utilities3 import paddle_memory_usage
+from .utilities3 import show_tensor_range
 
 # with customized paddle-backended open3d operators
 # import src.custom_ops.return_types as return_types
 # from src.custom_ops.neighbor_search import FixedRadiusSearch
 # NeighborSearchReturnType = return_types.open3d_fixed_radius_search
-# with paddle-backended open3d
-import open3d.ml.paddle as ml3d
-import paddle
-from open3d.ml.paddle.layers import FixedRadiusSearch
-
-from .net_utils import MLP
-
 
 NeighborSearchReturnType = ml3d.python.return_types.open3d_fixed_radius_search
 
 
 class NeighborSearchLayer(paddle.nn.Layer):
-
     def __init__(self, radius: float):
         super().__init__()
         self.radius = radius
         self.nsearch = FixedRadiusSearch(return_distances=True)
 
     def forward(
-        self, inp_positions: paddle.Tensor, out_positions: paddle.Tensor, return_distances=True
+        self,
+        inp_positions: paddle.Tensor,
+        out_positions: paddle.Tensor,
+        return_distances=True,
     ) -> NeighborSearchReturnType:
         paddle.device.synchronize()
         neighbors = self.nsearch(inp_positions, out_positions, self.radius)
@@ -34,8 +40,9 @@ class NeighborSearchLayer(paddle.nn.Layer):
 
 
 class NeighborMLPConvLayerWeighted(paddle.nn.Layer):
-
-    def __init__(self, mlp=None, in_channels=8, hidden_dim=32, out_channels=32, reduction="mean"):
+    def __init__(
+        self, mlp=None, in_channels=8, hidden_dim=32, out_channels=32, reduction="mean"
+    ):
         super().__init__()
         self.reduction = reduction
         if mlp is None:
@@ -57,25 +64,38 @@ class NeighborMLPConvLayerWeighted(paddle.nn.Layer):
         """
         if out_features is None:
             out_features = in_features
-        assert in_features.shape[1] + out_features.shape[1] == self.mlp.layers[0].weight.shape[0]
+        assert (
+            in_features.shape[1] + out_features.shape[1]
+            == self.mlp.layers[0].weight.shape[0]
+        )
         rep_features = in_features[neighbors.neighbors_index.astype(paddle.int32)]
         if in_weights is None:
             rep_weights = 1
         else:
-            rep_weights = in_weights[neighbors.neighbors_index.astype(paddle.int32)].unsqueeze(axis=-1)
+            rep_weights = in_weights[
+                neighbors.neighbors_index.astype(paddle.int32)
+            ].unsqueeze(axis=-1)
         rs = neighbors.neighbors_row_splits
         num_reps = rs[1:] - rs[:-1]
-        self_features = paddle.repeat_interleave(x=out_features, repeats=num_reps, axis=0)
+        self_features = paddle.repeat_interleave(
+            x=out_features, repeats=num_reps, axis=0
+        )
 
-        rep_csr = segment_csr(rep_features, neighbors.neighbors_row_splits, reduce=self.reduction)
+        rep_csr = segment_csr(
+            rep_features, neighbors.neighbors_row_splits, reduce=self.reduction
+        )
         del rep_features
-        self_csr = segment_csr(self_features, neighbors.neighbors_row_splits, reduce=self.reduction)
+        self_csr = segment_csr(
+            self_features, neighbors.neighbors_row_splits, reduce=self.reduction
+        )
         del self_features
         agg_csr = paddle.concat([rep_csr, self_csr], axis=1)
         del rep_csr
         del self_csr
 
-        weights_csr = segment_csr(rep_weights, neighbors.neighbors_row_splits, reduce=self.reduction)
+        weights_csr = segment_csr(
+            rep_weights, neighbors.neighbors_row_splits, reduce=self.reduction
+        )
         del rep_weights
         out_features = weights_csr * self.mlp(agg_csr)
 
@@ -83,8 +103,9 @@ class NeighborMLPConvLayerWeighted(paddle.nn.Layer):
 
 
 class NeighborMLPConvLayer(paddle.nn.Layer):
-
-    def __init__(self, mlp=None, in_channels=8, hidden_dim=32, out_channels=32, reduction="mean"):
+    def __init__(
+        self, mlp=None, in_channels=8, hidden_dim=32, out_channels=32, reduction="mean"
+    ):
         super().__init__()
         self.reduction = reduction
         if mlp is None:
@@ -104,20 +125,28 @@ class NeighborMLPConvLayer(paddle.nn.Layer):
         """
         if out_features is None:
             out_features = in_features
-        assert tuple(in_features.shape)[1] + tuple(out_features.shape)[1] == self.mlp.layers[0].in_features
+        assert (
+            tuple(in_features.shape)[1] + tuple(out_features.shape)[1]
+            == self.mlp.layers[0].in_features
+        )
         rep_features = in_features[neighbors.neighbors_index.long()]
         rs = neighbors.neighbors_row_splits
         num_reps = rs[1:] - rs[:-1]
-        self_features = paddle.repeat_interleave(x=out_features, repeats=num_reps, axis=0)
+        self_features = paddle.repeat_interleave(
+            x=out_features, repeats=num_reps, axis=0
+        )
         agg_features = paddle.concat(x=[rep_features, self_features], axis=1)
         rep_features = self.mlp(agg_features)
-        out_features = segment_csr(rep_features, neighbors.neighbors_row_splits, reduce=self.reduction)
+        out_features = segment_csr(
+            rep_features, neighbors.neighbors_row_splits, reduce=self.reduction
+        )
         return out_features
 
 
 class NeighborMLPConvLayerLinear(paddle.nn.Layer):
-
-    def __init__(self, mlp=None, in_channels=8, hidden_dim=32, out_channels=32, reduction="mean"):
+    def __init__(
+        self, mlp=None, in_channels=8, hidden_dim=32, out_channels=32, reduction="mean"
+    ):
         super().__init__()
         self.reduction = reduction
         if mlp is None:
@@ -147,8 +176,12 @@ class NeighborMLPConvLayerLinear(paddle.nn.Layer):
         agg_features = paddle.concat(x=[rep_features, self_features], axis=1)
         del self_features
 
-        agg_features = segment_csr(agg_features, neighbors.neighbors_row_splits, reduce=self.reduction)
-        in_features = segment_csr(in_features, neighbors.neighbors_row_splits, reduce=self.reduction)
+        agg_features = segment_csr(
+            agg_features, neighbors.neighbors_row_splits, reduce=self.reduction
+        )
+        in_features = segment_csr(
+            in_features, neighbors.neighbors_row_splits, reduce=self.reduction
+        )
         rep_features = self.mlp(agg_features)
         del agg_features
         out_features = rep_features * in_features
@@ -201,7 +234,6 @@ def segment_csr(
 
 
 class TestNeighborSearch(unittest.TestCase):
-
     def setUp(self) -> None:
         self.N = 10000
         self.device = "cuda:0"

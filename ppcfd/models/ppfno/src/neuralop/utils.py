@@ -1,4 +1,8 @@
+import sys
+
 import os
+
+# import wandb
 import warnings
 from math import prod
 from typing import List
@@ -9,7 +13,6 @@ import paddle
 
 
 class UnitGaussianNormalizer:
-
     def __init__(self, x, eps=1e-05, reduce_dim=[0], verbose=True):
         super().__init__()
         msg = "neuralop.utils.UnitGaussianNormalizer has been deprecated. Please use the newer neuralop.datasets.UnitGaussianNormalizer instead."
@@ -23,7 +26,9 @@ class UnitGaussianNormalizer:
         self.std = paddle.std(x=x, axis=reduce_dim, keepdim=True).squeeze(axis=0)
         self.eps = eps
         if verbose:
-            print(f"UnitGaussianNormalizer init on {n_samples}, reducing over {reduce_dim}, samples of shape {shape}.")
+            print(
+                f"UnitGaussianNormalizer init on {n_samples}, reducing over {reduce_dim}, samples of shape {shape}."
+            )
             print(f"   Mean and std of shape {tuple(self.mean.shape)}, eps={eps}")
 
     def encode(self, x):
@@ -144,10 +149,16 @@ def spectrum_2d(signal, n_observations, normalize=True):
     if normalize:
         signal = paddle.fft.fft2(x=signal)
     else:
-        signal = paddle.fft.rfft2(signal, s=(n_observations, n_observations), normalized=False)
+        signal = paddle.fft.rfft2(
+            signal, s=(n_observations, n_observations), normalized=False
+        )
     k_max = n_observations // 2
     wavenumers = paddle.concat(
-        x=(paddle.arange(start=0, end=k_max, step=1), paddle.arange(start=-k_max, end=0, step=1)), axis=0
+        x=(
+            paddle.arange(start=0, end=k_max, step=1),
+            paddle.arange(start=-k_max, end=0, step=1),
+        ),
+        axis=0,
     ).tile(repeat_times=[n_observations, 1])
     k_x = wavenumers.transpose(perm=utils.dim2perm(wavenumers.ndim, 0, 1))
     k_y = wavenumers
@@ -168,7 +179,9 @@ Number = Union[float, int]
 
 
 def validate_scaling_factor(
-    scaling_factor: Union[None, Number, List[Number], List[List[Number]]], n_dim: int, n_layers: Optional[int] = None
+    scaling_factor: Union[None, Number, List[Number], List[List[Number]]],
+    n_dim: int,
+    n_layers: Optional[int] = None,
 ) -> Union[None, List[float], List[List[float]]]:
     """
     Parameters

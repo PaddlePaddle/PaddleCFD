@@ -1,3 +1,4 @@
+import copy
 
 
 class DotDict(dict):
