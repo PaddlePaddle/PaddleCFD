@@ -1,7 +1,9 @@
 import paddle
 
 
-def skip_connection(in_features, out_features, n_dim=2, bias=False, skip_type="soft-gating"):
+def skip_connection(
+    in_features, out_features, n_dim=2, bias=False, skip_type="soft-gating"
+):
     """A wrapper for several types of skip connections.
     Returns an nn.Module skip connections, one of  {'identity', 'linear', soft-gating'}
 
@@ -25,15 +27,22 @@ def skip_connection(in_features, out_features, n_dim=2, bias=False, skip_type="s
         module that takes in x and returns skip(x)
     """
     if skip_type.lower() == "soft-gating":
-        return SoftGating(in_features=in_features, out_features=out_features, bias=bias, n_dim=n_dim)
+        return SoftGating(
+            in_features=in_features, out_features=out_features, bias=bias, n_dim=n_dim
+        )
     elif skip_type.lower() == "linear":
         return getattr(paddle.nn, f"Conv{n_dim}D")(
-            in_channels=in_features, out_channels=out_features, kernel_size=1, bias_attr=bias
+            in_channels=in_features,
+            out_channels=out_features,
+            kernel_size=1,
+            bias_attr=bias,
         )
     elif skip_type.lower() == "identity":
         return paddle.nn.Identity()
     else:
-        raise ValueError(f"Got skip-connection type={skip_type}, expected one of {'soft-gating', 'linear', 'id'}.")
+        raise ValueError(
+            f"Got skip-connection type={skip_type}, expected one of {'soft-gating', 'linear', 'id'}."
+        )
 
 
 class SoftGating(paddle.nn.Layer):

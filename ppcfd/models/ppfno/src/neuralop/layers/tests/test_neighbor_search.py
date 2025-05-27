@@ -1,18 +1,18 @@
 import sys
 
-
 sys.path.append("/home/chenkai26/PaddleScience-AeroShapeOpt/paddle_project")
 import paddle
 
+import utils
 
 """
 Tests fallback neighbor search on a small 2d grid
 that was calculated manually
 """
 import numpy as np
+import pytest
 
 from ..simple_neighbor_search import simple_neighbor_search
-
 
 indices = [
     0,
@@ -121,11 +121,40 @@ indices = [
     23,
     24,
 ]
-splits = [0, 3, 7, 11, 15, 18, 22, 27, 32, 37, 41, 45, 50, 55, 60, 64, 68, 73, 78, 83, 87, 90, 94, 98, 102, 105]
+splits = [
+    0,
+    3,
+    7,
+    11,
+    15,
+    18,
+    22,
+    27,
+    32,
+    37,
+    41,
+    45,
+    50,
+    55,
+    60,
+    64,
+    68,
+    73,
+    78,
+    83,
+    87,
+    90,
+    94,
+    98,
+    102,
+    105,
+]
 
 
 def test_fallback_nb_search():
-    mesh_grid = np.stack(np.meshgrid(*[np.linspace(0, 1, 5) for _ in range(2)], indexing="ij"), axis=-1)
+    mesh_grid = np.stack(
+        np.meshgrid(*[np.linspace(0, 1, 5) for _ in range(2)], indexing="ij"), axis=-1
+    )
     coords = paddle.to_tensor(data=mesh_grid.reshape(-1, 2), dtype="float32")
     return_dict = simple_neighbor_search(data=coords, queries=coords, radius=0.3)
     assert return_dict["neighbors_index"].tolist() == indices

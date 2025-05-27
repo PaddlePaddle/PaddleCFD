@@ -57,7 +57,9 @@ class NeighborSearch(paddle.nn.Layer):
         if self.use_open3d:
             search_return = self.search_fn(data, queries, radius)
             return_dict["neighbors_index"] = search_return.neighbors_index.long()
-            return_dict["neighbors_row_splits"] = search_return.neighbors_row_splits.long()
+            return_dict[
+                "neighbors_row_splits"
+            ] = search_return.neighbors_row_splits.long()
         else:
             return_dict = self.search_fn(data, queries, radius)
         return return_dict

@@ -1,5 +1,6 @@
 import itertools
 
+import numpy as np
 import paddle
 
 
@@ -34,15 +35,25 @@ def resample(x, res_scale, axis, output_shape=None):
     else:
         new_size = output_shape
     if len(axis) == 1:
-        return paddle.nn.functional.interpolate(x=x, size=new_size[0], mode="linear", align_corners=True)
+        return paddle.nn.functional.interpolate(
+            x=x, size=new_size[0], mode="linear", align_corners=True
+        )
     if len(axis) == 2:
-        return paddle.nn.functional.interpolate(x=x, size=new_size, mode="bicubic", align_corners=True)
+        return paddle.nn.functional.interpolate(
+            x=x, size=new_size, mode="bicubic", align_corners=True
+        )
     X = paddle.fft.rfftn(x=x.astype(dtype="float32"), norm="forward", axes=axis)
     new_fft_size = list(new_size)
     new_fft_size[-1] = new_fft_size[-1] // 2 + 1
-    new_fft_size_c = [min(i, j) for i, j in zip(new_fft_size, tuple(X.shape)[-len(axis) :])]
-    out_fft = paddle.zeros(shape=[tuple(x.shape)[0], tuple(x.shape)[1], *new_fft_size], dtype="complex64")
-    mode_indexing = [((None, m // 2), (-m // 2, None)) for m in new_fft_size_c[:-1]] + [((None, new_fft_size_c[-1]),)]
+    new_fft_size_c = [
+        min(i, j) for i, j in zip(new_fft_size, tuple(X.shape)[-len(axis) :])
+    ]
+    out_fft = paddle.zeros(
+        shape=[tuple(x.shape)[0], tuple(x.shape)[1], *new_fft_size], dtype="complex64"
+    )
+    mode_indexing = [((None, m // 2), (-m // 2, None)) for m in new_fft_size_c[:-1]] + [
+        ((None, new_fft_size_c[-1]),)
+    ]
     for i, boundaries in enumerate(itertools.product(*mode_indexing)):
         idx_tuple = [slice(None), slice(None)] + [slice(*b) for b in boundaries]
         out_fft[idx_tuple] = X[idx_tuple]
@@ -55,7 +66,11 @@ def iterative_resample(x, res_scale, axis):
         res_scale = [res_scale] * len(axis)
     if not isinstance(axis, list) and isinstance(res_scale, list):
         raise Exception("Axis is not a list but Scale factors are")
-    if isinstance(axis, list) and isinstance(res_scale, list) and len(res_scale) != len(axis):
+    if (
+        isinstance(axis, list)
+        and isinstance(res_scale, list)
+        and len(res_scale) != len(axis)
+    ):
         raise Exception("Axis and Scal factor are in different sizes")
     if isinstance(axis, list):
         for i in range(len(res_scale)):

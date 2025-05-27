@@ -8,7 +8,9 @@ from ..legacy_spectral_convolution import SpectralConv2d
 from ..legacy_spectral_convolution import SpectralConv3d
 
 
-@pytest.mark.parametrize("factorization", ["ComplexDense", "ComplexCP", "ComplexTucker", "ComplexTT"])
+@pytest.mark.parametrize(
+    "factorization", ["ComplexDense", "ComplexCP", "ComplexTucker", "ComplexTT"]
+)
 @pytest.mark.parametrize("implementation", ["factorized", "reconstructed"])
 def test_SpectralConv(factorization, implementation):
     """Test for SpectralConv of any order
@@ -24,10 +26,22 @@ def test_SpectralConv(factorization, implementation):
     incremental_modes = 6, 6, 4, 4
     for dim in [1, 2, 3, 4]:
         conv = SpectralConv(
-            3, 3, modes[:dim], n_layers=1, bias=False, implementation=implementation, factorization=factorization
+            3,
+            3,
+            modes[:dim],
+            n_layers=1,
+            bias=False,
+            implementation=implementation,
+            factorization=factorization,
         )
         conv_dense = SpectralConv(
-            3, 3, modes[:dim], n_layers=1, bias=False, implementation="reconstructed", factorization=None
+            3,
+            3,
+            modes[:dim],
+            n_layers=1,
+            bias=False,
+            implementation="reconstructed",
+            factorization=None,
         )
         for i in range(2 ** (dim - 1)):
             conv_dense.weight[i] = FactorizedTensor.from_tensor(
@@ -77,16 +91,30 @@ def test_SpectralConv3D(factorization, implementation):
     take with a grain of salt
     """
     conv = SpectralConv(
-        3, 6, (4, 5, 2), n_layers=1, bias=False, implementation=implementation, factorization=factorization
+        3,
+        6,
+        (4, 5, 2),
+        n_layers=1,
+        bias=False,
+        implementation=implementation,
+        factorization=factorization,
     )
     conv_dense = SpectralConv3d(
-        3, 6, (4, 5, 2), n_layers=1, bias=False, implementation="reconstructed", factorization=None
+        3,
+        6,
+        (4, 5, 2),
+        n_layers=1,
+        bias=False,
+        implementation="reconstructed",
+        factorization=None,
     )
     for i, w in enumerate(conv.weight):
         rec = w.to_tensor()
         dtype = rec.dtype
         assert dtype == "complex64"
-        conv_dense.weight[i] = FactorizedTensor.from_tensor(rec, rank=None, factorization="ComplexDense")
+        conv_dense.weight[i] = FactorizedTensor.from_tensor(
+            rec, rank=None, factorization="ComplexDense"
+        )
     x = paddle.randn(shape=[2, 3, 12, 12, 12])
     res_dense = conv_dense(x)
     res = conv(x)
@@ -103,16 +131,30 @@ def test_SpectralConv2D(factorization, implementation):
     take with a grain of salt
     """
     conv = SpectralConv(
-        10, 11, (4, 5), n_layers=1, bias=False, implementation=implementation, factorization=factorization
+        10,
+        11,
+        (4, 5),
+        n_layers=1,
+        bias=False,
+        implementation=implementation,
+        factorization=factorization,
     )
     conv_dense = SpectralConv2d(
-        10, 11, (4, 5), n_layers=1, bias=False, implementation="reconstructed", factorization=None
+        10,
+        11,
+        (4, 5),
+        n_layers=1,
+        bias=False,
+        implementation="reconstructed",
+        factorization=None,
     )
     for i, w in enumerate(conv.weight):
         rec = w.to_tensor()
         dtype = rec.dtype
         assert dtype == "complex64"
-        conv_dense.weight[i] = FactorizedTensor.from_tensor(rec, rank=None, factorization="ComplexDense")
+        conv_dense.weight[i] = FactorizedTensor.from_tensor(
+            rec, rank=None, factorization="ComplexDense"
+        )
     x = paddle.randn(shape=[2, 10, 12, 12])
     res_dense = conv_dense(x)
     res = conv(x)
@@ -127,16 +169,30 @@ def test_SpectralConv1D(factorization, implementation):
     Verifies that a dense conv and factorized conv with the same weight produce the same output
     """
     conv = SpectralConv(
-        10, 11, (5,), n_layers=1, bias=False, implementation=implementation, factorization=factorization
+        10,
+        11,
+        (5,),
+        n_layers=1,
+        bias=False,
+        implementation=implementation,
+        factorization=factorization,
     )
     conv_dense = SpectralConv1d(
-        10, 11, (5,), n_layers=1, bias=False, implementation="reconstructed", factorization=None
+        10,
+        11,
+        (5,),
+        n_layers=1,
+        bias=False,
+        implementation="reconstructed",
+        factorization=None,
     )
     for i, w in enumerate(conv.weight):
         rec = w.to_tensor()
         dtype = rec.dtype
         assert dtype == "complex64"
-        conv_dense.weight[i] = FactorizedTensor.from_tensor(rec, rank=None, factorization="ComplexDense")
+        conv_dense.weight[i] = FactorizedTensor.from_tensor(
+            rec, rank=None, factorization="ComplexDense"
+        )
     x = paddle.randn(shape=[2, 10, 12])
     res_dense = conv_dense(x)
     res = conv(x)

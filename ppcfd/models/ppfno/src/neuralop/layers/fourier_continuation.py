@@ -4,7 +4,6 @@ from numpy.polynomial.legendre import Legendre
 
 
 class FCLegendre(paddle.nn.Layer):
-
     def __init__(self, n, d, dtype="float32"):
         super().__init__()
         self.dtype = dtype
@@ -29,7 +28,9 @@ class FCLegendre(paddle.nn.Layer):
             Q[:, j] = polynomials[j](extension_grid)
             X[:, j] = polynomials[j](fit_grid)
         ext_mat = np.matmul(Q, np.linalg.pinv(X, rcond=1e-31))
-        self.register_buffer(name="ext_mat", tensor=paddle.to_tensor(data=ext_mat).to(dtype=self.dtype))
+        self.register_buffer(
+            name="ext_mat", tensor=paddle.to_tensor(data=ext_mat).to(dtype=self.dtype)
+        )
         self.register_buffer(name="ext_mat_T", tensor=self.ext_mat.T.clone())
         return self.ext_mat
 

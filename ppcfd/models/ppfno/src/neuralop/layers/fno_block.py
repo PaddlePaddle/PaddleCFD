@@ -11,12 +11,10 @@ from .normalization_layers import AdaIN
 from .skip_connections import skip_connection
 from .spectral_convolution import SpectralConv
 
-
 Number = Union[int, float]
 
 
 class FNOBlocks(paddle.nn.Layer):
-
     def __init__(
         self,
         in_channels,
@@ -52,9 +50,9 @@ class FNOBlocks(paddle.nn.Layer):
             n_modes = [n_modes]
         self._n_modes = n_modes
         self.n_dim = len(n_modes)
-        self.output_scaling_factor: Union[None, List[List[float]]] = validate_scaling_factor(
-            output_scaling_factor, self.n_dim, n_layers
-        )
+        self.output_scaling_factor: Union[
+            None, List[List[float]]
+        ] = validate_scaling_factor(output_scaling_factor, self.n_dim, n_layers)
         self.max_n_modes = max_n_modes
         self.fno_block_precision = fno_block_precision
         self.in_channels = in_channels
@@ -94,7 +92,12 @@ class FNOBlocks(paddle.nn.Layer):
         )
         self.fno_skips = paddle.nn.LayerList(
             sublayers=[
-                skip_connection(self.in_channels, self.out_channels, skip_type=fno_skip, n_dim=self.n_dim)
+                skip_connection(
+                    self.in_channels,
+                    self.out_channels,
+                    skip_type=fno_skip,
+                    n_dim=self.n_dim,
+                )
                 for _ in range(n_layers)
             ]
         )
@@ -112,7 +115,12 @@ class FNOBlocks(paddle.nn.Layer):
             )
             self.mlp_skips = paddle.nn.LayerList(
                 sublayers=[
-                    skip_connection(self.in_channels, self.out_channels, skip_type=mlp_skip, n_dim=self.n_dim)
+                    skip_connection(
+                        self.in_channels,
+                        self.out_channels,
+                        skip_type=mlp_skip,
+                        n_dim=self.n_dim,
+                    )
                     for _ in range(n_layers)
                 ]
             )
@@ -124,7 +132,9 @@ class FNOBlocks(paddle.nn.Layer):
         elif norm == "instance_norm":
             self.norm = paddle.nn.LayerList(
                 sublayers=[
-                    getattr(nn, f"InstanceNorm{self.n_dim}D")(num_features=self.out_channels)
+                    getattr(nn, f"InstanceNorm{self.n_dim}D")(
+                        num_features=self.out_channels
+                    )
                     for _ in range(n_layers * self.n_norms)
                 ]
             )
@@ -137,10 +147,15 @@ class FNOBlocks(paddle.nn.Layer):
             )
         elif norm == "ada_in":
             self.norm = paddle.nn.LayerList(
-                sublayers=[AdaIN(ada_in_features, out_channels) for _ in range(n_layers * self.n_norms)]
+                sublayers=[
+                    AdaIN(ada_in_features, out_channels)
+                    for _ in range(n_layers * self.n_norms)
+                ]
             )
         else:
-            raise ValueError(f"Got norm={norm} but expected None or one of [instance_norm, group_norm, layer_norm]")
+            raise ValueError(
+                f"Got norm={norm} but expected None or one of [instance_norm, group_norm, layer_norm]"
+            )
 
     def set_ada_in_embeddings(self, *embeddings):
         """Sets the embeddings of each Ada-IN norm layers
@@ -169,7 +184,9 @@ class FNOBlocks(paddle.nn.Layer):
         x_skip_fno = self.convs[index].transform(x_skip_fno, output_shape=output_shape)
         if self.mlp is not None:
             x_skip_mlp = self.mlp_skips[index](x)
-            x_skip_mlp = self.convs[index].transform(x_skip_mlp, output_shape=output_shape)
+            x_skip_mlp = self.convs[index].transform(
+                x_skip_mlp, output_shape=output_shape
+            )
         if self.stabilizer == "tanh":
             x = paddle.nn.functional.tanh(x=x)
         x_fno = self.convs(x, index, output_shape=output_shape)
@@ -194,7 +211,9 @@ class FNOBlocks(paddle.nn.Layer):
         x_skip_fno = self.convs[index].transform(x_skip_fno, output_shape=output_shape)
         if self.mlp is not None:
             x_skip_mlp = self.mlp_skips[index](x)
-            x_skip_mlp = self.convs[index].transform(x_skip_mlp, output_shape=output_shape)
+            x_skip_mlp = self.convs[index].transform(
+                x_skip_mlp, output_shape=output_shape
+            )
         if self.stabilizer == "tanh":
             x = paddle.nn.functional.tanh(x=x)
         x_fno = self.convs(x, index, output_shape=output_shape)
@@ -222,7 +241,9 @@ class FNOBlocks(paddle.nn.Layer):
         The parametrization of an FNOBlock layer is shared with the main one.
         """
         if self.n_layers == 1:
-            raise ValueError("A single layer is parametrized, directly use the main class.")
+            raise ValueError(
+                "A single layer is parametrized, directly use the main class."
+            )
         return SubModule(self, indices)
 
     def __getitem__(self, indices):

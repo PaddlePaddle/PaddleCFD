@@ -10,7 +10,9 @@ def instantiate_scheduler(optimizer, config):
         scheduler = tmp_lr
     elif config.opt_scheduler == "StepLR":
         tmp_lr = paddle.optimizer.lr.StepDecay(
-            step_size=config.opt_step_size, gamma=config.opt_gamma, learning_rate=optimizer.get_lr()
+            step_size=config.opt_step_size,
+            gamma=config.opt_gamma,
+            learning_rate=optimizer.get_lr(),
         )
         optimizer.set_lr_scheduler(tmp_lr)
         scheduler = tmp_lr

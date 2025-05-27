@@ -5,12 +5,14 @@ import paddle.nn as nn
 class Integral_Cd(paddle.nn.Layer):
     def __init__(self, layers=None, dropout=False, normalize=False):
         super().__init__()
-        if layers == None:
+        if layers is None:
             layers = [2, 32, 32, 1]
         self.n_layers = len(layers) - 1
         self.layers = nn.LayerList()
         for i in range(self.n_layers):
-            self.layers.append(nn.Linear(in_features=layers[i], out_features=layers[i + 1]))
+            self.layers.append(
+                nn.Linear(in_features=layers[i], out_features=layers[i + 1])
+            )
             if i < self.n_layers - 1:
                 if normalize:
                     self.layers.append(paddle.nn.BatchNorm(num_features=layers[i + 1]))
@@ -24,9 +26,9 @@ class Integral_Cd(paddle.nn.Layer):
         out_keys=None,
     ):
 
-        cd_pred = paddle.to_tensor([cd_dict[f"Cd_{out_keys[0]}_pred"], cd_dict[f"Cd_{out_keys[1]}_pred"]]).cuda(
-            blocking=True
-        )
+        cd_pred = paddle.to_tensor(
+            [cd_dict[f"Cd_{out_keys[0]}_pred"], cd_dict[f"Cd_{out_keys[1]}_pred"]]
+        ).cuda(blocking=True)
         for _, layer in enumerate(self.layers):
             cd_pred = layer(cd_pred)
         cd_pred = paddle.Tensor.sigmoid(cd_pred) * (0.6 - 0.1) + 0.1
@@ -34,7 +36,14 @@ class Integral_Cd(paddle.nn.Layer):
         return cd_dict
 
     def forward_v1(
-        self, pred, truth: paddle.Tensor, out_channels, data_dict, decode_fn=None, out_keys=None, subsample_train=None
+        self,
+        pred,
+        truth: paddle.Tensor,
+        out_channels,
+        data_dict,
+        decode_fn=None,
+        out_keys=None,
+        subsample_train=None,
     ):
         pred = pred.transpose(perm=[1, 0])
         truth = truth.transpose(perm=[1, 0])
@@ -48,15 +57,17 @@ class Integral_Cd(paddle.nn.Layer):
             subsample_train=subsample_train,
         )
 
-        cd_pred = paddle.to_tensor([cd_dict[f"Cd_{out_keys[0]}_pred"], cd_dict[f"Cd_{out_keys[1]}_pred"]]).cuda(
-            blocking=True
-        )
+        cd_pred = paddle.to_tensor(
+            [cd_dict[f"Cd_{out_keys[0]}_pred"], cd_dict[f"Cd_{out_keys[1]}_pred"]]
+        ).cuda(blocking=True)
         for _, layer in enumerate(self.layers):
             cd_pred = layer(cd_pred)
         cd_dict.update({"Cd_pred_modify": cd_pred})
         return cd_dict
 
-    def get_cd(self, pred, truth, out_channels, data_dict, decode_fn, out_keys, subsample_train):
+    def get_cd(
+        self, pred, truth, out_channels, data_dict, decode_fn, out_keys, subsample_train
+    ):
         cd_dict = {
             "Cd_pred": paddle.to_tensor(data=0.0).cuda(blocking=True),
             "Cd_truth": paddle.to_tensor(data=0.0).cuda(blocking=True),
@@ -78,11 +89,15 @@ class Integral_Cd(paddle.nn.Layer):
                     drag_weight = data_dict["dragWeight"][0].cuda(blocking=True)
                     drag_weight = drag_weight[::subsample_train]
                 elif key == "wallshearstress":
-                    drag_weight = data_dict["dragWeightWss"][0][: out_channels[i], :].cuda(blocking=True)
+                    drag_weight = data_dict["dragWeightWss"][0][
+                        : out_channels[i], :
+                    ].cuda(blocking=True)
                     drag_weight = drag_weight[..., ::subsample_train]
                 drag_pred = paddle.sum(x=drag_weight * pred_decode)
                 drag_truth = paddle.sum(x=drag_weight * truth_decode)
-                cd_dict.update({f"Cd_{key}_pred": drag_pred, f"Cd_{key}_truth": drag_truth})
+                cd_dict.update(
+                    {f"Cd_{key}_pred": drag_pred, f"Cd_{key}_truth": drag_truth}
+                )
                 cd_dict["Cd_pred"] += drag_pred
                 cd_dict["Cd_truth"] += drag_truth
         return cd_dict

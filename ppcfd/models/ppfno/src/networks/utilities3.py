@@ -1,4 +1,6 @@
+import sys
 import operator
+from functools import partial
 from functools import reduce
 
 import h5py
@@ -7,12 +9,12 @@ import paddle
 import pynvml
 import scipy.io
 
-
-device = str("cuda" if paddle.device.cuda.device_count() >= 1 else "cpu").replace("cuda", "gpu")
+device = str("cuda" if paddle.device.cuda.device_count() >= 1 else "cpu").replace(
+    "cuda", "gpu"
+)
 
 
 class MatReader(object):
-
     def __init__(self, file_path, to_torch=True, to_cuda=False, to_float=True):
         super(MatReader, self).__init__()
         self.to_torch = to_torch
@@ -59,7 +61,6 @@ class MatReader(object):
 
 
 class UnitGaussianNormalizer(object):
-
     def __init__(self, x, eps=1e-05, time_last=True):
         super(UnitGaussianNormalizer, self).__init__()
         self.mean = paddle.mean(x=x, axis=0)
@@ -104,7 +105,6 @@ class UnitGaussianNormalizer(object):
 
 
 class GaussianNormalizer(object):
-
     def __init__(self, x, eps=1e-05):
         super(GaussianNormalizer, self).__init__()
         self.mean = paddle.mean(x=x)
@@ -129,7 +129,6 @@ class GaussianNormalizer(object):
 
 
 class RangeNormalizer(object):
-
     def __init__(self, x, low=0.0, high=1.0):
         super(RangeNormalizer, self).__init__()
         mymin = (paddle.min(x=x, axis=0), paddle.argmin(x=x, axis=0))[0].view(-1)
@@ -155,14 +154,29 @@ class RangeNormalizer(object):
 def count_params(model):
     c = 0
     for p in list(model.parameters()):
-        c += reduce(operator.mul, list(tuple(p.shape) + (2,) if p.is_complex() else tuple(p.shape)))
+        c += reduce(
+            operator.mul,
+            list(tuple(p.shape) + (2,) if p.is_complex() else tuple(p.shape)),
+        )
     return c
 
 
 def paddle_memory_usage():
-    cm = paddle.device.cuda.memory_allocated() / 1024**3 if paddle.device.cuda.device_count() >= 1 else 0
-    mm = paddle.device.cuda.max_memory_allocated() / 1024**3 if paddle.device.cuda.device_count() >= 1 else 0
-    rm = paddle.device.cuda.memory_reserved() / 1024**3 if paddle.device.cuda.device_count() >= 1 else 0
+    cm = (
+        paddle.device.cuda.memory_allocated() / 1024**3
+        if paddle.device.cuda.device_count() >= 1
+        else 0
+    )
+    mm = (
+        paddle.device.cuda.max_memory_allocated() / 1024**3
+        if paddle.device.cuda.device_count() >= 1
+        else 0
+    )
+    rm = (
+        paddle.device.cuda.memory_reserved() / 1024**3
+        if paddle.device.cuda.device_count() >= 1
+        else 0
+    )
     return f"{cm:.4g}GB/{mm:.4g}GB/{rm:.4g}GB (Current/MAX/Reserved"
 
 
