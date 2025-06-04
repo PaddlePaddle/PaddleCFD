@@ -11,13 +11,13 @@ from os import path as osp
 import hydra
 import numpy as np
 import paddle
+import ppsci
 import scipy.io as sio
 from matplotlib import pyplot as plt
 from omegaconf import DictConfig
-
-import ppsci
 from ppsci.loss import mtl
 from ppsci.utils import misc
+
 
 dtype = paddle.get_default_dtype()
 
@@ -42,17 +42,13 @@ def train(cfg: DictConfig):
     model = ppsci.arch.PirateNet(**cfg.MODEL)
 
     # set optimizer
-    lr_scheduler = ppsci.optimizer.lr_scheduler.ExponentialDecay(
-        **cfg.TRAIN.lr_scheduler
-    )()
+    lr_scheduler = ppsci.optimizer.lr_scheduler.ExponentialDecay(**cfg.TRAIN.lr_scheduler)()
     if cfg.TRAIN.optim == "adam":
         optimizer = ppsci.optimizer.Adam(lr_scheduler)(model)
     elif cfg.TRAIN.optim == "soap":
         optimizer = ppsci.optimizer.SOAP(lr_scheduler)(model)
     else:
-        raise ValueError(
-            f"cfg.TRAIN.optim should be in ['adam','soap'], but got '{cfg.TRAIN.optim}'."
-        )
+        raise ValueError(f"cfg.TRAIN.optim should be in ['adam','soap'], but got '{cfg.TRAIN.optim}'.")
     grad_norm = mtl.GradNorm(
         model,
         5,
@@ -93,9 +89,7 @@ def train(cfg: DictConfig):
         )
 
         # set equation
-        equation = {
-            "NavierStokes": ppsci.equation.NavierStokes(1 / Re, 1, dim=2, time=False)
-        }
+        equation = {"NavierStokes": ppsci.equation.NavierStokes(1 / Re, 1, dim=2, time=False)}
 
         # load data
         data = sio.loadmat(f"./data/ldc_Re{Re}.mat")
@@ -139,17 +133,16 @@ def train(cfg: DictConfig):
         )
 
         # set boundary conditions
-        x_bc = sample_points_on_square_boundary(
-            cfg_t.TRAIN.batch_size.bc, eps=0.0
-        ).astype(
+        x_bc = sample_points_on_square_boundary(cfg_t.TRAIN.batch_size.bc, eps=0.0).astype(
             dtype
         )  # avoid singularity a right corner for u velocity
         v_bc = np.zeros((cfg_t.TRAIN.batch_size.bc * 4, 1), dtype)
         u_bc = copy.deepcopy(v_bc)
-        lid_bc_fn = lambda x: 1 - np.cosh(50 * (x - 0.5)) / np.cosh(50 * 0.5)
-        u_bc[: cfg_t.TRAIN.batch_size.bc] = lid_bc_fn(
-            x_bc[: cfg_t.TRAIN.batch_size.bc, 0:1]
-        )
+
+        def lid_bc_fn(x):
+            return 1 - np.cosh(50 * (x - 0.5)) / np.cosh(50 * 0.5)
+
+        u_bc[: cfg_t.TRAIN.batch_size.bc] = lid_bc_fn(x_bc[: cfg_t.TRAIN.batch_size.bc, 0:1])
         bc = ppsci.constraint.SupervisedConstraint(
             {
                 "dataset": {
@@ -206,12 +199,8 @@ def train(cfg: DictConfig):
         # evaluate after finished training
         solver.eval()
         # visualize prediction after finished training
-        pred_dict = solver.predict(
-            eval_data, batch_size=cfg_t.EVAL.batch_size, return_numpy=True
-        )
-        U_pred = np.sqrt(pred_dict["u"] ** 2 + pred_dict["v"] ** 2).reshape(
-            [len(x_star), len(y_star)]
-        )
+        pred_dict = solver.predict(eval_data, batch_size=cfg_t.EVAL.batch_size, return_numpy=True)
+        U_pred = np.sqrt(pred_dict["u"] ** 2 + pred_dict["v"] ** 2).reshape([len(x_star), len(y_star)])
         plot(U_pred, cfg_t.output_dir)
 
     for idx in range(len(cfg.Re)):
@@ -260,12 +249,8 @@ def evaluate(cfg: DictConfig):
     # evaluate after finished training
     solver.eval()
     # visualize prediction after finished training
-    pred_dict = solver.predict(
-        eval_data, batch_size=cfg.EVAL.batch_size, return_numpy=True
-    )
-    U_pred = np.sqrt(pred_dict["u"] ** 2 + pred_dict["v"] ** 2).reshape(
-        [len(x_star), len(y_star)]
-    )
+    pred_dict = solver.predict(eval_data, batch_size=cfg.EVAL.batch_size, return_numpy=True)
+    U_pred = np.sqrt(pred_dict["u"] ** 2 + pred_dict["v"] ** 2).reshape([len(x_star), len(y_star)])
     # plot
     plot(U_pred, cfg.output_dir)
 
@@ -300,19 +285,13 @@ def inference(cfg: DictConfig):
     # mapping data to cfg.INFER.output_keys
     output_dict = {
         store_key: output_dict[infer_key]
-        for store_key, infer_key in zip(
-            sorted(cfg.MODEL.output_keys), output_dict.keys()
-        )
+        for store_key, infer_key in zip(sorted(cfg.MODEL.output_keys), output_dict.keys())
     }
-    U_pred = np.sqrt(output_dict["u"] ** 2 + output_dict["v"] ** 2).reshape(
-        [len(x_star), len(y_star)]
-    )
+    U_pred = np.sqrt(output_dict["u"] ** 2 + output_dict["v"] ** 2).reshape([len(x_star), len(y_star)])
     plot(U_pred, cfg.output_dir)
 
 
-@hydra.main(
-    version_base=None, config_path="./conf", config_name="ldc_2d_Re3200_piratenet.yaml"
-)
+@hydra.main(version_base=None, config_path="./conf", config_name="ldc_2d_Re3200_piratenet.yaml")
 def main(cfg: DictConfig):
     if cfg.mode == "train":
         train(cfg)
@@ -323,11 +302,8 @@ def main(cfg: DictConfig):
     elif cfg.mode == "infer":
         inference(cfg)
     else:
-        raise ValueError(
-            f"cfg.mode should in ['train', 'eval', 'export', 'infer'], but got '{cfg.mode}'"
-        )
+        raise ValueError(f"cfg.mode should in ['train', 'eval', 'export', 'infer'], but got '{cfg.mode}'")
 
 
 if __name__ == "__main__":
     main()
-
