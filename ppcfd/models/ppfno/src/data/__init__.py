@@ -43,6 +43,3 @@ def instantiate_inferencedatamodule(config, dataset_path, bounds_dir, n_inferenc
         )
     else:
         raise NotImplementedError(f"Unknown datamodule: {config.data_module}")
-
-
-__all__ = ["instantiate_datamodule", "instantiate_inferencedatamodule"]

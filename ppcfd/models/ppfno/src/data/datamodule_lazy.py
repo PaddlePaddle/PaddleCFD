@@ -9,11 +9,7 @@ import warnings
 from collections.abc import Callable
 from pathlib import Path
 from timeit import default_timer
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Tuple
-from typing import Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import meshio
 import numpy as np
@@ -22,7 +18,7 @@ import paddle
 
 from src.data.base_datamodule import BaseDataModule
 
-from src.neuralop.utils import UnitGaussianNormalizer
+from ..neuralop.utils import UnitGaussianNormalizer
 
 
 def get_last_dir(path):
@@ -30,6 +26,7 @@ def get_last_dir(path):
 
 
 class LoadMesh:
+
     def __init__(self, path, query_points=None, closest_points_to_query=False):
         self.path = path
         self.query_points = query_points
@@ -142,6 +139,7 @@ class LoadMesh:
 
 
 class LoadFile:
+
     def __init__(self, path):
         self.path = path
 
@@ -169,6 +167,7 @@ class LoadFile:
 
 
 class PathDictDataset(paddle.io.Dataset, LoadMesh, LoadFile):
+
     def __init__(
         self,
         path: str = None,
@@ -279,6 +278,7 @@ class PathDictDataset(paddle.io.Dataset, LoadMesh, LoadFile):
 
 
 class BaseCFDDataModule(BaseDataModule):
+
     def __init__(self):
         super().__init__()
 
@@ -349,6 +349,7 @@ class BaseCFDDataModule(BaseDataModule):
 
 
 class SAEDataModule(BaseCFDDataModule):
+
     def __init__(
         self,
         data_dir,
@@ -442,9 +443,7 @@ class SAEDataModule(BaseCFDDataModule):
             indices.sort(key=extract_number)
             indices = indices[:n_data]
             full_caseids = os.listdir(self.data_dir)
-            full_caseids = [
-                d for d in full_caseids if os.path.isdir(os.path.join(self.data_dir, d))
-            ]
+            full_caseids = [d for d in full_caseids if os.path.isdir(os.path.join(self.data_dir, d))]
             full_caseids.sort(key=extract_number2)
             full_caseids = full_caseids[:n_data]
             # print('indices_%s:' % mode, indices)
@@ -466,16 +465,10 @@ class SAEDataModule(BaseCFDDataModule):
 
     def get_indices(self, n_train, n_val, n_test):
         if self.train_ratio is None:
-            self.train_indices, self.train_full_caseids = self.init_idx(
-                n_train, "train", "train_design_ids.txt"
-            )
-            self.test_indices, self.test_full_caseids = self.init_idx(
-                n_test, "test", "test_design_ids.txt"
-            )
+            self.train_indices, self.train_full_caseids = self.init_idx(n_train, "train", "train_design_ids.txt")
+            self.test_indices, self.test_full_caseids = self.init_idx(n_test, "test", "test_design_ids.txt")
         else:
-            self.train_indices, self.train_full_caseids = self.init_idx(
-                n_train, "train", "train_design_ids.txt"
-            )
+            self.train_indices, self.train_full_caseids = self.init_idx(n_train, "train", "train_design_ids.txt")
             index = list(range(len(self.train_indices)))
             train_index, test_index = self.split_list_(
                 index, train_ratio=self.train_ratio, test_ratio=self.test_ratio
@@ -567,6 +560,7 @@ class SAEDataModule(BaseCFDDataModule):
 
 
 class TestData(unittest.TestCase):
+
     def __init__(self, methodName: str, data_path: str) -> None:
         super().__init__(methodName)
         self.data_path = data_path

@@ -9,11 +9,7 @@ import warnings
 from collections.abc import Callable
 from pathlib import Path
 from timeit import default_timer
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Tuple
-from typing import Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import meshio
 import numpy as np
@@ -22,7 +18,7 @@ import paddle
 
 from src.data.base_datamodule import BaseDataModule
 
-from src.neuralop.utils import UnitGaussianNormalizer
+from ..neuralop.utils import UnitGaussianNormalizer
 
 
 def get_last_dir(path):
@@ -30,6 +26,7 @@ def get_last_dir(path):
 
 
 class LoadFile:
+
     def __init__(self, path):
         self.path = path
 
@@ -57,6 +54,7 @@ class LoadFile:
 
 
 class PathDictDataset(paddle.io.Dataset, LoadFile):
+
     def __init__(
         self,
         path: str = None,
@@ -130,6 +128,7 @@ class PathDictDataset(paddle.io.Dataset, LoadFile):
 
 
 class BaseCFDDataModule(BaseDataModule):
+
     def __init__(self):
         super().__init__()
 
@@ -193,6 +192,7 @@ class BaseCFDDataModule(BaseDataModule):
 
 
 class SAEInferenceDataModule(BaseCFDDataModule):
+
     def __init__(
         self,
         data_dir,
@@ -358,12 +358,13 @@ class SAEInferenceDataModule(BaseCFDDataModule):
 
 
 class TestData(unittest.TestCase):
+
     def __init__(self, methodName: str, data_path: str) -> None:
         super().__init__(methodName)
         self.data_path = data_path
 
     def test_ahmed(self):
-        dm = SAEInferenceDataModule(
+        dm = SAEDataModule(
             self.data_path, n_train=10, n_test=10, spatial_resolution=(64, 64, 64)
         )
         tl = dm.train_dataloader(batch_size=2, shuffle=True)
