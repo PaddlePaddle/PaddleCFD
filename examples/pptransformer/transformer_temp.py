@@ -1,397 +1,748 @@
-from __future__ import annotations
+import logging
+import os
+import re
+import time
+from dataclasses import dataclass
+from dataclasses import field
+from pathlib import Path
 
-import math
-from typing import Callable
-from typing import Tuple
-
+import hydra
+import numpy as np
 import paddle
-import paddle.nn as nn
+import pandas as pd
+import tensorboardX
+from paddle.io import BatchSampler
+
+import ppcfd.utils.op as op
+import ppcfd.utils.parallel as parallel
+from ppcfd.utils.loss import LpLoss
+from ppcfd.utils.metric import R2Score
+
+log = logging.getLogger(__name__)
 
 
-
-def transpose_aux_func(dims, dim0, dim1):
-    perm = list(range(dims))
-    perm[dim0], perm[dim1] = perm[dim1], perm[dim0]
-    return perm
+def set_seed(seed: int = 0):
+    paddle.seed(seed)
+    np.random.seed(seed)
 
 
-class MultiHeadAttention(nn.Layer):
-    def __init__(self, heads, d_model):
-        super().__init__()
-        self.heads = heads
-        self.d_model = d_model
-        assert d_model % heads == 0
-        self.d_k = d_model // heads
-        self.W_Q = nn.Linear(in_features=d_model, out_features=d_model)
-        self.W_K = nn.Linear(in_features=d_model, out_features=d_model)
-        self.W_V = nn.Linear(in_features=d_model, out_features=d_model)
-        self.W_O = nn.Linear(in_features=d_model, out_features=d_model)
-
-    def scaled_dot_product_attention(self, Q, K, V, mask=None):
-        scores = paddle.matmul(
-            x=Q, y=K.transpose(perm=transpose_aux_func(K.ndim, -1, -2))
-        ) / math.sqrt(self.d_k)
-        if mask is not None:
-            scores = paddle.where(
-                condition=mask,
-                x=paddle.to_tensor(data=[-1e9], dtype="float32"),
-                y=scores,
-            )
-        weights = nn.functional.softmax(x=scores, axis=-1)
-        return paddle.matmul(x=weights, y=V)
-
-    def forward(self, Q, K, V, mask=None):
-        Q_temp = paddle.reshape(
-            x=self.W_Q(Q),
-            shape=[i for i in tuple(Q.shape)[:-1]] + [self.heads] + [self.d_k],
-        ).transpose(
-            perm=transpose_aux_func(
-                paddle.reshape(
-                    x=self.W_Q(Q),
-                    shape=[i for i in tuple(Q.shape)[:-1]] + [self.heads] + [self.d_k],
-                ).ndim,
-                1,
-                2,
-            )
-        )
-        K_temp = paddle.reshape(
-            x=self.W_K(K),
-            shape=[i for i in tuple(K.shape)[:-1]] + [self.heads] + [self.d_k],
-        ).transpose(
-            perm=transpose_aux_func(
-                paddle.reshape(
-                    x=self.W_K(K),
-                    shape=[i for i in tuple(K.shape)[:-1]] + [self.heads] + [self.d_k],
-                ).ndim,
-                1,
-                2,
-            )
-        )
-        V_temp = paddle.reshape(
-            x=self.W_V(V),
-            shape=[i for i in tuple(V.shape)[:-1]] + [self.heads] + [self.d_k],
-        ).transpose(
-            perm=transpose_aux_func(
-                paddle.reshape(
-                    x=self.W_V(V),
-                    shape=[i for i in tuple(V.shape)[:-1]] + [self.heads] + [self.d_k],
-                ).ndim,
-                1,
-                2,
-            )
-        )
-        sdpa = self.scaled_dot_product_attention(
-            Q_temp, K_temp, V_temp, mask
-        ).transpose(
-            perm=transpose_aux_func(
-                self.scaled_dot_product_attention(Q_temp, K_temp, V_temp, mask).ndim,
-                1,
-                2,
-            )
-        )
-        sdpa = paddle.reshape(
-            x=sdpa, shape=[i for i in tuple(sdpa.shape)[:-2]] + [self.d_model]
-        )
-        y_mha = self.W_O(sdpa)
-        return y_mha
+@dataclass
+class AeroDynamicCoefficients:
+    c_p_pred: op.Tensor = op.to_tensor(1.0)
+    c_f_pred: op.Tensor = op.to_tensor(1.0)
+    c_d_pred: op.Tensor = op.to_tensor(1.0)
+    c_l_pred: op.Tensor = op.to_tensor(1.0)
+    c_p_true: op.Tensor = op.to_tensor(1.0)
+    c_f_true: op.Tensor = op.to_tensor(1.0)
+    c_l_true: op.Tensor = op.to_tensor(1.0)
+    c_d_true: op.Tensor = op.to_tensor(1.0)
+    c_p_mre: op.Tensor = op.to_tensor(0.0)
+    c_f_mre: op.Tensor = op.to_tensor(0.0)
+    c_d_mre: op.Tensor = op.to_tensor(0.0)
+    c_l_mre: op.Tensor = op.to_tensor(0.0)
+    cd_starccm: op.Tensor = op.to_tensor(1.0)
+    reference_area: op.Tensor = op.to_tensor(-1.0)
 
 
-class MLP(nn.Layer):
-    def __init__(self, list_dims, act="relu", dropout=0.0):
-        super().__init__()
-        self.layers = nn.LayerList()
-        for i in range(len(list_dims) - 1):
-            self.layers.append(
-                nn.Linear(in_features=list_dims[i], out_features=list_dims[i + 1])
-            )
-            self.layers.append(act_mod.get_activation(act) if act else None)
-            self.layers.append(nn.Dropout(p=dropout))
-
-    def forward(self, x):
-        y = x
-        for layer in self.layers:
-            y = layer(y)
-        return y
+@dataclass
+class AeroDynamicLoss:
+    l2_p: list = field(default_factory=list)
+    mse_cd: list = field(default_factory=list)
+    mre_cp: list = field(default_factory=list)
 
 
-class EncoderLayerMix(nn.Layer):
-    def __init__(self, in_features, d_model, heads, act="relu", dropout=0.0):
-        super().__init__()
-        self.mlp = MLP([in_features, d_model, d_model], act="relu", dropout=dropout)
-        self.multihead_attention = MultiHeadAttention(heads, d_model)
-        self.dropout = nn.Dropout(p=dropout)
-        self.norm = nn.LayerNorm(normalized_shape=d_model)
+@dataclass
+class AeroDynamicMetrics:
+    csv_title: list = field(
+        default_factory=lambda: [
+            "file_name",
+            "cp pred",
+            "cf pred",
+            "cp true",
+            "cf true",
+            "cd starccm+",
+            "frontal area",
+        ]
+    )
+    test_l2_loss_list: list = field(default_factory=lambda: [0.0])
+    test_mse_cd_loss_list: list = field(default_factory=list)
+    test_l2_loss_list_p: list = field(default_factory=list)
+    test_l2_loss_list_wss: list = field(default_factory=list)
+    test_l2_loss_list_vel: list = field(default_factory=list)
+    test_mse_loss_list_p: list = field(default_factory=list)
+    test_mse_loss_list_wss: list = field(default_factory=list)
+    test_mse_loss_list_vel: list = field(default_factory=list)
+    test_cp_mre_list: list = field(default_factory=list)
+    test_cf_mre_list: list = field(default_factory=list)
+    test_cd_mre_list: list = field(default_factory=list)
+    test_cl_mre_list: list = field(default_factory=list)
+    cp_r2_score: float = 0.0
+    cf_r2_score: float = 0.0
+    cl_r2_score: float = 0.0
+    cd_r2_score: float = 0.0
 
-    def forward(self, x):
-        y = x
-        y = paddle.flatten(y, start_axis=2)
-        y = self.mlp(y)
-        y = self.multihead_attention(y, y, y, mask=None)
-        y = self.dropout(y)
-        y = paddle.unsqueeze(y, axis=2)
-        y = x + y
-        y = self.norm(y)
-        return y
+
+@dataclass
+class AeroDynamicPhysicsField:
+    u: op.Tensor = op.to_tensor(0.0)
+    v: op.Tensor = op.to_tensor(0.0)
+    w: op.Tensor = op.to_tensor(0.0)
+    p: op.Tensor = op.to_tensor(0.0)
+    wss: op.Tensor = op.to_tensor(0.0)
+    wss_x: op.Tensor = op.to_tensor(0.0)
+    cd: op.Tensor = op.to_tensor(0.0)
 
 
-class Encoder(nn.Layer):
-    def __init__(
-        self, num_layers, num_var_max, d_model, heads, act="relu", dropout=0.0
+@dataclass
+class StructuralCoefficients:
+    mass: op.Tensor = op.to_tensor(0.0)
+    safety_factor: op.Tensor = op.to_tensor(0.0)
+    max_displacement: op.Tensor = op.to_tensor(0.0)
+    contact_pressure: op.Tensor = op.to_tensor(0.0)
+    max_mises_stress: op.Tensor = op.to_tensor(0.0)
+    max_shear_stress: op.Tensor = op.to_tensor(0.0)
+    total_strain_energy: op.Tensor = op.to_tensor(0.0)
+    max_principal_stress: op.Tensor = op.to_tensor(0.0)
+    max_von_mises_strain: op.Tensor = op.to_tensor(0.0)
+
+
+@dataclass
+class StructuralMetrics:
+    csv_title: list = field(default_factory=lambda: ["file_name", "mean L-2 error"])
+    l2: list = field(default_factory=list)
+
+
+@dataclass
+class StructuralLoss:
+    l2: list = field(default_factory=list)
+
+
+class Car_Loss:
+    def __init__(self, config):
+        self.config = config
+        self.l2_mean_loss = LpLoss(p=2)
+        self.cx_list = []
+        self.mse_loss = paddle.nn.MSELoss()
+        self.metric = AeroDynamicMetrics()
+
+    def __call__(
+        self, inputs, outputs, targets, others, loss_fn, loss_cd_fn, cal_metric=False
     ):
-        super().__init__()
-        self.first_mlp = MLP([1, d_model, d_model], act="relu", dropout=dropout)
-        self.layers = nn.LayerList(
-            sublayers=[
-                EncoderLayerMix(
-                    d_model * num_var_max, d_model, heads, act="relu", dropout=dropout
-                )
-                for _ in range(num_layers)
-            ]
+        config = self.config
+        l2_loss, mse_cd_loss, c_p_mre, loss_p, loss_wss, loss_vel = [
+            op.to_tensor([0.0])
+        ] * 6
+        [output, label], [pred, true] = self.denormalize(
+            outputs, targets, others, config.mode
         )
-        self.last_mlp = MLP([d_model, d_model], act="relu", dropout=dropout)
+        cx = self.calculate_coefficient(
+            inputs,
+            targets,
+            others,
+            pred=pred,
+            true=true,
+            mass_density=config.mass_density,
+            flow_speed=config.flow_speed,
+        )
+        targets["coefficient"] = cx
 
-    def forward(self, x):
-        y = x
-        y = self.first_mlp(y)
-        for layer in self.layers:
-            y = layer(y)
-        y = self.last_mlp(y)
-        y = paddle.max(y, axis=1)
-        return y
+        if self.config.mode == "inference":
+            return cx, pred
 
+        if "pressure" in config.out_keys:
+            loss_p = loss_fn(pred.p, true.p)
 
-class TokenEmbeddings(nn.Layer):
-    def __init__(self, vocab_size, seq_length, d_model, dropout=0.0):
-        super().__init__()
-        self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
-        self.seq_length = seq_length
-        self.d_model = d_model
-        self.dropout = nn.Dropout(dropout)
-        self.get_pe_num()
+        if "wss" in config.out_keys:
+            loss_wss = loss_fn(pred.wss, true.wss)
 
-    def get_pe_num(self):
-        self.pe = paddle.zeros(shape=[self.seq_length, self.d_model])
-        numerator = paddle.arange(
-            self.seq_length, dtype=paddle.get_default_dtype()
-        ).unsqueeze(axis=1)
-        denominator = paddle.pow(
-            x=paddle.to_tensor(10e4, dtype=paddle.get_default_dtype()),
-            y=paddle.arange(self.d_model, step=2) / self.d_model,
-        ).unsqueeze(axis=0)
-        self.pe[:, 0::2] = paddle.sin(x=numerator / denominator)
-        self.pe[:, 1::2] = paddle.cos(x=numerator / denominator)
-        self.pe.stop_gradient = True
+        if "vel" in config.out_keys:
+            loss_vel = loss_fn(pred.u, true.u)
 
-    def forward(self, x):
-        # embedding
-        y = x
-        y = self.embed(y) * math.sqrt(self.d_model)
-        # position encoding
-        y = self.dropout(y + self.pe)
-        return y
+        l2_loss = loss_fn(output, label)
+        if config.cd_finetune is True:
+            mse_cd_loss = loss_cd_fn(cx.c_p_pred, cx.c_p_true)
+        else:
+            mse_cd_loss = op.to_tensor([0.0])
 
+        return_list = [
+            l2_loss,
+            mse_cd_loss,
+            loss_p,
+            loss_wss,
+            loss_vel,
+        ]
+        if cal_metric:
+            metrics_updated = self.update(return_list, cx)
+            return metrics_updated
+        else:
+            return return_list
 
-class DecoderLayer(nn.Layer):
-    def __init__(self, heads, d_model, act="relu", dropout=0.0):
-        super().__init__()
-        self.multihead_attention_1 = MultiHeadAttention(heads, d_model)
-        self.dropout_1 = nn.Dropout(p=dropout)
-        self.norm_1 = nn.LayerNorm(d_model)
+    def update(self, loss_list, cx):
+        m = self.metric
+        m.test_l2_loss_list.append(loss_list[0].item())
+        m.test_mse_cd_loss_list.append(loss_list[1].item())
+        m.test_l2_loss_list_p.append(loss_list[2].item())
+        m.test_l2_loss_list_wss.append(loss_list[3].item())
+        m.test_l2_loss_list_vel.append(loss_list[4].item())
+        m.test_cp_mre_list.append(cx.c_p_mre.item())
+        m.test_cf_mre_list.append(cx.c_f_mre.item())
+        m.test_cd_mre_list.append(cx.c_d_mre.item())
+        m.test_cl_mre_list.append(cx.c_l_mre.item())
+        return m
 
-        self.multihead_attention_2 = MultiHeadAttention(heads, d_model)
-        self.dropout_2 = nn.Dropout(p=dropout)
-        self.norm_2 = nn.LayerNorm(d_model)
-
-        self.mlp = MLP([d_model, 2 * d_model, d_model], act="relu", dropout=dropout)
-        self.norm_3 = nn.LayerNorm(d_model)
-
-    def forward(self, x_emb, x_enc, mask):
-        y_mha_1 = self.multihead_attention_1(x_emb, x_emb, x_emb, mask=mask)
-        y_mha_1 = self.dropout_1(y_mha_1)
-        y = y_mha_1 + x_emb
-        y = self.norm_1(y)
-        y_mha_2 = self.multihead_attention_2(y, x_enc, x_enc, mask=None)
-        y_mha_2 = self.dropout_2(y_mha_2)
-        y = y + y_mha_2
-        y = self.norm_2(y)
-        y_mlp = self.mlp(y)
-        y = y + y_mlp
-        y = self.norm_3(y)
-        return y
-
-
-class Decoder(nn.Layer):
-    def __init__(
+    def integral_over_cells(
         self,
-        num_layers,
-        vocab_size,
-        seq_length,
-        d_model,
-        heads,
-        act="relu",
-        dropout=0.0,
+        reference_area,
+        surface_normals,
+        areas,
+        mass_density,
+        flow_speed,
+        x_direction=1,
     ):
-        super().__init__()
-        self.token_embeddings = TokenEmbeddings(
-            vocab_size, seq_length, d_model, dropout
+        flow_normals = op.zeros(surface_normals.shape)
+        flow_normals[..., 0] = x_direction
+        const = 2.0 / (mass_density * flow_speed**2 * reference_area)
+        const = op.to_tensor(const)
+        const = const.reshape([-1, 1, 1])
+        direction = op.sum(surface_normals * flow_normals, axis=-1, keepdim=True)
+        c_p = const * direction * areas
+        c_f = (const * flow_normals * areas)[..., 0:1]
+        return c_p, c_f
+
+    def calculate_coefficient(
+        self,
+        inputs,
+        targets,
+        others,
+        pred,
+        true,
+        mass_density,
+        flow_speed,
+        x_direction=1,
+    ):
+        cx = AeroDynamicCoefficients()
+        if "Cd" in self.config.out_keys:
+            cx.c_d_pred = pred.cd
+            cx.c_d_true = true.cd
+            cx.c_d_mre = abs(cx.c_d_pred - cx.c_d_true) / abs(cx.c_d_true)
+            return cx
+        else:
+            cx.cd_starccm = others.get("Cd", 1.0)
+            cx.reference_area = others["reference_area"]
+        if "pressure" in self.config.out_keys or "wss" in self.config.out_keys:
+            # 2. Prepare Discreted Integral over Car Surface
+            cp, cf = self.integral_over_cells(
+                others["reference_area"],
+                targets["normal"],
+                targets["areas"],
+                mass_density,
+                flow_speed,
+                x_direction,
+            )
+
+            # 3. Calculate coefficient and MRE
+            if "pressure" in self.config.out_keys:
+                cx.c_p_pred = op.sum(cp * pred.p, axis=[1, 2])
+                cx.c_p_true = op.sum(cp * true.p, axis=[1, 2])
+                cx.c_p_mre = abs(cx.c_p_pred - cx.c_p_true) / abs(cx.c_p_true)
+
+            if "wss" in self.config.out_keys:
+                cx.c_f_pred = op.sum(cf * pred.wss_x, axis=[1, 2])
+                cx.c_f_true = op.sum(cf * true.wss_x, axis=[1, 2])
+                cx.c_f_mre = abs(cx.c_f_pred - cx.c_f_true) / abs(cx.c_f_true)
+
+            if {"pressure", "wss"}.issubset(self.config.out_keys):
+                cx.c_d_pred = cx.c_p_pred + cx.c_f_pred
+                cx.c_d_true = cx.c_p_true + cx.c_f_true
+                cx.c_d_mre = abs(cx.c_d_pred - cx.c_d_true) / abs(cx.c_d_true)
+                cx.c_l_pred = cx.c_p_pred  # tofix
+                cx.c_l_true = cx.c_p_true  # tofix
+                cx.c_l_mre = abs(
+                    op.to_tensor([1e-5] * inputs["centroids"].shape[0])
+                ) / abs(cx.c_l_true)
+        return cx
+
+    def denormalize(self, outputs, targets, others, mode, eps=1e-6):
+        config = self.config
+        channels = 0
+        true = AeroDynamicPhysicsField()
+        pred = AeroDynamicPhysicsField()
+        label_list, pred_list = [], []
+        (
+            p_true,
+            p_pred,
+            wss_true,
+            wss_pred,
+            wss_x_true,
+            wss_x_pred,
+            vel_true,
+            vel_pred,
+            cd_true,
+            cd_pred,
+        ) = [None] * 10
+        assert len(config.out_keys) != 0, "config.out_keys must be not empty"
+        if "pressure" in config.out_keys:
+            if mode in ["test", "train"]:
+                p_true = targets["pressure"].unsqueeze(axis=2)
+                label_list.append(p_true)
+                true.p = p_true
+            mean = others["p_mean"]
+            std = others["p_std"]
+            index = config.out_keys.index("pressure")
+            n = config.out_channels[index]
+            p_pred = outputs[..., channels : channels + n] * (std + eps) + mean
+            pred_list.append(p_pred)
+            pred.p = p_pred
+            channels += n
+        if "wss" in config.out_keys:
+            if mode in ["test", "train"]:
+                wss_true = targets["wss"]
+                label_list.append(wss_true)
+                wss_x_true = wss_true[..., 0:1]
+                true.wss = wss_true
+                true.wss_x = wss_x_true
+            mean = others["wss_mean"]
+            std = others["wss_std"]
+            index = config.out_keys.index("wss")
+            n = config.out_channels[index]
+            wss_pred = outputs[..., channels : channels + n] * (std + eps) + mean
+            wss_x_pred = wss_pred[..., 0:1]
+            pred_list.append(wss_pred)
+            pred.wss = wss_pred
+            pred.wss_x = wss_x_pred
+            channels += n
+        if "vel" in config.out_keys:
+            if mode in ["test", "train"]:
+                vel_true = targets["vel"].unsqueeze(axis=2)
+                label_list.append(vel_true)
+                true.u = vel_true
+
+            mean = others.get("v_mean", [1.0])[0]
+            std = others.get("v_std", [0.0])[0]
+            index = config.out_keys.index("vel")
+            n = config.out_channels[index]
+            vel_pred = outputs[..., channels : channels + n] * mean + std
+            pred_list.append(vel_pred)
+            pred.u = vel_pred
+            channels += n
+        if "Cd" in config.out_keys:
+            index = config.out_keys.index("Cd")
+            n = config.out_channels[index]
+            cd_pred = outputs[..., channels : channels + n]
+            cd_true = others["Cd"]
+            pred_list.append(cd_pred)
+            label_list.append(cd_true)
+            true.cd = cd_true
+            pred.cd = cd_pred
+
+        pred_list = op.concat(pred_list, axis=-1)
+        if mode in ["test", "train"]:
+            label_list = op.concat(label_list, axis=-1)
+        return [pred_list, label_list], [pred, true]
+
+
+class Structural_Loss:
+    def __init__(self, config):
+        self.config = config
+        self.structural_loss = StructuralLoss()
+        self.structural_metric = StructuralMetrics()
+
+    def __call__(
+        self, inputs, outputs, targets, others, loss_fn, loss_cd_fn, cal_metric=False
+    ):
+        targets["coefficient"] = StructuralCoefficients()
+        loss_list = []
+        for k in self.config.out_keys:
+            _targets = targets[k]
+            outputs = abs(outputs)  # tofix
+            l2_loss = loss_fn(outputs, _targets)
+            loss_list.append(l2_loss)
+            if cal_metric:
+                self.structural_metric.l2.append(l2_loss.item())
+            else:
+                self.structural_loss.l2.append(l2_loss.item())
+            output_dir = Path(self.config.output_dir) / "test_case"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            if k == "stress":
+                output_df = pd.DataFrame(
+                    {
+                        "x": inputs["centroids"][0, :, 0].numpy(),
+                        "y": inputs["centroids"][0, :, 1].numpy(),
+                        "z": inputs["centroids"][0, :, 2].numpy(),
+                        k: targets[k][0, :, 0].numpy(),
+                        "output": outputs[0, :, 0].numpy(),  # 假设output是可迭代对象
+                    }
+                )
+            elif k == "natural_frequency":
+                output_df = pd.DataFrame(
+                    {
+                        k: targets[k][0, :, 0].numpy(),
+                        "output": outputs[0, :, 0].numpy(),  # 假设output是可迭代对象
+                    }
+                )
+            else:
+                raise NotImplementedError
+
+            # 保存为CSV
+            output_df.to_csv(
+                output_dir / f"{others['file_name']}_test_train.csv",
+                index=False,  # 不保存行索引
+            )
+        if cal_metric:
+            return self.structural_metric
+        else:
+            return loss_list
+
+
+class Loss_logger:
+    def __init__(self, output_dir, mode, simulation_type):
+        self.output_dir = Path(output_dir)
+        self.mode = mode
+        if "Structural" == simulation_type:
+            self.metric = StructuralMetrics()
+            self.loss_list = StructuralLoss()
+        elif "AeroDynamic" == simulation_type:
+            self.metric = AeroDynamicMetrics()
+            self.loss_list = AeroDynamicLoss()
+        else:
+            raise ValueError("loss_fn must be StructuralMetrics or AeroDynamicMetrics")
+
+        tensorboard = tensorboardX.SummaryWriter(
+            os.path.join(output_dir, "tensorboard")
         )
-        self.dropout = nn.Dropout(p=dropout)
-        self.layers = nn.LayerList(
-            sublayers=[
-                DecoderLayer(heads, d_model, act="relu", dropout=dropout)
-                for _ in range(num_layers)
-            ]
+        log.info(f"Working directory : {os.getcwd()}")
+        log.info(f"Output directory  : {output_dir}")
+        self.tensorboard = tensorboard
+
+        self.csv_list = [self.metric.csv_title]
+        self.cx_test_list = []
+
+    def record_train_loss(self, input_list):
+        loss = self.loss_list
+        input_list = [op.mean(x).item() if x is op.Tensor else x for x in input_list]
+        if isinstance(loss, AeroDynamicLoss):
+            cx = input_list[2]
+            loss.l2_p.append(input_list[0])
+            loss.mse_cd.append(input_list[1])
+            loss.mre_cp.append(cx.c_p_mre)
+        elif isinstance(loss, StructuralLoss):
+            loss.l2.append(input_list[0])
+        else:
+            raise ValueError("loss_fn must be StructuralLoss or AeroDynamicLoss")
+
+    def record_metric_report(self):
+        m = self.metric
+        df = pd.DataFrame(self.csv_list[1:], columns=self.csv_list[0])
+        df.to_csv(self.output_dir / "test.csv", mode="w", index=False)
+        if self.mode == "test":
+            if isinstance(m, AeroDynamicMetrics):
+                outputs = {
+                    # "Cp": op.to_tensor([cx.c_p_pred for cx in self.cx_test_list]),
+                    # "cf": op.to_tensor([cx.c_f_pred for cx in self.cx_test_list]),
+                    "Cd": op.to_tensor([cx.c_d_pred for cx in self.cx_test_list]),
+                }
+
+                targets = {
+                    # "Cp": op.to_tensor([cx.c_p_true for cx in self.cx_test_list]),
+                    # "cf": op.to_tensor([cx.c_f_true for cx in self.cx_test_list]),
+                    "Cd": op.to_tensor([cx.c_d_true for cx in self.cx_test_list]),
+                }
+                r2_metric = R2Score()
+                r2_metric_dict = r2_metric(outputs, targets)
+                # m.cp_r2_score=r2_metric_dict["cp"]
+                # m.cf_r2_score=r2_metric_dict["cf"]
+                m.cd_r2_score = r2_metric_dict["Cd"]
+                # m.cp_r2_score=r2_metric_dict["Cp"]
+                log.info(
+                    f"MRE Error Mean: [Cp], {np.mean(m.test_cp_mre_list)*100:.2f}%, [Cf], {np.mean(m.test_cf_mre_list)*100:.2f}%, [Cd], {np.mean(m.test_cd_mre_list)*100:.2f}%, [Cl], {np.mean(m.test_cl_mre_list)*100:.2f}% \tRelative L2 Error Mean: [P], {np.mean(m.test_l2_loss_list_p):.4f}, [WSS], {np.mean(m.test_l2_loss_list_wss):.4f}, [VEL], {np.mean(m.test_l2_loss_list_vel):.4f}, R2 Score: [Cd], {m.cd_r2_score:.2f}"
+                )
+            elif isinstance(m, StructuralMetrics):
+                log.info(f"Mean Relative L-2 Error [Stress]: {np.mean(m.l2):.2f}")
+
+    def record_metric(self, file_name, cx, metric):
+        self.cx_test_list.append(cx)
+        self.metric = metric
+        if isinstance(metric, AeroDynamicMetrics):
+            log.info(
+                f"Case {file_name}\t MRE Error : [Cp], {cx.c_p_mre.item()*100:.2f}%, [Cf], {cx.c_f_mre.item()*100:.2f}%, [Cd], {cx.c_d_mre.item()*100:.2f}%, [Cl], {cx.c_l_mre.item()*100:.2f}% \tRelative L2 Error : [P], {metric.test_l2_loss_list_p[-1]:.4f}, [WSS], {metric.test_l2_loss_list_wss[-1]:.4f}, [VEL], {metric.test_l2_loss_list_vel[-1]:.4f}"
+            )
+            self.csv_list.append(
+                [
+                    file_name,
+                    cx.c_p_pred.item(),
+                    cx.c_f_pred.item(),
+                    cx.c_p_true.item(),
+                    cx.c_f_true.item(),
+                    cx.cd_starccm.item(),
+                    cx.reference_area.item(),
+                ]
+            )
+        elif isinstance(metric, StructuralMetrics):
+            if self.mode == "test":
+                log.info(
+                    f"Case {file_name}\t, Mean L-2 Relative Error [Stress]: {metric.l2[-1]:.2f}"
+                )
+            self.csv_list.append([file_name, metric.l2[-1]])
+        else:
+            raise ValueError("loss_fn must be StructuralMetrics or AeroDynamicMetrics")
+
+    def record_tensorboard(
+        self,
+        ep,
+        time_cost,
+        lr,
+    ):
+        loss = self.loss_list
+        m = self.metric
+        if isinstance(loss, AeroDynamicLoss) and isinstance(m, AeroDynamicMetrics):
+            self.tensorboard.add_scalar("Train_L2", np.mean(loss.l2_p), ep)
+            self.tensorboard.add_scalar("Train_Cd_MSE", np.mean(loss.mse_cd), ep)
+            self.tensorboard.add_scalar("Test_L2", np.mean(m.test_l2_loss_list), ep)
+            self.tensorboard.add_scalar(
+                "Test_Cd_MSE", np.mean(m.test_mse_cd_loss_list), ep
+            )
+            log.info(
+                f"Epoch {ep}  Times {(time_cost):.2f}s, lr:{lr:.1e}, [Tain] L2 :{np.mean(loss.l2_p):.4f},  MSE : [Cd] {np.mean(loss.mse_cd):.1e},  MRE: [Cp]{100*np.mean(loss.mre_cp):.2f}% ,  [Test] L2 :{np.mean(m.test_l2_loss_list):.4f},  MSE: [Cd] {np.mean(m.test_mse_cd_loss_list):.2f}, MRE: [Cp] {100*np.mean(m.test_cp_mre_list):.2f}%, [Cf] {100*np.mean(m.test_cf_mre_list):.2f}%, [Cl] {100*np.mean(m.test_cl_mre_list):.2f}%"
+            )
+        elif isinstance(m, StructuralMetrics) and isinstance(loss, StructuralLoss):
+            self.tensorboard.add_scalar("Train_L2", np.mean(loss.l2), ep)
+            self.tensorboard.add_scalar("Test_L2", np.mean(m.l2), ep)
+            log.info(
+                f"Epoch {ep}  Times {(time_cost):.2f}s, lr:{lr:.1e}, [Tain] Mean Relative L2 loss:{np.mean(m.l2):.4f}   [Test] Mean Relative L2 loss:{np.mean(loss.l2):.4f}"
+            )
+        else:
+            raise ValueError("loss_fn must be StructuralMetrics or AeroDynamicMetrics")
+
+
+def load_checkpoint(config, model, optimizer=None):
+    assert config.checkpoint is not None, "checkpoint must be given."
+    checkpoint_path = Path(config.checkpoint)
+    ep_start = int((re.search(r"_(\d+)", checkpoint_path.name)).group(1))
+    ckpt_path = f"{config.checkpoint}.pdparams"
+    opt_path = f"{config.checkpoint}.pdopt"
+    if os.path.isdir(ckpt_path):
+        op.load_state_dict(optimizer.state_dict(), opt_path)
+    else:
+        pdparams = op.load(ckpt_path)
+        ep_start = int((re.search(r"_(\d+)", config.checkpoint)).group(1))
+        if optimizer is not None and os.path.exists(opt_path):
+            pdopt = op.load(opt_path)
+            optimizer.set_state_dict(pdopt)
+        if "model_state_dict" in pdparams:
+            model.set_state_dict(pdparams["model_state_dict"])
+        else:
+            model.set_state_dict(pdparams)
+    return ep_start
+
+
+@paddle.no_grad()
+def test(config, model, test_dataloader, loss_logger, ep=None):
+    if config.mode == "test":
+        load_checkpoint(config, model)
+        full_batch = True
+    else:
+        full_batch = ((ep + 1) % config.val_freq == 0) or (
+            (ep + 1) == config.num_epochs
+        )
+    model.eval()
+    loss_cd_fn = op.mse_fn()
+    loss_fn = LpLoss(size_average=True)
+    if config.simulation_type == "AeroDynamic":
+        simulation_loss = Car_Loss(config)
+    elif config.simulation_type == "Structural":
+        simulation_loss = Structural_Loss(config)
+    else:
+        raise ValueError(f"Invalid simulation type. {config.simulation_type}")
+
+    # parallel
+    config.enable_dp = False  # length different for each batch
+    model, _ = parallel.setup_module(config, model)
+    data_to_dict = test_dataloader.dataset.data_to_dict
+    test_dataloader = parallel.setup_dataloaders(config, test_dataloader)
+    t0 = time.time()
+    for i, data in enumerate(test_dataloader):
+        with paddle.no_grad():
+            outputs = model(data["inputs"])
+        inputs, targets, others = data_to_dict(data)
+        metric = simulation_loss(
+            inputs, outputs, targets, others, loss_fn, loss_cd_fn, cal_metric=True
+        )
+        loss_logger.record_metric(
+            others.get("file_name", f"Test Case {i}"),
+            targets.get("coefficient", AeroDynamicCoefficients()),
+            metric,
         )
 
-    def forward(self, x_target, x_enc, mask):
-        y = x_target
-        y = self.token_embeddings(y)
-        y = self.dropout(y)
-        for layer in self.layers:
-            y = layer(y, x_enc, mask)
-        return y
+    loss_logger.record_metric_report()
+    if config.mode == "test":
+        log.info(
+            f"Test finished. time: {float(time.time() - t0):.3f} seconds, max gpu memory = {paddle.device.cuda.max_memory_allocated() / 1024**3:.2f} GB"
+        )
 
 
-class Transformer(base.Arch):
-    """A Kind of Transformer Model.
+def train(config, model, datamodule, eval_dataloader, loss_logger):
+    """
+    使用PaddlePaddle框架训练模型
 
     Args:
-        input_keys (Tuple[str, ...]): Name of input keys, such as ("x", "y", "z").
-        output_keys (Tuple[str, ...]): Name of output keys, such as ("u", "v", "w").
-        num_var_max (int): Maximum number of variables.
-        vocab_size (int): Size of vocab. Size of unary operators = 1, binary operators = 2.
-        seq_length (int): Length of sequance.
-        d_model (int, optional): The innermost dimension of model. Defaults to 256.
-        heads (int, optional): The number of independent heads for the multi-head attention layers. Defaults to 4.
-        num_layers_enc (int, optional): The number of encoders. Defaults to 4.
-        num_layers_dec (int, optional): The number of decoders. Defaults to 8.
-        dropout (float, optional): Dropout regularization. Defaults to 0.0.
+        config (dict): 配置信息，包含学习率(lr)和训练轮数(num_epochs)等
+        model (paddle.nn.Layer): 待训练的模型
 
-    Examples:
-        >>> import paddle
-        >>> import ppsci
-        >>> model = ppsci.arch.Transformer(
-        ...     input_keys=("input", "target_seq"),
-        ...     output_keys=("output",),
-        ...     num_var_max=7,
-        ...     vocab_size=20,
-        ...     seq_length=30,
-        ... )
-        >>> input_dict = {"input": paddle.rand([512, 50, 7, 1]),
-        ...               "target_seq": paddle.rand([512, 30])}
-        >>> output_dict = model(input_dict)
-        >>> print(output_dict["output"].shape)
-        [512, 30, 20]
+    Returns:
+        None
+    """
+    model.train()
+
+    # 损失函数
+    loss_fn = LpLoss(size_average=True)
+    loss_cd_fn = op.mse_fn()
+    car_loss = Car_Loss(config)
+    structural_loss = Structural_Loss(config)
+
+    # 创建优化器
+    optimizer = op.adamw_fn(
+        parameters=model.parameters(), learning_rate=config.lr, weight_decay=1e-6
+    )
+
+    # 断点续训
+    if config.checkpoint is not None:
+        log.info(f"loading checkpoint from: {config.checkpoint}")
+        ep_start = load_checkpoint(config, model, optimizer)
+    else:
+        ep_start = 0
+    # 学习率调度器
+    optimizer, scheduler = op.lr_schedular_fn(
+        scheduler_name=config.lr_schedular,
+        learning_rate=optimizer.get_lr(),
+        T_max=config.num_epochs,
+        optimizer=optimizer,
+    )
+
+    train_sampler = BatchSampler(
+        datamodule.train_data,
+        batch_size=config.batch_size,
+        shuffle=True,
+        drop_last=True,
+    )
+    train_dataloader = datamodule.train_dataloader(
+        num_workers=config.num_workers,
+        batch_sampler=train_sampler,
+    )
+    train_dataloader = parallel.setup_dataloaders(config, train_dataloader, datamodule)
+    model, optimizer = parallel.setup_module(config, model, optimizer)
+
+    data_to_dict = train_dataloader.dataset.data_to_dict
+    log.info(
+        f"iters per epochs = {len(train_dataloader)}, num_train = {config.data_module.n_train_num}, total bacth size = {config.batch_size * paddle.distributed.get_world_size()}"
+    )
+    t0 = time.time()
+    for ep in range(ep_start, config.num_epochs):
+        t1 = time.time()
+        # 训练循环
+        for n_iter, data in enumerate(train_dataloader):
+            outputs = model(data["inputs"])
+            inputs, targets, others = data_to_dict(data)
+            # 模型前向传播
+            if config.simulation_type == "AeroDynamic":
+                loss_list = car_loss(
+                    inputs, outputs, targets, others, loss_fn, loss_cd_fn
+                )
+                l2_loss = loss_list[0]
+                mse_cd_loss = loss_list[1]
+
+                if config.cd_finetune is True:
+                    train_loss = l2_loss + config.cd_loss_weight * mse_cd_loss
+                else:
+                    train_loss = l2_loss
+                loss_logger.record_train_loss(
+                    [
+                        train_loss,
+                        mse_cd_loss,
+                        targets.get("coefficient", AeroDynamicCoefficients()),
+                    ]
+                )
+            elif config.simulation_type == "Structural":
+                loss_list = structural_loss(
+                    inputs, outputs, targets, others, loss_fn, loss_cd_fn
+                )
+                loss_logger.record_train_loss(loss_list)
+                l2_loss = loss_list[0]
+                train_loss = l2_loss
+            # 清除梯度
+            optimizer.clear_grad()
+            # 反向传播
+            train_loss.backward()
+            # 更新模型参数
+            optimizer.step()
+        # 更新学习率
+        if config.lr_schedular is not None:
+            scheduler.step()
+        # 测试循环
+        test(config, model, eval_dataloader, loss_logger, ep)
+        model.train()
+        # 打印训练信息
+        loss_logger.record_tensorboard(
+            ep,
+            (time.time() - t1),
+            optimizer.get_lr(),
+        )
+
+        # Save the weights
+        if ((ep + 1) % 50 == 0) or ((ep + 1) == config.num_epochs):
+            model_name = f"{config.output_dir}/{config.model_name}_{ep}"
+            if config.enable_mp is True or config.enable_pp is True:
+                op.save_state_dict(model.state_dict(), f"{model_name}.pdparams")
+                state = optimizer.state_dict()
+                if config.lr_schedular is not None:
+                    state.pop("LR_Scheduler")
+                op.save_state_dict(state, f"{model_name}.pdopt")
+            else:
+                op.save(model.state_dict(), f"{model_name}.pdparams")
+                op.save(optimizer.state_dict(), f"{model_name}.pdopt")
+    log.info(
+        f"Training finished. time: {float(time.time() - t0)/3600:.3f} hours, max gpu memory = {paddle.device.cuda.max_memory_allocated() / 1024**3:.2f} GB"
+    )
+
+
+@hydra.main(version_base=None, config_path="./configs", config_name="transolver.yaml")
+def main(config):
+    """
+    主函数，用于训练和测试模型
+
+    Args:
+        config (dict): 包含模型配置信息的字典
+
+    Returns:
+        None
     """
 
-    def __init__(
-        self,
-        input_keys: Tuple[str, ...],
-        output_keys: Tuple[str, ...],
-        num_var_max: int,
-        vocab_size: int,
-        seq_length: int,
-        d_model: int = 256,
-        heads: int = 4,
-        num_layers_enc: int = 4,
-        num_layers_dec: int = 8,
-        act: str = "relu",
-        dropout: float = 0.0,
-    ):
-        super().__init__()
-        self.input_keys = input_keys
-        self.output_keys = output_keys
-        self.num_var_max = num_var_max
-        self.vocab_size = vocab_size
-        self.seq_length = seq_length
-        self.d_model = d_model
-        self.heads = heads
-        self.num_layers_enc = num_layers_enc
-        self.num_layers_dec = num_layers_dec
-        self.act = act
-        self.dropout = dropout
+    # 初始化损失记录器
+    loss_logger = Loss_logger(config.output_dir, config.mode, config.simulation_type)
 
-        self.encoder = Encoder(
-            num_layers_enc, num_var_max, d_model, heads, act="relu", dropout=dropout
-        )
-        self.decoder = Decoder(
-            num_layers_dec,
-            vocab_size,
-            seq_length,
-            d_model,
-            heads,
-            act="relu",
-            dropout=dropout,
-        )
-        self.last_layer = paddle.nn.Linear(in_features=d_model, out_features=vocab_size)
+    # 设置随机种子
+    set_seed(config.seed)
 
-    def get_mask(self, target_seq):
-        padding_mask = paddle.equal(target_seq, 0).unsqueeze(axis=1).unsqueeze(axis=1)
-        future_mask = paddle.triu(
-            paddle.ones(shape=[target_seq.shape[1], target_seq.shape[1]]),
-            diagonal=1,
-        ).astype(dtype="bool")
-        mask = paddle.logical_or(x=padding_mask, y=future_mask)
-        return mask
+    # 数据生成
+    datamodule = hydra.utils.instantiate(config.data_module)
 
-    def forward_tensor(self, x_lst):
-        y, target_seq = x_lst[0], x_lst[1]
-        mask = self.get_mask(target_seq)
-        y_enc = self.encoder(y)
-        y = self.decoder(target_seq, y_enc, mask)
-        y = self.last_layer(y)
-        return y
+    # 模型构建
+    model = hydra.utils.instantiate(config.model)
 
-    def forward(self, x):
-        if self._input_transform is not None:
-            x = self._input_transform(x)
+    # 模型训练
+    test_dataloader = datamodule.test_dataloader(
+        batch_size=config.batch_size, num_workers=config.num_workers
+    )
+    # eval_dataloader = datamodule.eval_dataloader(
+    #     batch_size=config.batch_size, num_workers=config.num_workers
+    # )
+    if config.mode == "train":
+        train(config, model, datamodule, test_dataloader, loss_logger)
+    # 模型测试
+    elif config.mode == "test":
+        # 创建测试数据加载器
+        model.eval()
+        test(config, model, test_dataloader, loss_logger)
 
-        x_lst = [x[key] for key in self.input_keys]  # input, target_seq
-        y = self.forward_tensor(x_lst)
-        y = self.split_to_dict(y, self.output_keys, axis=-1)
 
-        if self._output_transform is not None:
-            y = self._output_transform(x, y)
-        return y
-
-    @paddle.no_grad()
-    def decode_process(
-        self, dataset: paddle.Tensor, complete_func: Callable
-    ) -> paddle.Tensor:
-        """Greedy decode with the Transformer model, decode until the equation tree is completed.
-
-        Args:
-            dataset (paddle.Tensor): Tabular dataset.
-            complete_func (Callable): Function used to calculate whether inference is complete.
-        """
-        encoder_output = self.encoder(dataset)
-        decoder_output = paddle.zeros(
-            shape=(dataset.shape[0], self.seq_length + 1), dtype=paddle.int64
-        )
-        decoder_output[:, 0] = 1
-        is_complete = paddle.zeros(shape=dataset.shape[0], dtype=paddle.bool)
-        for n1 in range(self.seq_length):
-            padding_mask = (
-                paddle.equal(x=decoder_output[:, :-1], y=0)
-                .unsqueeze(axis=1)
-                .unsqueeze(axis=1)
-            )
-            future_mask = paddle.triu(
-                x=paddle.ones(shape=[self.seq_length, self.seq_length]), diagonal=1
-            ).astype(dtype=paddle.bool)
-            mask_dec = paddle.logical_or(x=padding_mask, y=future_mask)
-            y_dec = self.decoder(
-                x_target=decoder_output[:, :-1],
-                x_enc=encoder_output,
-                mask=mask_dec,
-            )
-            y_mlp = self.last_layer(y_dec)
-            # set value depending on complete condition
-            decoder_output[:, n1 + 1] = paddle.where(
-                is_complete, 0, paddle.argmax(y_mlp[:, n1], axis=-1)
-            )
-            # set complete condition
-            for n2 in range(dataset.shape[0]):
-                if complete_func(decoder_output[n2, 1:]):
-                    is_complete[n2] = True
-        return decoder_output
+if __name__ == "__main__":
+    main()
