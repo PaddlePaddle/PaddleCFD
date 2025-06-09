@@ -61,21 +61,23 @@ class AeroDynamicMetrics:
             "cp true",
             "cf true",
             "cd starccm+",
+            "cd pred",
+            "cd true",
             "frontal area",
         ]
     )
-    test_l2_loss_list: list = field(default_factory=lambda: [0.0])
-    test_mse_cd_loss_list: list = field(default_factory=list)
-    test_l2_loss_list_p: list = field(default_factory=list)
-    test_l2_loss_list_wss: list = field(default_factory=list)
-    test_l2_loss_list_vel: list = field(default_factory=list)
+    l2: list = field(default_factory=list)
+    mse_cd: list = field(default_factory=list)
+    l2_p: list = field(default_factory=list)
+    l2_wss: list = field(default_factory=list)
+    l2_vel: list = field(default_factory=list)
     test_mse_loss_list_p: list = field(default_factory=list)
     test_mse_loss_list_wss: list = field(default_factory=list)
     test_mse_loss_list_vel: list = field(default_factory=list)
-    test_cp_mre_list: list = field(default_factory=list)
-    test_cf_mre_list: list = field(default_factory=list)
-    test_cd_mre_list: list = field(default_factory=list)
-    test_cl_mre_list: list = field(default_factory=list)
+    mre_cp: list = field(default_factory=list)
+    mre_cf: list = field(default_factory=list)
+    mre_cd: list = field(default_factory=list)
+    mre_cl: list = field(default_factory=list)
     cp_r2_score: float = 0.0
     cf_r2_score: float = 0.0
     cl_r2_score: float = 0.0
@@ -120,7 +122,6 @@ class StructuralLoss:
 class Car_Loss:
     def __init__(self, config):
         self.config = config
-        self.l2_mean_loss = LpLoss(p=2)
         self.cx_list = []
         self.mse_loss = paddle.nn.MSELoss()
         self.metric = AeroDynamicMetrics()
@@ -158,11 +159,14 @@ class Car_Loss:
         if "vel" in config.out_keys:
             loss_vel = loss_fn(pred.u, true.u)
 
-        l2_loss = loss_fn(output, label)
         if config.cd_finetune is True:
             mse_cd_loss = loss_cd_fn(cx.c_p_pred, cx.c_p_true)
+        elif "Cd" in config.out_keys:
+            mse_cd_loss = loss_cd_fn(cx.c_d_pred, cx.c_d_true)
         else:
             mse_cd_loss = op.to_tensor([0.0])
+
+        l2_loss = loss_fn(output, label)
 
         return_list = [
             l2_loss,
@@ -179,15 +183,15 @@ class Car_Loss:
 
     def update(self, loss_list, cx):
         m = self.metric
-        m.test_l2_loss_list.append(loss_list[0].item())
-        m.test_mse_cd_loss_list.append(loss_list[1].item())
-        m.test_l2_loss_list_p.append(loss_list[2].item())
-        m.test_l2_loss_list_wss.append(loss_list[3].item())
-        m.test_l2_loss_list_vel.append(loss_list[4].item())
-        m.test_cp_mre_list.append(cx.c_p_mre.item())
-        m.test_cf_mre_list.append(cx.c_f_mre.item())
-        m.test_cd_mre_list.append(cx.c_d_mre.item())
-        m.test_cl_mre_list.append(cx.c_l_mre.item())
+        m.l2.append(loss_list[0].item())
+        m.mse_cd.append(loss_list[1].item())
+        m.l2_p.append(loss_list[2].item())
+        m.l2_wss.append(loss_list[3].item())
+        m.l2_vel.append(loss_list[4].item())
+        m.mre_cp.append(cx.c_p_mre.item())
+        m.mre_cf.append(cx.c_f_mre.item())
+        m.mre_cd.append(cx.c_d_mre.item())
+        m.mre_cl.append(cx.c_l_mre.item())
         return m
 
     def integral_over_cells(
@@ -430,31 +434,31 @@ class Loss_logger:
         else:
             raise ValueError("loss_fn must be StructuralLoss or AeroDynamicLoss")
 
-    def record_metric_report(self):
+    def record_metric_report(self, epoch):
         m = self.metric
-        df = pd.DataFrame(self.csv_list[1:], columns=self.csv_list[0])
-        df.to_csv(self.output_dir / "test.csv", mode="w", index=False)
+        df = pd.DataFrame(m.csv_list[1:], columns=m.csv_list[0])
+        df.to_csv(self.output_dir / f"test_epoch_{epoch}.csv", mode="w", index=False)
         if self.mode == "test":
-            if isinstance(m, AeroDynamicMetrics):
-                outputs = {
-                    # "Cp": op.to_tensor([cx.c_p_pred for cx in self.cx_test_list]),
-                    # "cf": op.to_tensor([cx.c_f_pred for cx in self.cx_test_list]),
-                    "Cd": op.to_tensor([cx.c_d_pred for cx in self.cx_test_list]),
-                }
+            outputs = {
+                # "Cp": op.to_tensor([cx.c_p_pred for cx in self.cx_test_list]),
+                # "cf": op.to_tensor([cx.c_f_pred for cx in self.cx_test_list]),
+                "Cd": op.to_tensor([cx.c_d_pred for cx in self.cx_test_list]),
+            }
 
-                targets = {
-                    # "Cp": op.to_tensor([cx.c_p_true for cx in self.cx_test_list]),
-                    # "cf": op.to_tensor([cx.c_f_true for cx in self.cx_test_list]),
-                    "Cd": op.to_tensor([cx.c_d_true for cx in self.cx_test_list]),
-                }
-                r2_metric = R2Score()
-                r2_metric_dict = r2_metric(outputs, targets)
-                # m.cp_r2_score=r2_metric_dict["cp"]
-                # m.cf_r2_score=r2_metric_dict["cf"]
-                m.cd_r2_score = r2_metric_dict["Cd"]
-                # m.cp_r2_score=r2_metric_dict["Cp"]
+            targets = {
+                # "Cp": op.to_tensor([cx.c_p_true for cx in self.cx_test_list]),
+                # "cf": op.to_tensor([cx.c_f_true for cx in self.cx_test_list]),
+                "Cd": op.to_tensor([cx.c_d_true for cx in self.cx_test_list]),
+            }
+            r2_metric = R2Score()
+            r2_metric_dict = r2_metric(outputs, targets)
+            # m.cp_r2_score=r2_metric_dict["cp"]
+            # m.cf_r2_score=r2_metric_dict["cf"]
+            m.cd_r2_score = r2_metric_dict["Cd"]
+            # m.cp_r2_score=r2_metric_dict["Cp"]
+            if isinstance(m, AeroDynamicMetrics):
                 log.info(
-                    f"MRE Error Mean: [Cp], {np.mean(m.test_cp_mre_list)*100:.2f}%, [Cf], {np.mean(m.test_cf_mre_list)*100:.2f}%, [Cd], {np.mean(m.test_cd_mre_list)*100:.2f}%, [Cl], {np.mean(m.test_cl_mre_list)*100:.2f}% \tRelative L2 Error Mean: [P], {np.mean(m.test_l2_loss_list_p):.4f}, [WSS], {np.mean(m.test_l2_loss_list_wss):.4f}, [VEL], {np.mean(m.test_l2_loss_list_vel):.4f}, R2 Score: [Cd], {m.cd_r2_score:.2f}"
+                    f"MSE:{np.mean(m.mse_cd):.2e}, MRE:[Cp], {np.mean(m.mre_cp)*100:.2f}%, [Cf], {np.mean(m.mre_cf)*100:.2f}%, [Cd], {np.mean(m.mre_cd)*100:.2f}%, [Cl], {np.mean(m.mre_cl)*100:.2f}% \tL2:[P], {np.mean(m.l2_p):.4f}, [WSS], {np.mean(m.l2_wss):.4f}, [VEL], {np.mean(m.l2_vel):.4f}, R2 Score: [Cd], {m.cd_r2_score:.2f}"
                 )
             elif isinstance(m, StructuralMetrics):
                 log.info(f"Mean Relative L-2 Error [Stress]: {np.mean(m.l2):.2f}")
@@ -463,9 +467,10 @@ class Loss_logger:
         self.cx_test_list.append(cx)
         self.metric = metric
         if isinstance(metric, AeroDynamicMetrics):
-            log.info(
-                f"Case {file_name}\t MRE Error : [Cp], {cx.c_p_mre.item()*100:.2f}%, [Cf], {cx.c_f_mre.item()*100:.2f}%, [Cd], {cx.c_d_mre.item()*100:.2f}%, [Cl], {cx.c_l_mre.item()*100:.2f}% \tRelative L2 Error : [P], {metric.test_l2_loss_list_p[-1]:.4f}, [WSS], {metric.test_l2_loss_list_wss[-1]:.4f}, [VEL], {metric.test_l2_loss_list_vel[-1]:.4f}"
-            )
+            if self.mode == "test":
+                log.info(
+                    f"Case {file_name}\t MSE:[Cd] {self.metric.mse_cd[-1]:2e}, MRE :[Cp], {cx.c_p_mre.item()*100:.2f}%, [Cf], {cx.c_f_mre.item()*100:.2f}%, [Cd], {cx.c_d_mre.item()*100:.2f}%, [Cl], {cx.c_l_mre.item()*100:.2f}% \tL2 Error:[P], {metric.l2_p[-1]:.4f}, [WSS], {metric.l2_wss[-1]:.4f}, [VEL], {metric.l2_vel[-1]:.4f}"
+                )
             self.csv_list.append(
                 [
                     file_name,
@@ -474,6 +479,8 @@ class Loss_logger:
                     cx.c_p_true.item(),
                     cx.c_f_true.item(),
                     cx.cd_starccm.item(),
+                    cx.c_d_pred.item(),
+                    cx.c_d_true.item(),
                     cx.reference_area.item(),
                 ]
             )
@@ -497,12 +504,12 @@ class Loss_logger:
         if isinstance(loss, AeroDynamicLoss) and isinstance(m, AeroDynamicMetrics):
             self.tensorboard.add_scalar("Train_L2", np.mean(loss.l2_p), ep)
             self.tensorboard.add_scalar("Train_Cd_MSE", np.mean(loss.mse_cd), ep)
-            self.tensorboard.add_scalar("Test_L2", np.mean(m.test_l2_loss_list), ep)
+            self.tensorboard.add_scalar("Test_L2", np.mean(m.l2), ep)
             self.tensorboard.add_scalar(
-                "Test_Cd_MSE", np.mean(m.test_mse_cd_loss_list), ep
+                "Test_Cd_MSE", np.mean(m.mse_cd), ep
             )
             log.info(
-                f"Epoch {ep}  Times {(time_cost):.2f}s, lr:{lr:.1e}, [Tain] L2 :{np.mean(loss.l2_p):.4f},  MSE : [Cd] {np.mean(loss.mse_cd):.1e},  MRE: [Cp]{100*np.mean(loss.mre_cp):.2f}% ,  [Test] L2 :{np.mean(m.test_l2_loss_list):.4f},  MSE: [Cd] {np.mean(m.test_mse_cd_loss_list):.2f}, MRE: [Cp] {100*np.mean(m.test_cp_mre_list):.2f}%, [Cf] {100*np.mean(m.test_cf_mre_list):.2f}%, [Cl] {100*np.mean(m.test_cl_mre_list):.2f}%"
+                f"Epoch {ep} {(time_cost):.2f} s/it, lr:{lr:.1e}, [Tain] L2: {np.mean(loss.l2_p):.2e},  MSE:[Cd] {np.mean(loss.mse_cd):.1e},  MRE:[Cp]{100*np.mean(loss.mre_cp):.2f}% ,  [Test] L2: {np.mean(m.l2):.2e},  MSE:[Cd] {np.mean(m.mse_cd):.2e}, MRE:[Cp] {100*np.mean(m.mre_cp):.2f}%, [Cf] {100*np.mean(m.mre_cf):.2f}%, [Cl] {100*np.mean(m.mre_cl):.2f}%"
             )
         elif isinstance(m, StructuralMetrics) and isinstance(loss, StructuralLoss):
             self.tensorboard.add_scalar("Train_L2", np.mean(loss.l2), ep)
@@ -546,7 +553,9 @@ def test(config, model, test_dataloader, loss_logger, ep=None):
         )
     model.eval()
     loss_cd_fn = op.mse_fn()
-    loss_fn = LpLoss(size_average=True)
+    # loss_fn = LpLoss(size_average=True)
+    loss_fn = paddle.nn.MSELoss()
+
     if config.simulation_type == "AeroDynamic":
         simulation_loss = Car_Loss(config)
     elif config.simulation_type == "Structural":
@@ -572,8 +581,10 @@ def test(config, model, test_dataloader, loss_logger, ep=None):
             targets.get("coefficient", AeroDynamicCoefficients()),
             metric,
         )
-
-    loss_logger.record_metric_report()
+        if (full_batch is False) and (i > 5):
+            break
+    if (full_batch is True):
+        loss_logger.record_metric_report(ep)
     if config.mode == "test":
         log.info(
             f"Test finished. time: {float(time.time() - t0):.3f} seconds, max gpu memory = {paddle.device.cuda.max_memory_allocated() / 1024**3:.2f} GB"
@@ -594,7 +605,8 @@ def train(config, model, datamodule, eval_dataloader, loss_logger):
     model.train()
 
     # 损失函数
-    loss_fn = LpLoss(size_average=True)
+    # loss_fn = LpLoss(size_average=True)
+    loss_fn = paddle.nn.MSELoss()
     loss_cd_fn = op.mse_fn()
     car_loss = Car_Loss(config)
     structural_loss = Structural_Loss(config)
@@ -652,6 +664,8 @@ def train(config, model, datamodule, eval_dataloader, loss_logger):
 
                 if config.cd_finetune is True:
                     train_loss = l2_loss + config.cd_loss_weight * mse_cd_loss
+                elif "Cd" in config.out_keys:
+                    train_loss = mse_cd_loss
                 else:
                     train_loss = l2_loss
                 loss_logger.record_train_loss(
