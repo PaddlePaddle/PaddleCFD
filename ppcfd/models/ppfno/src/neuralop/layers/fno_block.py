@@ -1,58 +1,34 @@
-from typing import List
-from typing import Optional
-from typing import Union
-
 import paddle
 import paddle.nn as nn
-
-from ..utils import validate_scaling_factor
+from typing import List, Optional, Union
 from .mlp import MLP
 from .normalization_layers import AdaIN
 from .skip_connections import skip_connection
 from .spectral_convolution import SpectralConv
-
+from ..utils import validate_scaling_factor
 Number = Union[int, float]
 
 
 class FNOBlocks(paddle.nn.Layer):
-    def __init__(
-        self,
-        in_channels,
-        out_channels,
-        n_modes,
-        output_scaling_factor: Optional[Union[Number, List[Number]]] = None,
-        n_layers=1,
-        max_n_modes=None,
-        fno_block_precision="full",
-        use_mlp=False,
-        mlp_dropout=0,
-        mlp_expansion=0.5,
-        non_linearity=paddle.nn.functional.gelu,
-        stabilizer=None,
-        norm=None,
-        ada_in_features=None,
-        preactivation=False,
-        fno_skip="linear",
-        mlp_skip="soft-gating",
-        separable=False,
-        factorization=None,
-        rank=1.0,
-        SpectralConv=SpectralConv,
-        joint_factorization=False,
-        fixed_rank_modes=False,
-        implementation="factorized",
-        decomposition_kwargs=dict(),
-        fft_norm="forward",
-        **kwargs,
-    ):
+
+    def __init__(self, in_channels, out_channels, n_modes,
+        output_scaling_factor: Optional[Union[Number, List[Number]]]=None,
+        n_layers=1, max_n_modes=None, fno_block_precision='full', use_mlp=
+        False, mlp_dropout=0, mlp_expansion=0.5, non_linearity=paddle.nn.
+        functional.gelu, stabilizer=None, norm=None, ada_in_features=None,
+        preactivation=False, fno_skip='linear', mlp_skip='soft-gating',
+        separable=False, factorization=None, rank=1.0, SpectralConv=
+        SpectralConv, joint_factorization=False, fixed_rank_modes=False,
+        implementation='factorized', decomposition_kwargs=dict(), fft_norm=
+        'forward', **kwargs):
         super().__init__()
         if isinstance(n_modes, int):
             n_modes = [n_modes]
         self._n_modes = n_modes
         self.n_dim = len(n_modes)
-        self.output_scaling_factor: Union[
-            None, List[List[float]]
-        ] = validate_scaling_factor(output_scaling_factor, self.n_dim, n_layers)
+        self.output_scaling_factor: Union[None, List[List[float]]
+            ] = validate_scaling_factor(output_scaling_factor, self.n_dim,
+            n_layers)
         self.max_n_modes = max_n_modes
         self.fno_block_precision = fno_block_precision
         self.in_channels = in_channels
@@ -75,87 +51,45 @@ class FNOBlocks(paddle.nn.Layer):
         self.separable = separable
         self.preactivation = preactivation
         self.ada_in_features = ada_in_features
-        self.convs = SpectralConv(
-            self.in_channels,
-            self.out_channels,
-            self.n_modes,
-            output_scaling_factor=output_scaling_factor,
-            max_n_modes=max_n_modes,
-            rank=rank,
-            fixed_rank_modes=fixed_rank_modes,
-            implementation=implementation,
-            separable=separable,
-            factorization=factorization,
-            decomposition_kwargs=decomposition_kwargs,
-            joint_factorization=joint_factorization,
-            n_layers=n_layers,
-        )
-        self.fno_skips = paddle.nn.LayerList(
-            sublayers=[
-                skip_connection(
-                    self.in_channels,
-                    self.out_channels,
-                    skip_type=fno_skip,
-                    n_dim=self.n_dim,
-                )
-                for _ in range(n_layers)
-            ]
-        )
+        self.convs = SpectralConv(self.in_channels, self.out_channels, self
+            .n_modes, output_scaling_factor=output_scaling_factor,
+            max_n_modes=max_n_modes, rank=rank, fixed_rank_modes=
+            fixed_rank_modes, implementation=implementation, separable=
+            separable, factorization=factorization, decomposition_kwargs=
+            decomposition_kwargs, joint_factorization=joint_factorization,
+            n_layers=n_layers)
+        self.fno_skips = paddle.nn.LayerList(sublayers=[skip_connection(
+            self.in_channels, self.out_channels, skip_type=fno_skip, n_dim=
+            self.n_dim) for _ in range(n_layers)])
         if use_mlp:
-            self.mlp = paddle.nn.LayerList(
-                sublayers=[
-                    MLP(
-                        in_channels=self.out_channels,
-                        hidden_channels=round(self.out_channels * mlp_expansion),
-                        dropout=mlp_dropout,
-                        n_dim=self.n_dim,
-                    )
-                    for _ in range(n_layers)
-                ]
-            )
-            self.mlp_skips = paddle.nn.LayerList(
-                sublayers=[
-                    skip_connection(
-                        self.in_channels,
-                        self.out_channels,
-                        skip_type=mlp_skip,
-                        n_dim=self.n_dim,
-                    )
-                    for _ in range(n_layers)
-                ]
-            )
+            self.mlp = paddle.nn.LayerList(sublayers=[MLP(in_channels=self.
+                out_channels, hidden_channels=round(self.out_channels *
+                mlp_expansion), dropout=mlp_dropout, n_dim=self.n_dim) for
+                _ in range(n_layers)])
+            self.mlp_skips = paddle.nn.LayerList(sublayers=[skip_connection
+                (self.in_channels, self.out_channels, skip_type=mlp_skip,
+                n_dim=self.n_dim) for _ in range(n_layers)])
         else:
             self.mlp = None
         self.n_norms = 1 if self.mlp is None else 2
         if norm is None:
             self.norm = None
-        elif norm == "instance_norm":
-            self.norm = paddle.nn.LayerList(
-                sublayers=[
-                    getattr(nn, f"InstanceNorm{self.n_dim}D")(
-                        num_features=self.out_channels
-                    )
-                    for _ in range(n_layers * self.n_norms)
-                ]
-            )
-        elif norm == "group_norm":
-            self.norm = paddle.nn.LayerList(
-                sublayers=[
-                    paddle.nn.GroupNorm(num_groups=1, num_channels=self.out_channels)
-                    for _ in range(n_layers * self.n_norms)
-                ]
-            )
-        elif norm == "ada_in":
-            self.norm = paddle.nn.LayerList(
-                sublayers=[
-                    AdaIN(ada_in_features, out_channels)
-                    for _ in range(n_layers * self.n_norms)
-                ]
-            )
+        elif norm == 'instance_norm':
+            self.norm = paddle.nn.LayerList(sublayers=[getattr(nn,
+                f'InstanceNorm{self.n_dim}D')(num_features=self.
+                out_channels) for _ in range(n_layers * self.n_norms)])
+        elif norm == 'group_norm':
+            self.norm = paddle.nn.LayerList(sublayers=[paddle.nn.GroupNorm(
+                num_groups=1, num_channels=self.out_channels) for _ in
+                range(n_layers * self.n_norms)])
+        elif norm == 'ada_in':
+            self.norm = paddle.nn.LayerList(sublayers=[AdaIN(
+                ada_in_features, out_channels) for _ in range(n_layers *
+                self.n_norms)])
         else:
             raise ValueError(
-                f"Got norm={norm} but expected None or one of [instance_norm, group_norm, layer_norm]"
-            )
+                f'Got norm={norm} but expected None or one of [instance_norm, group_norm, layer_norm]'
+                )
 
     def set_ada_in_embeddings(self, *embeddings):
         """Sets the embeddings of each Ada-IN norm layers
@@ -181,13 +115,13 @@ class FNOBlocks(paddle.nn.Layer):
 
     def forward_with_postactivation(self, x, index=0, output_shape=None):
         x_skip_fno = self.fno_skips[index](x)
-        x_skip_fno = self.convs[index].transform(x_skip_fno, output_shape=output_shape)
+        x_skip_fno = self.convs[index].transform(x_skip_fno, output_shape=
+            output_shape)
         if self.mlp is not None:
             x_skip_mlp = self.mlp_skips[index](x)
-            x_skip_mlp = self.convs[index].transform(
-                x_skip_mlp, output_shape=output_shape
-            )
-        if self.stabilizer == "tanh":
+            x_skip_mlp = self.convs[index].transform(x_skip_mlp,
+                output_shape=output_shape)
+        if self.stabilizer == 'tanh':
             x = paddle.nn.functional.tanh(x=x)
         x_fno = self.convs(x, index, output_shape=output_shape)
         if self.norm is not None:
@@ -208,13 +142,13 @@ class FNOBlocks(paddle.nn.Layer):
         if self.norm is not None:
             x = self.norm[self.n_norms * index](x)
         x_skip_fno = self.fno_skips[index](x)
-        x_skip_fno = self.convs[index].transform(x_skip_fno, output_shape=output_shape)
+        x_skip_fno = self.convs[index].transform(x_skip_fno, output_shape=
+            output_shape)
         if self.mlp is not None:
             x_skip_mlp = self.mlp_skips[index](x)
-            x_skip_mlp = self.convs[index].transform(
-                x_skip_mlp, output_shape=output_shape
-            )
-        if self.stabilizer == "tanh":
+            x_skip_mlp = self.convs[index].transform(x_skip_mlp,
+                output_shape=output_shape)
+        if self.stabilizer == 'tanh':
             x = paddle.nn.functional.tanh(x=x)
         x_fno = self.convs(x, index, output_shape=output_shape)
         x = x_fno + x_skip_fno
@@ -242,8 +176,7 @@ class FNOBlocks(paddle.nn.Layer):
         """
         if self.n_layers == 1:
             raise ValueError(
-                "A single layer is parametrized, directly use the main class."
-            )
+                'A single layer is parametrized, directly use the main class.')
         return SubModule(self, indices)
 
     def __getitem__(self, indices):

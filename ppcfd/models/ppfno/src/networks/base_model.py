@@ -2,6 +2,7 @@ import paddle
 
 
 class BaseModel(paddle.nn.Layer):
+
     def __init__(self):
         super().__init__()
         self.device_indicator_param = paddle.empty(shape=[0])

@@ -5,7 +5,6 @@ class DotDict(dict):
     """
     dot.notation access to dictionary attributes
     """
-
     __getattr__ = dict.get
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
@@ -21,10 +20,10 @@ class DotDict(dict):
                 self[k] = v
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({super().__repr__()})"
+        return f'{self.__class__.__name__}({super().__repr__()})'
 
 
-def flatten_dict(d, parent_key="", sep="_", no_sep_keys=["base"]):
+def flatten_dict(d, parent_key='', sep='_', no_sep_keys=['base']):
     items = []
     for k, v in d.items():
         if parent_key in no_sep_keys:
