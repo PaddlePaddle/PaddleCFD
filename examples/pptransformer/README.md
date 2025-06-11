@@ -1,4 +1,6 @@
-The parallel efficiency achieved 90.2% in the distributed computing experiment.
+
+enable_
+The parallel efficiency achieved 90.2% in the data parallel computing experiment.
 
 
 datadownload
