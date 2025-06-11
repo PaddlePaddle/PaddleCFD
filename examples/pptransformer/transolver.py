@@ -27,7 +27,6 @@ from paddle._typing import DTypeLike
 from paddle.nn import Dropout
 from paddle.nn import Linear
 
-sys.path.append("/workspace/DNNFluid_Car/DNNFluid-Car/")
 from ppcfd.networks.KAN import KAN
 from ppcfd.neuralop.models import FNO
 
@@ -41,42 +40,6 @@ ACTIVATION = {
     "ELU": paddle.nn.ELU,
     "silu": paddle.nn.Silu,
 }
-
-
-def print_gpu_memory(id, card_list):
-    import paddle.distributed as dist
-
-    if dist.get_world_size() > 1:
-        card1 = card_list[0]
-        card2 = card_list[1]
-        card3 = card_list[2]
-        card4 = card_list[3]
-        print(f"index:{id}")
-        print(
-            f"多卡:代码执行到此处时，消耗的GPU:{card1}显存:{paddle.device.cuda.max_memory_allocated(card1) / (1024 ** 3):.2f} GB"
-        )
-        print(
-            f"多卡:代码执行到此处时，消耗的GPU:{card2}显存:{paddle.device.cuda.max_memory_allocated(card2) / (1024 ** 3):.2f} GB"
-        )
-        print(
-            f"多卡:代码执行到此处时，消耗的GPU:{card3}显存:{paddle.device.cuda.max_memory_allocated(card3) / (1024 ** 3):.2f} GB"
-        )
-        print(
-            f"多卡:代码执行到此处时，消耗的GPU:{card4}显存:{paddle.device.cuda.max_memory_allocated(card4) / (1024 ** 3):.2f} GB"
-        )
-        print(f"多卡:显存日志保存在 ./log/worklog.{card1}")
-        print(f"多卡:显存日志保存在 ./log/worklog.{card2}")
-        print(f"多卡:显存日志保存在 ./log/worklog.{card3}")
-        print(f"多卡:显存日志保存在 ./log/worklog.{card4}")
-    else:
-        pass
-        print(f"index:{id}")
-        print(
-            f"单卡:代码执行到此处时，消耗的MAX GPU显存:{paddle.device.cuda.max_memory_allocated() / (1024 ** 3):.2f} GB"
-        )
-        print(
-            f"单卡:代码执行到此处时，消耗的CURRENT GPU显存:{paddle.device.cuda.memory_allocated() / (1024 ** 3):.2f} GB"
-        )
 
 
 class Physics_Attention_1D(paddle.nn.Layer):
@@ -165,7 +128,6 @@ class Physics_Attention_1D(paddle.nn.Layer):
         x = k_slice_token
 
         # dots: B, heads, slice_num, slice_num
-        # attn: B, heads, slice_num, slice_num
         dots = paddle.matmul(x=q_slice_token, y=x, transpose_y=True) * self.scale
         attn = self.softmax(dots)
 
