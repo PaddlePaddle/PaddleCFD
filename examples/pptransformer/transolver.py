@@ -1,34 +1,10 @@
-# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
-
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-
-#     http://www.apache.org/licenses/LICENSE-2.0
-
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-# Code is heavily based on paper "Transolver: A Fast Transformer Solver for PDEs on General Geometries",
-# we use paddle to reproduce the results of the paper
-
-import random
-import sys
-from multiprocessing import Value
-from typing import Optional
-
+import numpy as np
 import paddle
 from einops import rearrange
-from einops import repeat
-from paddle._typing import DTypeLike
-from paddle.nn import Dropout
-from paddle.nn import Linear
-
-from ppcfd.networks.KAN import KAN
-from ppcfd.neuralop.models import FNO
+from paddle.nn.initializer import Constant
+from paddle.nn.initializer import TruncatedNormal
+# from ppcfd.data.shapenetcar_datamodule import Data
+from ppcfd.networks.utils import paddle_aux
 
 ACTIVATION = {
     "gelu": paddle.nn.GELU,
@@ -42,10 +18,8 @@ ACTIVATION = {
 }
 
 
-class Physics_Attention_1D(paddle.nn.Layer):
-    def __init__(
-        self, dim, heads=8, dim_head=64, dropout=0.0, slice_num=64, attn_type=""
-    ):
+class Physics_Attention_Irregular_Mesh(paddle.nn.Layer):
+    def __init__(self, dim, heads=8, dim_head=64, dropout=0.0, slice_num=64):
         super().__init__()
         inner_dim = dim_head * heads
         self.dim_head = dim_head
@@ -53,23 +27,17 @@ class Physics_Attention_1D(paddle.nn.Layer):
         self.scale = dim_head**-0.5
         self.softmax = paddle.nn.Softmax(axis=-1)
         self.dropout = paddle.nn.Dropout(p=dropout)
-        out_0 = paddle.create_parameter(
-            shape=(paddle.ones(shape=[1, heads, 1, 1]) * 0.5).shape,
-            dtype=(paddle.ones(shape=[1, heads, 1, 1]) * 0.5).numpy().dtype,
-            default_initializer=paddle.nn.initializer.Assign(
-                paddle.ones(shape=[1, heads, 1, 1]) * 0.5
-            ),
+        self.temperature = paddle.base.framework.EagerParamBase.from_tensor(
+            tensor=paddle.ones(shape=[1, heads, 1, 1]) * 0.5
         )
-        out_0.stop_gradient = not True
-        self.temperature = out_0
         self.in_project_x = paddle.nn.Linear(in_features=dim, out_features=inner_dim)
         self.in_project_fx = paddle.nn.Linear(in_features=dim, out_features=inner_dim)
         self.in_project_slice = paddle.nn.Linear(
             in_features=dim_head, out_features=slice_num
         )
-        for la in [self.in_project_slice]:
+        for l in [self.in_project_slice]:
             init_Orthogonal = paddle.nn.initializer.Orthogonal()
-            init_Orthogonal(la.weight)
+            init_Orthogonal(l.weight)
         self.to_q = paddle.nn.Linear(
             in_features=dim_head, out_features=dim_head, bias_attr=False
         )
@@ -85,434 +53,64 @@ class Physics_Attention_1D(paddle.nn.Layer):
         )
 
     def forward(self, x):
-        # x = B, N, C
         B, N, C = tuple(x.shape)
-
-        # self.in_project_fx(x) = B, N, n_hidden
-        # fx_mid = B, heads, N, dim_head
         fx_mid = (
             self.in_project_fx(x)
-            .reshape((B, N, self.heads, self.dim_head))
+            .reshape([B, N, self.heads, self.dim_head])
             .transpose(perm=[0, 2, 1, 3])
         )
-
-        # self.in_project_fx(x) = B, N, n_hidden
-        # x_mid = B, heads, N, dim_head
         x_mid = (
             self.in_project_x(x)
-            .reshape((B, N, self.heads, self.dim_head))
+            .reshape([B, N, self.heads, self.dim_head])
             .transpose(perm=[0, 2, 1, 3])
         )
-
-        # self.in_project_slice(x_mid) = B, heads, N, slice_num
-        # self.temperature = 1, heads, 1, 1
-        # self.slice_weights = B, heads, N, slice_num
         slice_weights = self.softmax(self.in_project_slice(x_mid) / self.temperature)
         slice_norm = slice_weights.sum(axis=2)
-        slice_token = paddle.matmul(x=slice_weights, y=fx_mid, transpose_x=True)
-        slice_token = slice_token / (slice_norm + 1e-05)[:, :, :, None].tile(
-            (1, 1, 1, self.dim_head)
+        # slice_token_orig = paddle.einsum("bhnc,bhng->bhgc", fx_mid, slice_weights)
+        slice_token = paddle.matmul(
+            slice_weights, 
+            fx_mid, 
+            transpose_x=True, 
+            transpose_y=False
         )
-
-        # slice_token = slice_num, slice_num
-        if not self.training:
-            del (x, fx_mid, x_mid, slice_norm)
-            paddle.device.cuda.empty_cache()
-
-        # qkv_slice_token = B , N , slice_num, slice_num
+        # res = paddle.allclose(slice_token_orig, slice_token)
+        # print(res) # True
+        # exit()
+        slice_token = slice_token / (slice_norm + 1e-05)[:, :, :, None].tile(
+            repeat_times=[1, 1, 1, self.dim_head]
+        )
         q_slice_token = self.to_q(slice_token)
         k_slice_token = self.to_k(slice_token)
         v_slice_token = self.to_v(slice_token)
-
-        # Attention
-        x = k_slice_token
-
-        # dots: B, heads, slice_num, slice_num
-        dots = paddle.matmul(x=q_slice_token, y=x, transpose_y=True) * self.scale
-        attn = self.softmax(dots)
-
-        attn = self.dropout(attn)
-        # attn: B, heads, slice_num, slice_num
-        out_slice_token = paddle.matmul(x=attn, y=v_slice_token)
-
-        out_x = paddle.matmul(x=slice_weights, y=out_slice_token)
-        out_x = paddle.transpose(
-            out_x, perm=[0, 2, 1, 3]
-        )  # Now out_x.shape = [b, n, h, d]
-        out_x = paddle.reshape(
-            out_x, shape=[out_x.shape[0], out_x.shape[1], -1]
-        )  # Now out_x.shape = [b, n, h*d]
-        if not self.training:
-            del (
-                x,
-                slice_weights,
-                slice_token,
-                q_slice_token,
-                k_slice_token,
-                v_slice_token,
-                dots,
-                attn,
-                out_slice_token,
+        dots = (
+            paddle.matmul(
+                x=q_slice_token,
+                y=k_slice_token.transpose(
+                    perm=paddle_aux.transpose_aux_func(k_slice_token.ndim, -1, -2)
+                ),
             )
-            paddle.device.cuda.empty_cache()
-        out_x = self.to_out(out_x)
-        if not self.training:
-            paddle.device.cuda.empty_cache()
-        return out_x
-
-
-class Eidetic_States_Attention(paddle.nn.Layer):
-    def __init__(
-        self, dim, heads=8, dim_head=64, dropout=0.0, slice_num=64, attn_type=""
-    ):
-        super().__init__()
-        inner_dim = dim_head * heads
-        self.dim_head = dim_head
-        self.heads = heads
-        self.scale = dim_head**-0.5
-        self.softmax = paddle.nn.Softmax(axis=-1)
-        self.dropout = paddle.nn.Dropout(p=dropout)
-        self.distribution = paddle.distribution.Uniform(low=0.0, high=1.0)
-
-        # New
-        self.temperature_0 = paddle.create_parameter(
-            shape=[1, heads, 1, 1],
-            dtype=paddle.float32,
-            default_initializer=paddle.nn.initializer.Assign(
-                paddle.ones(shape=[1, heads, 1, 1]) * 0.5
-            ),
+            * self.scale
         )
-        self.temperature_0.stop_gradient = False
-        self.temperature = paddle.nn.Linear(
-            in_features=inner_dim, out_features=1
-        )  # +out_0
-        self.in_project_x = paddle.nn.Linear(in_features=dim, out_features=inner_dim)
-        self.in_project_fx = paddle.nn.Linear(in_features=dim, out_features=inner_dim)
-        self.in_project_slice = paddle.nn.Linear(
-            in_features=dim_head, out_features=slice_num
-        )
-        for la in [self.in_project_slice]:
-            init_Orthogonal = paddle.nn.initializer.Orthogonal()
-            init_Orthogonal(la.weight)
-        self.to_q = paddle.nn.Linear(
-            in_features=dim_head, out_features=dim_head, bias_attr=False
-        )
-        self.to_k = paddle.nn.Linear(
-            in_features=dim_head, out_features=dim_head, bias_attr=False
-        )
-        self.to_v = paddle.nn.Linear(
-            in_features=dim_head, out_features=dim_head, bias_attr=False
-        )
-        self.to_out = paddle.nn.Sequential(
-            paddle.nn.Linear(in_features=inner_dim, out_features=dim),
-            paddle.nn.Dropout(p=dropout),
-        )
-
-    def forward(self, x):
-        # x = B, N, C
-        B, N, C = tuple(x.shape)
-
-        # self.in_project_fx(x) = B, N, n_hidden
-        # fx_mid = B, heads, N, dim_head
-        # fx_mid = (
-        #     self.in_project_fx(x).reshape((B, N, self.heads, self.dim_head)).transpose(perm=[0, 2, 1, 3])
-        # )
-
-        # self.in_project_fx(x) = B, N, n_hidden
-        # x_mid = B, heads, N, dim_head
-        x_mid = (
-            self.in_project_x(x)
-            .reshape((B, N, self.heads, self.dim_head))
-            .transpose(perm=[0, 2, 1, 3])
-        )
-
-        # self.in_project_slice(x_mid) = B, heads, N, slice_num
-        # self.temperature = 1, heads, 1, 1
-        # self.slice_weights = B, heads, N, slice_num
-        ada_temp = self.temperature_0 + self.temperature(x_mid)
-        epsilon = self.distribution.sample(ada_temp.shape)
-        slice_weights = (
-            self.in_project_slice(x_mid) + paddle.log(-paddle.log(epsilon))
-        ) / ada_temp
-        slice_weights = paddle.nn.functional.softmax(slice_weights)
-        # slice_weights = self.softmax(self.in_project_slice(x_mid) / self.temperature)
-        slice_norm = slice_weights.sum(axis=2)
-        slice_token = paddle.matmul(x=slice_weights, y=x_mid, transpose_x=True)
-        slice_token = slice_token / (slice_norm + 1e-05)[:, :, :, None].tile(
-            (1, 1, 1, self.dim_head)
-        )
-
-        # slice_token = slice_num, slice_num
-        if not self.training:
-            del (x, x_mid, slice_norm)
-            paddle.device.cuda.empty_cache()
-
-        # qkv_slice_token = B , N , slice_num, slice_num
-        q_slice_token = self.to_q(slice_token)
-        k_slice_token = self.to_k(slice_token)
-        v_slice_token = self.to_v(slice_token)
-
-        # Attention
-        x = k_slice_token
-
-        # dots: B, heads, slice_num, slice_num
-        # attn: B, heads, slice_num, slice_num
-        dots = paddle.matmul(x=q_slice_token, y=x, transpose_y=True) * self.scale
         attn = self.softmax(dots)
-
         attn = self.dropout(attn)
-        # attn: B, heads, slice_num, slice_num
         out_slice_token = paddle.matmul(x=attn, y=v_slice_token)
+        # out_x_orig = paddle.einsum("bhgc,bhng->bhnc", out_slice_token, slice_weights)
+        out_x = paddle.matmul(
+            out_slice_token,
+            slice_weights,
+            transpose_x=True,
+            transpose_y=True
+        ).transpose([0,1,3,2])
 
-        out_x = paddle.matmul(x=slice_weights, y=out_slice_token)
-        out_x = paddle.transpose(
-            out_x, perm=[0, 2, 1, 3]
-        )  # Now out_x.shape = [b, n, h, d]
-        out_x = paddle.reshape(
-            out_x, shape=[out_x.shape[0], out_x.shape[1], -1]
-        )  # Now out_x.shape = [b, n, h*d]
-        if not self.training:
-            del (
-                x,
-                slice_weights,
-                slice_token,
-                q_slice_token,
-                k_slice_token,
-                v_slice_token,
-                dots,
-                attn,
-                out_slice_token,
-            )
-            paddle.device.cuda.empty_cache()
-        out_x = self.to_out(out_x)
-        if not self.training:
-            paddle.device.cuda.empty_cache()
-        return out_x
+        # out_x_orig = rearrange(out_x, "b h n d -> b n (h d)")
+        b, h, n, d = out_x.shape
+        out_x_transposed = out_x.transpose([0, 2, 1, 3])  # 形状变为 (b, n, h, d)
+        out_x = out_x_transposed.reshape([b, n, h * d])  # 形状变为 (b, n, h*d)
 
-
-class FNO_Slice(paddle.nn.Layer):
-    def __init__(
-        self, dim, heads=8, dim_head=64, dropout=0.0, slice_num=64, attn_type="l1"
-    ):
-        super().__init__()
-        inner_dim = dim_head * heads
-        self.dim_head = dim_head
-        self.heads = heads
-        self.scale = dim_head**-0.5
-        self.softmax = paddle.nn.Softmax(axis=-1)
-        self.dropout = paddle.nn.Dropout(p=dropout)
-        out_0 = paddle.create_parameter(
-            shape=(paddle.ones(shape=[1, heads, 1, 1]) * 0.5).shape,
-            dtype=(paddle.ones(shape=[1, heads, 1, 1]) * 0.5).numpy().dtype,
-            default_initializer=paddle.nn.initializer.Assign(
-                paddle.ones(shape=[1, heads, 1, 1]) * 0.5
-            ),
-        )
-        out_0.stop_gradient = not True
-        self.temperature = out_0
-        self.in_project_x = paddle.nn.Linear(in_features=dim, out_features=inner_dim)
-        self.in_project_fx = paddle.nn.Linear(in_features=dim, out_features=inner_dim)
-        self.in_project_slice = paddle.nn.Linear(
-            in_features=dim_head, out_features=slice_num
-        )
-        for la in [self.in_project_slice]:
-            init_Orthogonal = paddle.nn.initializer.Orthogonal()
-            init_Orthogonal(la.weight)
-        self.to_q = paddle.nn.Linear(
-            in_features=dim_head, out_features=dim_head, bias_attr=False
-        )
-        self.to_k = paddle.nn.Linear(
-            in_features=dim_head, out_features=dim_head, bias_attr=False
-        )
-        self.to_v = paddle.nn.Linear(
-            in_features=dim_head, out_features=dim_head, bias_attr=False
-        )
-        self.to_out = paddle.nn.Sequential(
-            paddle.nn.Linear(in_features=inner_dim, out_features=dim),
-            paddle.nn.Dropout(p=dropout),
-        )
-
-        self.temperature_fno = FNO(
-            (8, 8),
-            in_channels=8,
-            hidden_channels=8,
-            out_channels=8,
-            use_mlp=True,
-            mlp={"expansion": 1.0, "dropout": 0},
-            domain_padding=0.125,
-            factorization="tucker",
-            norm="group_norm",
-            rank=0.4,
-        )
-
-    def forward(self, x):
-        # x = B, N, C
-        B, N, C = tuple(x.shape)
-
-        # self.in_project_fx(x) = B, N, n_hidden
-        # fx_mid = B, heads, N, dim_head
-        fx_mid = (
-            self.in_project_fx(x)
-            .reshape((B, N, self.heads, self.dim_head))
-            .transpose(perm=[0, 2, 1, 3])
-        )
-
-        # self.in_project_fx(x) = B, N, n_hidden
-        # x_mid = B, heads, N, dim_head
-        x_mid = (
-            self.in_project_x(x)
-            .reshape((B, N, self.heads, self.dim_head))
-            .transpose(perm=[0, 2, 1, 3])
-        )
-
-        # self.in_project_slice(x_mid) = B, heads, N, slice_num
-        # self.temperature = 1, heads, 1, 1
-        # self.slice_weights = B, heads, N, slice_num
-        slice_weights = self.softmax(self.in_project_slice(x_mid) / self.temperature)
-        slice_norm = slice_weights.sum(axis=2)
-        slice_token = paddle.matmul(x=slice_weights, y=fx_mid, transpose_x=True)
-        slice_token = slice_token / (slice_norm + 1e-05)[:, :, :, None].tile(
-            (1, 1, 1, self.dim_head)
-        )
-        slice_token = self.temperature_fno(slice_token)
-
-        # slice_token = slice_num, slice_num
-        if not self.training:
-            del (x, fx_mid, x_mid, slice_norm)
-            paddle.device.cuda.empty_cache()
-
-        # qkv_slice_token = B , N , slice_num, slice_num
-        q_slice_token = self.to_q(slice_token)
-        k_slice_token = self.to_k(slice_token)
-        v_slice_token = self.to_v(slice_token)
-
-        # Attention
-        x = k_slice_token
-
-        # dots: B, heads, slice_num, slice_num
-        # attn: B, heads, slice_num, slice_num
-        dots = paddle.matmul(x=q_slice_token, y=x, transpose_y=True) * self.scale
-        attn = self.softmax(dots)
-
-        attn = self.dropout(attn)
-        # attn: B, heads, slice_num, slice_num
-        out_slice_token = paddle.matmul(x=attn, y=v_slice_token)
-
-        out_x = paddle.matmul(x=slice_weights, y=out_slice_token)
-        out_x = paddle.transpose(
-            out_x, perm=[0, 2, 1, 3]
-        )  # Now out_x.shape = [b, n, h, d]
-        out_x = paddle.reshape(
-            out_x, shape=[out_x.shape[0], out_x.shape[1], -1]
-        )  # Now out_x.shape = [b, n, h*d]
-        if not self.training:
-            del (
-                x,
-                slice_weights,
-                slice_token,
-                q_slice_token,
-                k_slice_token,
-                v_slice_token,
-                dots,
-                attn,
-                out_slice_token,
-            )
-            paddle.device.cuda.empty_cache()
-        out_x = self.to_out(out_x)
-        if not self.training:
-            paddle.device.cuda.empty_cache()
-        return out_x
-
-
-class Linear_Attention(paddle.nn.Layer):
-    """
-    A vanilla multi-head masked self-attention layer with a projection at the end.
-    It is possible to use torch.nn.MultiheadAttention here but I am including an
-    explicit implementation here to show that there is nothing too scary here.
-    """
-
-    def __init__(
-        self,
-        hidden_dim,
-        heads=8,
-        dim_head=64,
-        dropout=0.0,
-        slice_num=64,
-        attn_type="linear",
-        **kwargs,
-    ):
-        super(Linear_Attention, self).__init__()
-        assert hidden_dim % heads == 0
-        # key, query, value projections for all heads
-        self.key = Linear(hidden_dim, hidden_dim)
-        self.query = Linear(hidden_dim, hidden_dim)
-        self.value = Linear(hidden_dim, hidden_dim)
-        # regularization
-        self.attn_drop = Dropout(dropout)
-        # output projection
-        self.proj = Linear(hidden_dim, hidden_dim)
-        self.n_head = heads
-        self.attn_type = attn_type
-        self.softmax = paddle.nn.Softmax(axis=-1)
-
-    """
-        Linear Attention and Linear Cross Attention (if y is provided)
-        -----------------------------------------------------------------------------------
-        类型         归一化方法	      缩放因子D_inv 计算方式	            特点
-        -----------------------------------------------------------------------------------
-        l1          Softmax	        动态计算（基于输入数据的累积和）	    经典注意力变体，动态缩放
-        galerkin	Softmax	        固定参数 1/T2	                    理论驱动，预定义归一化
-        l2          L1 范数归一化	  动态计算（含绝对值操作）	            稀疏性增强，符号保留
-        -----------------------------------------------------------------------------------
-    """
-
-    def forward(self, x, y=None, layer_past=None):
-        y = x if y is None else y
-        B, T1, C = x.shape
-        _, T2, _ = y.shape
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q = (
-            self.query(x)
-            .reshape([B, T1, self.n_head, C // self.n_head])
-            .transpose([0, 2, 1, 3])
-        )  # (B, nh, T, hs)
-
-        k = (
-            self.key(y)
-            .reshape([B, T2, self.n_head, C // self.n_head])
-            .transpose([0, 2, 1, 3])
-        )  # (B, nh, T, hs)
-        v = (
-            self.value(y)
-            .reshape([B, T2, self.n_head, C // self.n_head])
-            .transpose([0, 2, 1, 3])
-        )  # (B, nh, T, hs)
-
-        if self.attn_type == "l1":
-            q = self.softmax(q)
-            k = self.softmax(k)
-            k_cumsum = k.sum(axis=-2, keepdim=True)
-            D_inv = 1.0 / (q * k_cumsum).sum(axis=-1, keepdim=True)  # normalized
-        elif self.attn_type == "galerkin":
-            q = self.softmax(q)
-            k = self.softmax(k)
-            D_inv = 1.0 / T2  # galerkin
-        elif self.attn_type == "l2":  # still use l1 normalization
-            q = q / q.norm(axis=-1, keepdim=True, p=1)
-            k = k / k.norm(axis=-1, keepdim=True, p=1)
-            k_cumsum = k.sum(axis=-2, keepdim=True)
-            D_inv = 1.0 / (q * k_cumsum).abs().sum(axis=-1, keepdim=True)  # normalized
-        else:
-            raise NotImplementedError
-
-        # torch.Size([4, 1, 10086, 128]) torch.Size([4, 1, 10086, 128])
-        context = k.transpose([0, 1, 3, 2]) @ v
-        y = self.attn_drop((q @ context) * D_inv + q)
-
-        # output projection
-        y = rearrange(y, "b h n d -> b n (h d)")
-        y = self.proj(y)
-        return y
+        # res = paddle.allclose(out_x_orig, out_x)
+        # print(res) # True
+        # exit()
+        return self.to_out(out_x)
 
 
 class MLP(paddle.nn.Layer):
@@ -551,14 +149,6 @@ class MLP(paddle.nn.Layer):
         return x
 
 
-ATTENTION = {
-    "Physics_Attention_1D": Physics_Attention_1D,
-    "Eidetic_States_Attention": Eidetic_States_Attention,
-    "FNO_Slice": FNO_Slice,
-    "linearAtten": Linear_Attention,
-}
-
-
 class Transolver_block(paddle.nn.Layer):
     """Transformer encoder block."""
 
@@ -568,8 +158,6 @@ class Transolver_block(paddle.nn.Layer):
         hidden_dim: int,
         dropout: float,
         act="gelu",
-        attn="FNO_Slice",
-        attn_type="l1",
         mlp_ratio=4,
         last_layer=False,
         out_dim=1,
@@ -578,14 +166,12 @@ class Transolver_block(paddle.nn.Layer):
         super().__init__()
         self.last_layer = last_layer
         self.ln_1 = paddle.nn.LayerNorm(normalized_shape=hidden_dim)
-        _Attention_Layer = ATTENTION[attn]
-        self.Attn = _Attention_Layer(
+        self.Attn = Physics_Attention_Irregular_Mesh(
             hidden_dim,
             heads=num_heads,
             dim_head=hidden_dim // num_heads,
             dropout=dropout,
             slice_num=slice_num,
-            attn_type=attn_type,
         )
         self.ln_2 = paddle.nn.LayerNorm(normalized_shape=hidden_dim)
         self.mlp = MLP(
@@ -596,72 +182,41 @@ class Transolver_block(paddle.nn.Layer):
             res=False,
             act=act,
         )
-        self.pp_layer = paddle.nn.Identity()
         if self.last_layer:
             self.ln_3 = paddle.nn.LayerNorm(normalized_shape=hidden_dim)
             self.mlp2 = paddle.nn.Linear(in_features=hidden_dim, out_features=out_dim)
 
     def forward(self, fx):
-        # residual connection
         fx = self.Attn(self.ln_1(fx)) + fx
-        # residual connection
         fx = self.mlp(self.ln_2(fx)) + fx
-        fx = self.pp_layer(fx)
         if self.last_layer:
             return self.mlp2(self.ln_3(fx))
         else:
             return fx
 
 
-class Reynolds_Embedding(paddle.nn.Layer):
-    def __init__(self, ref=8):
-        super(Reynolds_Embedding, self).__init__()
-        self.ref = ref
-        self.learnable_similarity = paddle.nn.Linear(2, 1)
-        self.scaling = [0.8, 1.2]
-        self.density = 1.0
-        self.in_vel = 30.0
-        self.mu = 1.0
-
-    def forward(self, x, in_vel):
-        scaler = random.choice(self.scaling)
-        characterisctic_length = x[0].max() - x[0].min()
-        reynolds_number = self.density * in_vel * characterisctic_length / self.mu
-        x = x / scaler
-        in_vel = paddle.concat([in_vel, reynolds_number])
-        in_vel = self.learnable_similarity(in_vel) * scaler
-        return x, in_vel
-
-
-class Transolver_0513_0(paddle.nn.Layer):
+class Model(paddle.nn.Layer):
     def __init__(
         self,
-        space_dim=3,
+        space_dim=1,
         n_layers=5,
         n_hidden=256,
         dropout=0,
         n_head=8,
         act="gelu",
-        attn="FNO_Slice",
-        attn_type="linear",
         mlp_ratio=1,
-        fun_dim=0,
+        fun_dim=1,
         out_dim=1,
         slice_num=32,
         ref=8,
-        n_iter=1,
         unified_pos=False,
-        reshape=False,
     ):
-        super(Transolver_0513_0, self).__init__()
-        self.__name__ = "Transolver_0513_0"
+        super(Model, self).__init__()
+        self.__name__ = "UniPDE_3D"
         self.ref = ref
-        self.n_layers = n_layers
-        self.n_iter = n_iter
         self.unified_pos = unified_pos
-        # self.reynolds_embedding = Reynolds_Embedding()
         if self.unified_pos:
-            self.embedding = MLP(
+            self.preprocess = MLP(
                 fun_dim + self.ref * self.ref * self.ref,
                 n_hidden * 2,
                 n_hidden,
@@ -670,7 +225,7 @@ class Transolver_0513_0(paddle.nn.Layer):
                 act=act,
             )
         else:
-            self.embedding = MLP(
+            self.preprocess = MLP(
                 fun_dim + space_dim,
                 n_hidden * 2,
                 n_hidden,
@@ -687,8 +242,6 @@ class Transolver_0513_0(paddle.nn.Layer):
                     hidden_dim=n_hidden,
                     dropout=dropout,
                     act=act,
-                    attn=attn,
-                    attn_type=attn_type,
                     mlp_ratio=mlp_ratio,
                     out_dim=out_dim,
                     slice_num=slice_num,
@@ -698,81 +251,76 @@ class Transolver_0513_0(paddle.nn.Layer):
             ]
         )
         self.initialize_weights()
-        param = 1 / n_hidden * paddle.rand(shape=(n_hidden,), dtype="float32")
-        out_1 = paddle.create_parameter(
-            shape=param.shape,
-            dtype=param.numpy().dtype,
-            default_initializer=paddle.nn.initializer.Assign(param),
+        self.placeholder = paddle.base.framework.EagerParamBase.from_tensor(
+            tensor=1 / n_hidden * paddle.rand(shape=[n_hidden], dtype="float32")
         )
-        out_1.stop_gradient = not True
-        self.placeholder = out_1
-        self.reshape = reshape
-        if reshape:
-            self.reshape_output_layer = paddle.nn.Linear(out_dim, 10)
-            self.ln = paddle.nn.LayerNorm(normalized_shape=[10, 1])
+        # self.fake_data = paddle.load("/workspace/DNNFluid_Car/DNNFluid-Car_0611/demo_data.pd")
+        # pos = self.fake_data["pos"]
+        # x = self.fake_data["x"]
+        # y = self.fake_data["y"]
+        # surf = self.fake_data["surf"]
+        # edge_index = self.fake_data["edge_index"]
+        # self.fake_data = [Data(pos=pos, x=x, y=y, surf=surf, edge_index=edge_index), None]
 
     def initialize_weights(self):
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
         if isinstance(m, paddle.nn.Linear):
-            # m.weight = ppsci.utils.initializer.trunc_normal_(m.weight, std=0.02)
-            if isinstance(m, paddle.nn.Linear) and m.bias is not None:
-                init_Constant = paddle.nn.initializer.Constant(value=0)
-                init_Constant(m.bias)
+            trunc_normal = TruncatedNormal(mean=0.0, std=0.02)
+            trunc_normal(m.weight)
+            if m.bias is not None:
+                constant = Constant(value=0.0)
+                constant(m.bias)
         elif isinstance(m, (paddle.nn.LayerNorm, paddle.nn.BatchNorm1D)):
-            init_Constant = paddle.nn.initializer.Constant(value=0)
-            init_Constant(m.bias)
-            init_Constant = paddle.nn.initializer.Constant(value=1.0)
-            init_Constant(m.weight)
+            constant = Constant(value=0.0)
+            constant(m.bias)
+            constant = Constant(value=1.0)
+            constant(m.weight)
 
-    def reshape_output(self, x):
-        x = self.reshape_output_layer(x)
-        x = paddle.sum(x, axis=1, keepdim=True).transpose([0, 2, 1])
-        x = self.ln(x)
-        return x
+    def get_grid(self, my_pos):
+        batchsize = tuple(my_pos.shape)[0]
+        gridx = paddle.to_tensor(data=np.linspace(-1.5, 1.5, self.ref), dtype="float32")
+        gridx = gridx.reshape([1, self.ref, 1, 1, 1]).tile(
+            repeat_times=[batchsize, 1, self.ref, self.ref, 1]
+        )
+        gridy = paddle.to_tensor(data=np.linspace(0, 2, self.ref), dtype="float32")
+        gridy = gridy.reshape([1, 1, self.ref, 1, 1]).tile(
+            repeat_times=[batchsize, self.ref, 1, self.ref, 1]
+        )
+        gridz = paddle.to_tensor(data=np.linspace(-4, 4, self.ref), dtype="float32")
+        gridz = gridz.reshape([1, 1, 1, self.ref, 1]).tile(
+            repeat_times=[batchsize, self.ref, self.ref, 1, 1]
+        )
+        grid_ref = (
+            paddle.concat(x=(gridx, gridy, gridz), axis=-1)
+            .cuda(blocking=True)
+            .reshape([batchsize, self.ref**3, 3])
+        )
+        pos = (
+            paddle.sqrt(
+                x=paddle.sum(
+                    x=(my_pos[:, :, None, :] - grid_ref[:, None, :, :]) ** 2, axis=-1
+                )
+            )
+            .reshape([batchsize, tuple(my_pos.shape)[1], self.ref * self.ref * self.ref])
+            
+        )
+        return pos
 
-    def forward(self, data):
-        # 1. embedding
-        # 2. model blocks
-        # 3. RMSNorm
-        # 4. linear
-        x = self.data_dict_to_input(data)
-        fx = self.embedding(x)
-        fx = fx + self.placeholder[None, None, :]
-        for _ in range(self.n_iter):
-            for i in range(self.n_layers - 1):
-                fx = self.blocks[i](fx)
-        linear = self.blocks[-1]
-        fx = linear(fx)
-        if not self.training:
-            paddle.device.cuda.empty_cache()
-        if self.reshape:
-            return self.reshape_output(fx)
-        return fx
-
-    def data_dict_to_input(self, inputs):
-        if isinstance(inputs, list):
-            # Handle list input from dataloader
-            features = paddle.concat(x=inputs, axis=-1)
+    def forward(self, x):
+        # cfd_data, geom_data = data
+        x, fx, T = x, None, None
+        # x = x[None, :, :]
+        # if self.unified_pos:
+        #     new_pos = self.get_grid(cfd_data.pos[None, :, :])
+        #     x = paddle.concat(x=(x, new_pos), axis=-1)
+        if fx is not None:
+            fx = paddle.concat(x=(x, fx), axis=-1)
+            fx = self.preprocess(fx)
         else:
-            # Handle dict input for backward compatibility
-            x_centroid = inputs["centroids"]
-            x_local_centroid = inputs["local_centroid"]
-            features = paddle.concat(x=[x_centroid, x_local_centroid], axis=-1)
-        return features
-
-    @paddle.no_grad()
-    def export(self, data_dict, **kwargs):
-        pred = self(data_dict)
-        return pred
-
-
-if __name__ == "__main__":
-    x, vel = paddle.ones(shape=(1, 5, 3), dtype="float32"), paddle.ones(
-        shape=(1,), dtype="float32"
-    )
-    model = Reynolds_Embedding()
-    x_new, vel_new = model(x, vel)
-    print(x_new, vel_new)
-    print("model loaded successfully.")
+            fx = self.preprocess(x)
+            fx = fx + self.placeholder[None, None, :]
+        for block in self.blocks:
+            fx = block(fx)
+        return fx
