@@ -3,7 +3,6 @@ import paddle
 from einops import rearrange
 from paddle.nn.initializer import Constant
 from paddle.nn.initializer import TruncatedNormal
-# from ppcfd.data.shapenetcar_datamodule import Data
 from ppcfd.networks.utils import paddle_aux
 
 ACTIVATION = {
@@ -66,16 +65,12 @@ class Physics_Attention_Irregular_Mesh(paddle.nn.Layer):
         )
         slice_weights = self.softmax(self.in_project_slice(x_mid) / self.temperature)
         slice_norm = slice_weights.sum(axis=2)
-        # slice_token_orig = paddle.einsum("bhnc,bhng->bhgc", fx_mid, slice_weights)
         slice_token = paddle.matmul(
             slice_weights, 
             fx_mid, 
             transpose_x=True, 
             transpose_y=False
         )
-        # res = paddle.allclose(slice_token_orig, slice_token)
-        # print(res) # True
-        # exit()
         slice_token = slice_token / (slice_norm + 1e-05)[:, :, :, None].tile(
             repeat_times=[1, 1, 1, self.dim_head]
         )
@@ -94,22 +89,15 @@ class Physics_Attention_Irregular_Mesh(paddle.nn.Layer):
         attn = self.softmax(dots)
         attn = self.dropout(attn)
         out_slice_token = paddle.matmul(x=attn, y=v_slice_token)
-        # out_x_orig = paddle.einsum("bhgc,bhng->bhnc", out_slice_token, slice_weights)
         out_x = paddle.matmul(
             out_slice_token,
             slice_weights,
             transpose_x=True,
             transpose_y=True
         ).transpose([0,1,3,2])
-
-        # out_x_orig = rearrange(out_x, "b h n d -> b n (h d)")
         b, h, n, d = out_x.shape
-        out_x_transposed = out_x.transpose([0, 2, 1, 3])  # 形状变为 (b, n, h, d)
-        out_x = out_x_transposed.reshape([b, n, h * d])  # 形状变为 (b, n, h*d)
-
-        # res = paddle.allclose(out_x_orig, out_x)
-        # print(res) # True
-        # exit()
+        out_x_transposed = out_x.transpose([0, 2, 1, 3])
+        out_x = out_x_transposed.reshape([b, n, h * d])
         return self.to_out(out_x)
 
 
@@ -150,8 +138,6 @@ class MLP(paddle.nn.Layer):
 
 
 class Transolver_block(paddle.nn.Layer):
-    """Transformer encoder block."""
-
     def __init__(
         self,
         num_heads: int,
@@ -254,13 +240,6 @@ class Model(paddle.nn.Layer):
         self.placeholder = paddle.base.framework.EagerParamBase.from_tensor(
             tensor=1 / n_hidden * paddle.rand(shape=[n_hidden], dtype="float32")
         )
-        # self.fake_data = paddle.load("/workspace/DNNFluid_Car/DNNFluid-Car_0611/demo_data.pd")
-        # pos = self.fake_data["pos"]
-        # x = self.fake_data["x"]
-        # y = self.fake_data["y"]
-        # surf = self.fake_data["surf"]
-        # edge_index = self.fake_data["edge_index"]
-        # self.fake_data = [Data(pos=pos, x=x, y=y, surf=surf, edge_index=edge_index), None]
 
     def initialize_weights(self):
         self.apply(self._init_weights)
@@ -309,12 +288,7 @@ class Model(paddle.nn.Layer):
         return pos
 
     def forward(self, x):
-        # cfd_data, geom_data = data
         x, fx, T = x, None, None
-        # x = x[None, :, :]
-        # if self.unified_pos:
-        #     new_pos = self.get_grid(cfd_data.pos[None, :, :])
-        #     x = paddle.concat(x=(x, new_pos), axis=-1)
         if fx is not None:
             fx = paddle.concat(x=(x, fx), axis=-1)
             fx = self.preprocess(fx)
