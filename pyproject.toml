@@ -31,9 +31,15 @@ exclude = [
 
 [tool.ruff]
 line-length = 119
-ignore = ["E501", "E741", "E731"]
+ignore = ["E501", "E741", "E731", "F821", "F401", "E402", "F405", "F403"]
 extend-exclude = [
 ]
+select = ["E", "F", "I", "W"]
+target-version = "py310"
+
+# [tool.ruff.isort]
+# force-single-line = true
+# lines-after-imports = 2
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
@@ -43,15 +49,4 @@ profile = "black"
 
 [tool.black]
 line-length = 119
-target_version = ['py310']
-
-[tool.ruff.lint]
-# Ignored rules:
-#   "E501" -> line length violation
-#   "F821" -> undefined named in type annotation (e.g. Literal["something"])
-ignore = ["E501", "F821"]
-select = ["E", "F", "I", "W"]
-
-[tool.ruff.lint.isort]
-force-single-line = true
-lines-after-imports = 2
+target-version = ["py310"]

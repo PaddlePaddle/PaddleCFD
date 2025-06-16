@@ -7,19 +7,14 @@ import paddle.nn as nn
 from ..neuralop.models import FNO
 from .base_model import BaseModel
 from .integral_finetuning import Integral_Cd
-from .neighbor_ops import NeighborMLPConvLayer
-from .neighbor_ops import NeighborMLPConvLayerLinear
-from .neighbor_ops import NeighborMLPConvLayerWeighted
-from .neighbor_ops import NeighborSearchLayer
-from .net_utils import MLP
-from .net_utils import AdaIN
-from .net_utils import PositionalEmbedding
-from .net_utils import Projection
-from .utilities3 import count_params
-from .utilities3 import memory_usage
-from .utilities3 import num_of_nans
-from .utilities3 import paddle_memory_usage
-from .utilities3 import show_tensor_range
+from .neighbor_ops import (
+    NeighborMLPConvLayer,
+    NeighborMLPConvLayerLinear,
+    NeighborMLPConvLayerWeighted,
+    NeighborSearchLayer,
+)
+from .net_utils import MLP, AdaIN, PositionalEmbedding, Projection
+from .utilities3 import count_params, memory_usage, num_of_nans, paddle_memory_usage, show_tensor_range
 
 
 class GNOFNOGNO(BaseModel):
@@ -50,7 +45,7 @@ class GNOFNOGNO(BaseModel):
         self.linear_kernel = linear_kernel
         kernel1 = MLP([10 * embed_dim, 512, 256, hidden_channels[0]], paddle.nn.GELU)
         self.gno1 = NeighborMLPConvLayerWeighted(mlp=kernel1)
-        if linear_kernel == False:
+        if linear_kernel is False:
             kernel2 = MLP(
                 [fno_out_channels + 4 * embed_dim, 512, 256, hidden_channels[1]],
                 paddle.nn.GELU,
@@ -99,19 +94,11 @@ class GNOFNOGNO(BaseModel):
                 area_eval = paddle.ones(shape=(n_eval,))
             x_eval = paddle.concat(x=[x_eval, area_eval.unsqueeze(axis=-1)], axis=-1)
             x_eval_embed = self.pos_embed(x_eval.reshape((-1,))).reshape((n_eval, -1))
-        x_out_embed = self.pos_embed(x_out.reshape((-1,))).reshape(
-            (resolution**3, -1)
-        )
-        df_embed = self.df_embed(df.transpose(perm=[1, 2, 3, 0])).reshape(
-            (resolution**3, -1)
-        )
+        x_out_embed = self.pos_embed(x_out.reshape((-1,))).reshape((resolution**3, -1))
+        df_embed = self.df_embed(df.transpose(perm=[1, 2, 3, 0])).reshape((resolution**3, -1))
         grid_embed = paddle.concat(x=[x_out_embed, df_embed], axis=-1)
         u = self.gno1(x_in_embed, in_to_out_nb, grid_embed, area_in)
-        u = (
-            u.reshape((resolution, resolution, resolution, -1))
-            .transpose(perm=[3, 0, 1, 2])
-            .unsqueeze(axis=0)
-        )
+        u = u.reshape((resolution, resolution, resolution, -1)).transpose(perm=[3, 0, 1, 2]).unsqueeze(axis=0)
         u = paddle.concat(
             x=(
                 x_out.transpose(perm=[3, 0, 1, 2]).unsqueeze(axis=0),
@@ -122,7 +109,7 @@ class GNOFNOGNO(BaseModel):
         )
         u = self.fno(u)
         u = u.squeeze().transpose(perm=[1, 2, 3, 0]).reshape((resolution**3, -1))
-        if self.linear_kernel == False:
+        if self.linear_kernel is False:
             if x_eval is not None:
                 u = self.gno2(u, out_to_in_nb, x_eval_embed)
             else:
@@ -213,9 +200,7 @@ class GNOFNOGNO_all(GNOFNOGNO):
             self.fno.fno_blocks.norm = paddle.nn.LayerList(
                 sublayers=(
                     AdaIN(adain_embed_dim, fno_hidden_channels)
-                    for _ in range(
-                        self.fno.fno_blocks.n_norms * self.fno.fno_blocks.convs.n_layers
-                    )
+                    for _ in range(self.fno.fno_blocks.n_norms * self.fno.fno_blocks.convs.n_layers)
                 )
             )
             self.use_adain = True
@@ -226,21 +211,13 @@ class GNOFNOGNO_all(GNOFNOGNO):
 
     def data_dict_to_input(self, data_dict, data_device=None):
         x_in = data_dict["centroids"][0]
-        x_out = (
-            data_dict["df_query_points"].squeeze(axis=0).transpose(perm=[1, 2, 3, 0])
-        )
+        x_out = data_dict["df_query_points"].squeeze(axis=0).transpose(perm=[1, 2, 3, 0])
         df = data_dict["df"]
         area = data_dict["areas"][0]
-        info_fields = data_dict["info"][0]["velocity"] * paddle.ones_like(x=df).to(
-            "float32"
-        )
+        info_fields = data_dict["info"][0]["velocity"] * paddle.ones_like(x=df).to("float32")
         df = paddle.concat(x=(df, info_fields), axis=0)
         if self.use_adain:
-            vel = (
-                paddle.to_tensor(data=[data_dict["info"][0]["velocity"]])
-                .reshape((-1,))
-                .to("float32")
-            )
+            vel = paddle.to_tensor(data=[data_dict["info"][0]["velocity"]]).reshape((-1,)).to("float32")
             vel_embed = self.adain_pos_embed(vel)
             for norm in self.fno.fno_blocks.norm:
                 norm.update_embeddding(vel_embed)
@@ -305,15 +282,11 @@ class GNOFNOGNO_all(GNOFNOGNO):
                     drag_weight = data_dict["dragWeight"][0].cuda(blocking=True)
                     drag_weight = drag_weight[:: self.subsample_eval]
                 elif key == "wallshearstress":
-                    drag_weight = data_dict["dragWeightWss"][0][
-                        : self.out_channels[i], :
-                    ].cuda(blocking=True)
+                    drag_weight = data_dict["dragWeightWss"][0][: self.out_channels[i], :].cuda(blocking=True)
                     drag_weight = drag_weight[..., :: self.subsample_eval]
                 drag_pred = paddle.sum(x=drag_weight * pred_decode)
                 drag_truth = paddle.sum(x=drag_weight * truth_decode)
-                out_dict.update(
-                    {f"Cd_{key}_pred": drag_pred, f"Cd_{key}_truth": drag_truth}
-                )
+                out_dict.update({f"Cd_{key}_pred": drag_pred, f"Cd_{key}_truth": drag_truth})
                 out_dict["Cd_pred"] += drag_pred
                 out_dict["Cd_truth"] += drag_truth
         truth = paddle.concat(x=truth, axis=0)
@@ -324,9 +297,7 @@ class GNOFNOGNO_all(GNOFNOGNO):
         cd_dict.update({"Cd_pressure_pred": out_dict["Cd_pressure_pred"]})
         cd_dict.update({"Cd_pressure_truth": out_dict["Cd_pressure_truth"]})
         cd_dict.update({"Cd_wallshearstress_pred": out_dict["Cd_wallshearstress_pred"]})
-        cd_dict.update(
-            {"Cd_wallshearstress_truth": out_dict["Cd_wallshearstress_truth"]}
-        )
+        cd_dict.update({"Cd_wallshearstress_truth": out_dict["Cd_wallshearstress_truth"]})
         cd_dict = self.integral_cd(cd_dict, self.out_keys)
         cd_dict.update({"L2_pressure": out_dict["L2_pressure"]})
         cd_dict.update({"L2_wallshearstress": out_dict["L2_wallshearstress"]})
@@ -386,9 +357,7 @@ class GNOFNOGNO_all(GNOFNOGNO):
                     drag_weight = data_dict["dragWeight"][0].cuda(blocking=True)
                     drag_weight = drag_weight[:: self.subsample_eval]
                 elif key == "wallshearstress":
-                    drag_weight = data_dict["dragWeightWss"][0][
-                        : self.out_channels[i], :
-                    ].cuda(blocking=True)
+                    drag_weight = data_dict["dragWeightWss"][0][: self.out_channels[i], :].cuda(blocking=True)
                     drag_weight = drag_weight[..., :: self.subsample_eval]
                 drag_pred = paddle.sum(x=drag_weight * pred_decode)
                 out_dict.update({f"Cd_{key}_pred": drag_pred})
@@ -397,9 +366,7 @@ class GNOFNOGNO_all(GNOFNOGNO):
         cd_dict = {}
         cd_dict.update({"Cd_pred": out_dict["Cd_pred"].item()})
         cd_dict.update({"Cd_pressure_pred": out_dict["Cd_pressure_pred"].item()})
-        cd_dict.update(
-            {"Cd_wallshearstress_pred": out_dict["Cd_wallshearstress_pred"].item()}
-        )
+        cd_dict.update({"Cd_wallshearstress_pred": out_dict["Cd_wallshearstress_pred"].item()})
         cd_dict = self.integral_cd(cd_dict, self.out_keys)
 
         velocity = data_dict["info"][0]["velocity"]
@@ -412,20 +379,11 @@ class GNOFNOGNO_all(GNOFNOGNO):
         cd_dict.update(
             {
                 "pressure_drag_pred": const
-                * (
-                    cd_dict["Cd_pressure_pred"]
-                    + cd_dict["Cd_pred_modify"].item()
-                    - out_dict["Cd_pred"].item()
-                )
+                * (cd_dict["Cd_pressure_pred"] + cd_dict["Cd_pred_modify"].item() - out_dict["Cd_pred"].item())
             }
         )
 
-        cd_dict.update(
-            {
-                "wallshearstress_drag_pred": const
-                * out_dict["Cd_wallshearstress_pred"].item()
-            }
-        )
+        cd_dict.update({"wallshearstress_drag_pred": const * out_dict["Cd_wallshearstress_pred"].item()})
 
         return out_dict, pred, cd_dict
 
@@ -445,9 +403,7 @@ class GNOFNOGNO_all(GNOFNOGNO):
         if randperm:
             indices = paddle.randperm(n=tuple(x_in.shape)[0])[:r]
         else:
-            indices = paddle.linspace(
-                start=0, stop=tuple(x_in.shape)[0] - 1, num=r, dtype="int64"
-            ).astype("int64")
+            indices = paddle.linspace(start=0, stop=tuple(x_in.shape)[0] - 1, num=r, dtype="int64").astype("int64")
 
         truth = []
         for i in range(len(self.out_keys)):
@@ -458,16 +414,14 @@ class GNOFNOGNO_all(GNOFNOGNO):
             truth.append(truth_key)
         truth = paddle.concat(x=truth, axis=-1)
 
-        if self.integral_cd.parameters()[0].stop_gradient == True:
-            pred = super().forward(
-                x_in, x_out, df, x_in[indices, ...], area, area[indices]
-            )
+        if self.integral_cd.parameters()[0].stop_gradient is True:
+            pred = super().forward(x_in, x_out, df, x_in[indices, ...], area, area[indices])
         else:
             pred = truth
             # paddle.device.cuda.empty_cache()  # clear GPU memory
 
         cd_dict = {}
-        if self.integral_cd.parameters()[0].stop_gradient == False:
+        if self.integral_cd.parameters()[0].stop_gradient is False:
             # cd_dict = self.integral_cd(pred, truth, self.out_channels,
             #    data_dict, decode_fn=decode_fn,
             #    out_keys=self.out_keys,
@@ -475,20 +429,14 @@ class GNOFNOGNO_all(GNOFNOGNO):
 
             cd_dict.update({"OOM": False})
             try:
-                out_dict, _, _, _ = self.eval_dict(
-                    device, data_dict, loss_fn=loss_fn, decode_fn=decode_fn
-                )
+                out_dict, _, _, _ = self.eval_dict(device, data_dict, loss_fn=loss_fn, decode_fn=decode_fn)
 
                 cd_dict.update({"Cd_pred": out_dict["Cd_pred"]})
                 cd_dict.update({"Cd_truth": out_dict["Cd_truth"]})
                 cd_dict.update({"Cd_pressure_pred": out_dict["Cd_pressure_pred"]})
                 cd_dict.update({"Cd_pressure_truth": out_dict["Cd_pressure_truth"]})
-                cd_dict.update(
-                    {"Cd_wallshearstress_pred": out_dict["Cd_wallshearstress_pred"]}
-                )
-                cd_dict.update(
-                    {"Cd_wallshearstress_truth": out_dict["Cd_wallshearstress_truth"]}
-                )
+                cd_dict.update({"Cd_wallshearstress_pred": out_dict["Cd_wallshearstress_pred"]})
+                cd_dict.update({"Cd_wallshearstress_truth": out_dict["Cd_wallshearstress_truth"]})
                 cd_dict = self.integral_cd(cd_dict, self.out_keys)
                 cd_dict.update({"L2_pressure": out_dict["L2_pressure"]})
                 cd_dict.update({"L2_wallshearstress": out_dict["L2_wallshearstress"]})

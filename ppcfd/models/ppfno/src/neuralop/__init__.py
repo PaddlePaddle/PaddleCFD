@@ -1,3 +1,2 @@
-__version__ = '0.3.0'
-from .models import TFNO3d, TFNO2d, TFNO1d, TFNO
-from .models import get_model
+__version__ = "0.3.0"
+from .models import TFNO, TFNO1d, TFNO2d, TFNO3d, get_model

@@ -2,8 +2,7 @@ import logging
 import os
 import re
 import time
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import hydra
@@ -126,16 +125,10 @@ class Car_Loss:
         self.mse_loss = paddle.nn.MSELoss()
         self.metric = AeroDynamicMetrics()
 
-    def __call__(
-        self, inputs, outputs, targets, others, loss_fn, loss_cd_fn, cal_metric=False
-    ):
+    def __call__(self, inputs, outputs, targets, others, loss_fn, loss_cd_fn, cal_metric=False):
         config = self.config
-        l2_loss, mse_cd_loss, c_p_mre, loss_p, loss_wss, loss_vel = [
-            op.to_tensor([0.0])
-        ] * 6
-        [output, label], [pred, true] = self.denormalize(
-            outputs, targets, others, config.mode
-        )
+        l2_loss, mse_cd_loss, c_p_mre, loss_p, loss_wss, loss_vel = [op.to_tensor([0.0])] * 6
+        [output, label], [pred, true] = self.denormalize(outputs, targets, others, config.mode)
         cx = self.calculate_coefficient(
             inputs,
             targets,
@@ -261,9 +254,7 @@ class Car_Loss:
                 cx.c_d_mre = abs(cx.c_d_pred - cx.c_d_true) / abs(cx.c_d_true)
                 cx.c_l_pred = cx.c_p_pred  # tofix
                 cx.c_l_true = cx.c_p_true  # tofix
-                cx.c_l_mre = abs(
-                    op.to_tensor([1e-5] * inputs["centroids"].shape[0])
-                ) / abs(cx.c_l_true)
+                cx.c_l_mre = abs(op.to_tensor([1e-5] * inputs["centroids"].shape[0])) / abs(cx.c_l_true)
         return cx
 
     def denormalize(self, outputs, targets, others, mode, eps=1e-6):
@@ -351,9 +342,7 @@ class Structural_Loss:
         self.structural_loss = StructuralLoss()
         self.structural_metric = StructuralMetrics()
 
-    def __call__(
-        self, inputs, outputs, targets, others, loss_fn, loss_cd_fn, cal_metric=False
-    ):
+    def __call__(self, inputs, outputs, targets, others, loss_fn, loss_cd_fn, cal_metric=False):
         targets["coefficient"] = StructuralCoefficients()
         loss_list = []
         for k in self.config.out_keys:
@@ -411,9 +400,7 @@ class Loss_logger:
         else:
             raise ValueError("loss_fn must be StructuralMetrics or AeroDynamicMetrics")
 
-        tensorboard = tensorboardX.SummaryWriter(
-            os.path.join(output_dir, "tensorboard")
-        )
+        tensorboard = tensorboardX.SummaryWriter(os.path.join(output_dir, "tensorboard"))
         log.info(f"Working directory : {os.getcwd()}")
         log.info(f"Output directory  : {output_dir}")
         self.tensorboard = tensorboard
@@ -486,9 +473,7 @@ class Loss_logger:
             )
         elif isinstance(metric, StructuralMetrics):
             if self.mode == "test":
-                log.info(
-                    f"Case {file_name}\t, Mean L-2 Relative Error [Stress]: {metric.l2[-1]:.2f}"
-                )
+                log.info(f"Case {file_name}\t, Mean L-2 Relative Error [Stress]: {metric.l2[-1]:.2f}")
             self.csv_list.append([file_name, metric.l2[-1]])
         else:
             raise ValueError("loss_fn must be StructuralMetrics or AeroDynamicMetrics")
@@ -505,9 +490,7 @@ class Loss_logger:
             self.tensorboard.add_scalar("Train_L2", np.mean(loss.l2_p), ep)
             self.tensorboard.add_scalar("Train_Cd_MSE", np.mean(loss.mse_cd), ep)
             self.tensorboard.add_scalar("Test_L2", np.mean(m.l2), ep)
-            self.tensorboard.add_scalar(
-                "Test_Cd_MSE", np.mean(m.mse_cd), ep
-            )
+            self.tensorboard.add_scalar("Test_Cd_MSE", np.mean(m.mse_cd), ep)
             log.info(
                 f"Epoch {ep} {(time_cost):.2f} s/it, lr:{lr:.1e}, [Tain] L2: {np.mean(loss.l2_p):.2e},  MSE:[Cd] {np.mean(loss.mse_cd):.1e},  MRE:[Cp]{100*np.mean(loss.mre_cp):.2f}% ,  [Test] L2: {np.mean(m.l2):.2e},  MSE:[Cd] {np.mean(m.mse_cd):.2e}, MRE:[Cp] {100*np.mean(m.mre_cp):.2f}%, [Cf] {100*np.mean(m.mre_cf):.2f}%, [Cl] {100*np.mean(m.mre_cl):.2f}%"
             )
@@ -548,9 +531,7 @@ def test(config, model, test_dataloader, loss_logger, ep=None):
         load_checkpoint(config, model)
         full_batch = True
     else:
-        full_batch = ((ep + 1) % config.val_freq == 0) or (
-            (ep + 1) == config.num_epochs
-        )
+        full_batch = ((ep + 1) % config.val_freq == 0) or ((ep + 1) == config.num_epochs)
     model.eval()
     loss_cd_fn = op.mse_fn()
     # loss_fn = LpLoss(size_average=True)
@@ -573,9 +554,7 @@ def test(config, model, test_dataloader, loss_logger, ep=None):
         with paddle.no_grad():
             outputs = model(data["inputs"])
         inputs, targets, others = data_to_dict(data)
-        metric = simulation_loss(
-            inputs, outputs, targets, others, loss_fn, loss_cd_fn, cal_metric=True
-        )
+        metric = simulation_loss(inputs, outputs, targets, others, loss_fn, loss_cd_fn, cal_metric=True)
         loss_logger.record_metric(
             others.get("file_name", f"Test Case {i}"),
             targets.get("coefficient", AeroDynamicCoefficients()),
@@ -583,7 +562,7 @@ def test(config, model, test_dataloader, loss_logger, ep=None):
         )
         if (full_batch is False) and (i > 5):
             break
-    if (full_batch is True):
+    if full_batch is True:
         loss_logger.record_metric_report(ep)
     if config.mode == "test":
         log.info(
@@ -612,9 +591,7 @@ def train(config, model, datamodule, eval_dataloader, loss_logger):
     structural_loss = Structural_Loss(config)
 
     # 创建优化器
-    optimizer = op.adamw_fn(
-        parameters=model.parameters(), learning_rate=config.lr, weight_decay=1e-6
-    )
+    optimizer = op.adamw_fn(parameters=model.parameters(), learning_rate=config.lr, weight_decay=1e-6)
 
     # 断点续训
     if config.checkpoint is not None:
@@ -656,9 +633,7 @@ def train(config, model, datamodule, eval_dataloader, loss_logger):
             inputs, targets, others = data_to_dict(data)
             # 模型前向传播
             if config.simulation_type == "AeroDynamic":
-                loss_list = car_loss(
-                    inputs, outputs, targets, others, loss_fn, loss_cd_fn
-                )
+                loss_list = car_loss(inputs, outputs, targets, others, loss_fn, loss_cd_fn)
                 l2_loss = loss_list[0]
                 mse_cd_loss = loss_list[1]
 
@@ -676,9 +651,7 @@ def train(config, model, datamodule, eval_dataloader, loss_logger):
                     ]
                 )
             elif config.simulation_type == "Structural":
-                loss_list = structural_loss(
-                    inputs, outputs, targets, others, loss_fn, loss_cd_fn
-                )
+                loss_list = structural_loss(inputs, outputs, targets, others, loss_fn, loss_cd_fn)
                 loss_logger.record_train_loss(loss_list)
                 l2_loss = loss_list[0]
                 train_loss = l2_loss
@@ -743,9 +716,7 @@ def main(config):
     model = hydra.utils.instantiate(config.model)
 
     # 模型训练
-    test_dataloader = datamodule.test_dataloader(
-        batch_size=config.batch_size, num_workers=config.num_workers
-    )
+    test_dataloader = datamodule.test_dataloader(batch_size=config.batch_size, num_workers=config.num_workers)
     # eval_dataloader = datamodule.eval_dataloader(
     #     batch_size=config.batch_size, num_workers=config.num_workers
     # )

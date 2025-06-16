@@ -139,7 +139,7 @@ class Compute_df_stl:
         scene = o3d.t.geometry.RaycastingScene()
         _ = scene.add_triangles(o3d_mesh)
         df = scene.compute_distance(o3d.core.Tensor(self.query_points)).numpy()
-        closest_point = scene.compute_closest_points(o3d.core.Tensor(self.query_points))["points"].numpy()
+        scene.compute_closest_points(o3d.core.Tensor(self.query_points))["points"].numpy()
         df_dict = {
             "df": df,
         }

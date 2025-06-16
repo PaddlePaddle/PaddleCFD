@@ -1,6 +1,6 @@
 import numpy as np
-import vtk
 import paddle
+import vtk
 from vtk.util.numpy_support import vtk_to_numpy
 
 
@@ -10,7 +10,6 @@ def read_vtk_file_and_compute_all_data(input_file, mesh_name=None, tri_filter=Tr
     reader.SetFileName(input_file)
     reader.Update()
     polydata = reader.GetOutput()
-
 
     if "p" in point_data_keys:
         # 获取点数据中的压力值
@@ -32,27 +31,24 @@ def read_vtk_file_and_compute_all_data(input_file, mesh_name=None, tri_filter=Tr
         cell_pressures = None
 
     # # 转换为NumPy数组
-    numpy_cell_areas = vtk_to_numpy(
-        cell_size_filter.GetOutput().GetCellData().GetArray("Area")
-    )
-    numpy_cell_normals = vtk_to_numpy(
-        normals_filter.GetOutput().GetCellData().GetNormals()
-    )
+    vtk_to_numpy(cell_size_filter.GetOutput().GetCellData().GetArray("Area"))
+    vtk_to_numpy(normals_filter.GetOutput().GetCellData().GetNormals())
 
     # 计算边界框
     bounds = polydata.GetBounds()
     # bounds是一个包含六个元素的元组，分别对应(xmin, xmax, ymin, ymax, zmin, zmax)
-    length = bounds[1] - bounds[0]  # X轴上的距离
-    width = bounds[3] - bounds[2]  # Y轴上的距离
-    height = bounds[5] - bounds[4]  # Z轴上的距离
-    numpy_cell_centers = (numpy_cell_centers - np.array([1.5760515, -0.019655414, 0.5975443])) / np.array([1.3543817, 0.62339926, 0.397299])
+    bounds[1] - bounds[0]  # X轴上的距离
+    bounds[3] - bounds[2]  # Y轴上的距离
+    bounds[5] - bounds[4]  # Z轴上的距离
+    numpy_cell_centers = (numpy_cell_centers - np.array([1.5760515, -0.019655414, 0.5975443])) / np.array(
+        [1.3543817, 0.62339926, 0.397299]
+    )
 
     # _组织数据到字典
     data_dict = {
         "Point_Coordinates": vtk_to_numpy(polydata.GetPoints().GetData()),
-        "centroids": numpy_cell_centers.astype('float32').reshape([1, -1, 3]),
+        "centroids": numpy_cell_centers.astype("float32").reshape([1, -1, 3]),
     }
-
 
     return data_dict
 

@@ -1,22 +1,23 @@
 repos:
+  # - repo: https://github.com/PyCQA/isort
+  #   rev: 5.11.5
+  #   hooks:
+  #     - id: isort
+  #       args: ["--multi-line=7", "--sl", "--profile", "black", "--filter-files"]
+
   - repo: https://github.com/psf/black
-    rev: 25.1.0
+    rev: 22.3.0
     hooks:
       - id: black
-        language_version: python3
-        types: [python]
-        stages: [pre-commit]
-        args: ["--config", "pyproject.toml"]
 
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: 'v0.9.8'
+    rev: "v0.0.272"
     hooks:
-    - id: ruff
-      stages: [pre-commit]
-      args: [ "--config", "pyproject.toml", "--fix"]
+      - id: ruff
+        args: ["--fix"]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: a11d9314b22d8f8c7556443875b731ef05965464
     hooks:
       - id: check-merge-conflict
       - id: check-symlinks
@@ -32,7 +33,7 @@ repos:
       - id: requirements-txt-fixer
 
   - repo: https://github.com/Lucas-C/pre-commit-hooks
-    rev: v1.5.5
+    rev: v1.0.1
     hooks:
       - id: forbid-crlf
         files: \.md$
@@ -51,6 +52,3 @@ repos:
         entry: bash .clang_format.hook -i
         language: system
         files: \.(c|cc|cxx|cpp|cu|h|hpp|hxx|cuh|proto)$
-
-exclude: |
-  ^examples/

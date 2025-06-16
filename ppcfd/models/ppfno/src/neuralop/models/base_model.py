@@ -1,14 +1,15 @@
-import paddle
 import inspect
 import warnings
 from pathlib import Path
+
+import paddle
 
 
 class BaseModel(paddle.nn.Layer):
     """Based class for all Models
 
     This class has two main functionalities:
-    * It monitors the creation of subclass, that are automatically registered 
+    * It monitors the creation of subclass, that are automatically registered
       for users to use by name using the library's config system
     * When a new instance of this class is created, the init call is intercepted
       so we can store the parameters used to create the instance.
@@ -17,16 +18,17 @@ class BaseModel(paddle.nn.Layer):
 
     Notes
     -----
-    Model can be versioned using the _version class attribute. 
-    This can be used for sanity check when loading models from checkpoints to verify the 
+    Model can be versioned using the _version class attribute.
+    This can be used for sanity check when loading models from checkpoints to verify the
     model hasn't been updated since.
     """
+
     _models = dict()
-    _version = '0.1.0'
+    _version = "0.1.0"
 
     def __init_subclass__(cls, name=None, **kwargs):
         """When a subclass is created, register it in _models
-        We look for an existing name attribute. 
+        We look for an existing name attribute.
         If not give, then we use the class' name.
         """
         super().__init_subclass__(**kwargs)
@@ -40,67 +42,59 @@ class BaseModel(paddle.nn.Layer):
     def __new__(cls, *args, **kwargs):
         """Verify arguments and save init kwargs for loading/saving
 
-        We inspect the class' signature and check for unused parameters, or 
-        parameters not passed. 
+        We inspect the class' signature and check for unused parameters, or
+        parameters not passed.
 
         We store all the args and kwargs given so we can duplicate the instance transparently.
         """
         sig = inspect.signature(cls)
         model_name = cls.__name__
-        verbose = kwargs.get('verbose', False)
+        verbose = kwargs.get("verbose", False)
         for key in kwargs:
             if key not in sig.parameters:
                 if verbose:
-                    print(
-                        f"Given argument key={key} that is not in {model_name}'s signature."
-                        )
+                    print(f"Given argument key={key} that is not in {model_name}'s signature.")
         for key, value in sig.parameters.items():
             if value.default is not inspect._empty and key not in kwargs:
                 if verbose:
                     print(
-                        f'Keyword argument {key} not specified for model {model_name}, using default={value.default}.'
-                        )
+                        f"Keyword argument {key} not specified for model {model_name}, using default={value.default}."
+                    )
                 kwargs[key] = value.default
-        if hasattr(cls, '_version'):
-            kwargs['_version'] = cls._version
-        kwargs['args'] = args
-        kwargs['_name'] = cls._name
+        if hasattr(cls, "_version"):
+            kwargs["_version"] = cls._version
+        kwargs["args"] = args
+        kwargs["_name"] = cls._name
         instance = super().__new__(cls)
         instance._init_kwargs = kwargs
         return instance
 
     def save_checkpoint(self, save_folder, save_name):
-        """Saves the model state and init param in the given folder under the given name
-        """
+        """Saves the model state and init param in the given folder under the given name"""
         save_folder = Path(save_folder)
-        state_dict_filepath = save_folder.joinpath(f'{save_name}_state_dict.pt'
-            ).as_posix()
+        state_dict_filepath = save_folder.joinpath(f"{save_name}_state_dict.pt").as_posix()
         paddle.save(obj=self.state_dict(), path=state_dict_filepath)
-        metadata_filepath = save_folder.joinpath(f'{save_name}_metadata.pkl'
-            ).as_posix()
+        metadata_filepath = save_folder.joinpath(f"{save_name}_metadata.pkl").as_posix()
         paddle.save(obj=self._init_kwargs, path=metadata_filepath)
 
     def load_checkpoint(self, save_folder, save_name):
         save_folder = Path(save_folder)
-        state_dict_filepath = save_folder.joinpath(f'{save_name}_state_dict.pt'
-            ).as_posix()
-        self.set_state_dict(state_dict=paddle.load(path=str(
-            state_dict_filepath)))
+        state_dict_filepath = save_folder.joinpath(f"{save_name}_state_dict.pt").as_posix()
+        self.set_state_dict(state_dict=paddle.load(path=str(state_dict_filepath)))
 
     @classmethod
     def from_checkpoint(cls, save_folder, save_name):
         save_folder = Path(save_folder)
-        metadata_filepath = save_folder.joinpath(f'{save_name}_metadata.pkl'
-            ).as_posix()
+        metadata_filepath = save_folder.joinpath(f"{save_name}_metadata.pkl").as_posix()
         init_kwargs = paddle.load(path=str(metadata_filepath))
-        version = init_kwargs.pop('_version')
-        if hasattr(cls, '_version') and version != cls._version:
+        version = init_kwargs.pop("_version")
+        if hasattr(cls, "_version") and version != cls._version:
             print(version)
             warnings.warn(
-                f'Checkpoing saved for version {version} of model {cls._name} but current code is version {cls._version}'
-                )
-        if 'args' in init_kwargs:
-            init_args = init_kwargs.pop('args')
+                f"Checkpoing saved for version {version} of model {cls._name} but current code is version {cls._version}"
+            )
+        if "args" in init_kwargs:
+            init_args = init_kwargs.pop("args")
         else:
             init_args = []
         instance = cls(*init_args, **init_kwargs)
@@ -135,18 +129,17 @@ def get_model(config):
     model : nn.Module
         the instanciated module
     """
-    arch = config['arch'].lower()
+    arch = config["arch"].lower()
     config_arch = config.get(arch)
-    data_channels = config_arch.pop('data_channels')
+    data_channels = config_arch.pop("data_channels")
     try:
-        patching_levels = config['patching']['levels']
+        patching_levels = config["patching"]["levels"]
     except KeyError:
         patching_levels = 0
     if patching_levels:
         data_channels *= patching_levels + 1
-    config_arch['in_channels'] = data_channels
+    config_arch["in_channels"] = data_channels
     try:
         return BaseModel._models[arch](**config_arch)
     except KeyError:
-        raise ValueError(
-            f'Got config.arch={arch}, expected one of {available_models()}.')
+        raise ValueError(f"Got config.arch={arch}, expected one of {available_models()}.")

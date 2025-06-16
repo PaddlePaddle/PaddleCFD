@@ -1,19 +1,21 @@
-
 import paddle
 
 ############################## 相关utils函数，如下 ##############################
 ####################### PaConvert 自动生成的代码，请勿手动修改! ##################
 
+
 def view(self, *args, **kwargs):
     if args:
-        if len(args)==1 and isinstance(args[0], (tuple, list, str)):
+        if len(args) == 1 and isinstance(args[0], (tuple, list, str)):
             return paddle.view(self, args[0])
         else:
             return paddle.view(self, list(args))
     elif kwargs:
-        return paddle.view(self, shape_or_dtype = list(kwargs.values())[0])
+        return paddle.view(self, shape_or_dtype=list(kwargs.values())[0])
 
-setattr(paddle.Tensor, 'view', view)
+
+setattr(paddle.Tensor, "view", view)
+
 
 def reshape(self, *args, **kwargs):
     if args:
@@ -25,7 +27,9 @@ def reshape(self, *args, **kwargs):
         assert "shape" in kwargs
         return paddle.reshape(self, shape=kwargs["shape"])
 
+
 setattr(paddle.Tensor, "reshape", reshape)
+
 
 def max_class_func(self, *args, **kwargs):
     if "other" in kwargs:
@@ -44,7 +48,9 @@ def max_class_func(self, *args, **kwargs):
 
     return ret
 
+
 setattr(paddle.Tensor, "max", max_class_func)
+
 
 def min_class_func(self, *args, **kwargs):
     if "other" in kwargs:
@@ -63,6 +69,6 @@ def min_class_func(self, *args, **kwargs):
 
     return ret
 
+
 setattr(paddle.Tensor, "min", min_class_func)
 ############################## 相关utils函数，如上 ##############################
-

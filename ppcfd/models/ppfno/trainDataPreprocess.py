@@ -2,7 +2,6 @@ import os
 
 import paddle
 
-
 """
 Authors: chenkai26(chenkai26@baidu.com)
 Date:    2024/8/27
@@ -23,7 +22,6 @@ from stl import mesh
 
 
 class CFDDataTransiton:
-
     def __init__(self, case_path, save_path, caseID, info):
         self.inward_surface_normal = None
         self.cell_area = None
@@ -197,7 +195,7 @@ class ComputeDF:
         scene = o3d.t.geometry.RaycastingScene()
         _ = scene.add_triangles(stl_mesh)
         df = scene.compute_distance(o3d.core.Tensor(self.query_points)).numpy()
-        closest_point = scene.compute_closest_points(o3d.core.Tensor(self.query_points))["points"].numpy()
+        scene.compute_closest_points(o3d.core.Tensor(self.query_points))["points"].numpy()
         df_dict = {
             "df": df,
         }
@@ -214,7 +212,6 @@ class ComputeDF:
         pcd_train.points = train_point
         df = pcd_query_points.compute_point_cloud_distance(pcd_train)
         df = np.asarray(df).reshape(64, 64, 64)
-        closest_point = None
         df_dict = {
             "df": df,
         }
@@ -251,7 +248,7 @@ def compute_save_bounds_all(dataset_path, save_path, info):
         # max_col = np.max(csv_data, axis=0)
         # min_col = np.min(csv_data, axis=0)
         max_value = np.amax(csv_data)
-        min_value = np.amin(csv_data)
+        np.amin(csv_data)
         if max_value > 1e10:
             logging.info(f"Abnormal cfd case detected, skip {caseID} sample.")
             continue
@@ -319,14 +316,11 @@ def auto_trans(case_path, save_path, caseID, info):
     # max_col = np.max(csv_data, axis=0)
     # min_col = np.min(csv_data, axis=0)
     max_value = np.amax(csv_data)
-    min_value = np.amin(csv_data)
+    np.amin(csv_data)
     if max_value > 1e10:
         logging.info(f"Abnormal cfd case detected, skip {caseID} sample.")
         return None
 
-    press = data_trans.press
-    wallshearstress = data_trans.wallshearstress
-    centroid = data_trans.centroid
     area = data_trans.area
 
     if area is None:

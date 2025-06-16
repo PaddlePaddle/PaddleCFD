@@ -1,9 +1,6 @@
 import math
 import warnings
-from typing import List
-from typing import Optional
-from typing import Tuple
-from typing import Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import paddle
@@ -58,12 +55,8 @@ def _contract_dense_trick(x, weight: list, separable=False):
 
     eq = "".join(x_syms) + "," + "".join(weight_syms) + "->" + "".join(out_syms)
 
-    o1_real = paddle.einsum(eq, x.real(), weight_real) - paddle.einsum(
-        eq, x.imag(), weight_imag
-    )
-    o1_imag = paddle.einsum(eq, x.imag(), weight_real) + paddle.einsum(
-        eq, x.real(), weight_imag
-    )
+    o1_real = paddle.einsum(eq, x.real(), weight_real) - paddle.einsum(eq, x.imag(), weight_imag)
+    o1_imag = paddle.einsum(eq, x.imag(), weight_real) + paddle.einsum(eq, x.real(), weight_imag)
     x = paddle.complex(o1_real, o1_imag)
     return x
 
@@ -86,9 +79,7 @@ def _contract_cp(x, cp_weight, separable=False):
         out_syms[1] = out_sym
         factor_syms = [einsum_symbols[1] + rank_sym, out_sym + rank_sym]  # in, out
     factor_syms += [xs + rank_sym for xs in x_syms[2:]]  # x, y, ...
-    eq = (
-        x_syms + "," + rank_sym + "," + ",".join(factor_syms) + "->" + "".join(out_syms)
-    )
+    eq = x_syms + "," + rank_sym + "," + ",".join(factor_syms) + "->" + "".join(out_syms)
 
     return paddle.einsum(eq, x, cp_weight.weights, *cp_weight.factors)
 
@@ -108,26 +99,13 @@ def _contract_tucker(x, tucker_weight, separable=False):
             einsum_symbols[1] + core_syms[0],
             out_sym + core_syms[1],
         ]  # out, in
-        factor_syms += [
-            xs + rs for (xs, rs) in zip(x_syms[2:], core_syms[2:])
-        ]  # x, y, ...
+        factor_syms += [xs + rs for (xs, rs) in zip(x_syms[2:], core_syms[2:])]  # x, y, ...
 
-    eq = (
-        core_syms
-        + ","
-        + ",".join(factor_syms)
-        + ","
-        + x_syms
-        + "->"
-        + "".join(out_syms)
-    )
+    eq = core_syms + "," + ",".join(factor_syms) + "," + x_syms + "->" + "".join(out_syms)
 
     core = paddle.complex(tucker_weight.core_real, tucker_weight.core_imag)
     len_f = len(tucker_weight.factors_real)
-    factors = [
-        paddle.complex(tucker_weight.factors_real[i], tucker_weight.factors_imag[i])
-        for i in range(len_f)
-    ]
+    factors = [paddle.complex(tucker_weight.factors_real[i], tucker_weight.factors_imag[i]) for i in range(len_f)]
     out = paddle.einsum(eq, core, *factors, x)
     # Note: When exporting the model, replace the previous line of code with the line commented below
     # out = alter_einsum(eq, core, *factors, x)
@@ -155,11 +133,7 @@ def alter_einsum(eq, *x):
     out_last = x[0]
     eq_out_last = eq_in_lst[0]
     for i in range(1, num_ops):
-        eq_out_inter = (
-            reconstruct_eq(eq_out_last, eq_in_lst[i], eq_out)
-            if i != num_ops - 1
-            else eq_out
-        )
+        eq_out_inter = reconstruct_eq(eq_out_last, eq_in_lst[i], eq_out) if i != num_ops - 1 else eq_out
         eq_inter = eq_out_last + "," + eq_in_lst[i] + "->" + eq_out_inter
         eq_out_last = eq_out_inter
         out_last = complex_einsum(eq_inter, out_last, x[i])
@@ -180,9 +154,7 @@ def complex_einsum(eq, op1, op2):
         paddle.einsum(eq, op1_real, op2_imag) + paddle.einsum(eq, op1_imag, op2_real),
         axis=-1,
     )
-    result_complex = paddle.as_complex(
-        paddle.concat([result_real, result_imag], axis=-1)
-    )
+    result_complex = paddle.as_complex(paddle.concat([result_real, result_imag], axis=-1))
     return result_complex
 
 
@@ -200,13 +172,7 @@ def _contract_tt(x, tt_weight, separable=False):
     tt_syms = []
     for i, s in enumerate(weight_syms):
         tt_syms.append([rank_syms[i], s, rank_syms[i + 1]])
-    eq = (
-        "".join(x_syms)
-        + ","
-        + ",".join("".join(f) for f in tt_syms)
-        + "->"
-        + "".join(out_syms)
-    )
+    eq = "".join(x_syms) + "," + ",".join("".join(f) for f in tt_syms) + "->" + "".join(out_syms)
     return paddle.einsum(eq, x, *tt_weight.factors)
 
 
@@ -247,9 +213,7 @@ def get_contract_fun(weight, implementation="reconstructed", separable=False):
         else:
             raise ValueError(f"Got unexpected factorized weight type {weight.name}")
     else:
-        raise ValueError(
-            f'Got implementation={implementation!r}, expected "reconstructed" or "factorized"'
-        )
+        raise ValueError(f'Got implementation={implementation!r}, expected "reconstructed" or "factorized"')
 
 
 class FactorList(nn.Layer):
@@ -327,9 +291,7 @@ class FactorList(nn.Layer):
         for k, p in self._parameters.items():
             size_str = "x".join(str(size) for size in p.size())
             device_str = "" if not p.is_cuda else " (GPU {})".format(p.get_device())
-            parastr = "Parameter containing: [{} of size {}{}]".format(
-                paddle.typename(p), size_str, device_str
-            )
+            parastr = "Parameter containing: [{} of size {}{}]".format(paddle.typename(p), size_str, device_str)
             child_lines.append("  (" + str(k) + "): " + parastr)
         tmpstr = "\n".join(child_lines)
         return tmpstr
@@ -367,12 +329,8 @@ class FactorizedTensor(nn.Layer):
         self.shape = shape
         self.init_scale = init_scale
         self.factorization = factorization
-        self.real = self.create_parameter(
-            shape=shape, default_initializer=nn.initializer.XavierNormal()
-        )
-        self.imag = self.create_parameter(
-            shape=shape, default_initializer=nn.initializer.XavierNormal()
-        )
+        self.real = self.create_parameter(shape=shape, default_initializer=nn.initializer.XavierNormal())
+        self.imag = self.create_parameter(shape=shape, default_initializer=nn.initializer.XavierNormal())
 
     def __repr__(self):
         return f"FactorizedTensor(shape={self.shape})"
@@ -382,9 +340,7 @@ class FactorizedTensor(nn.Layer):
         return paddle.complex(self.real, self.imag)
 
 
-def validate_tucker_tensor(
-    tensor_shape, rank="same", rounding="round", fixed_modes=None
-):
+def validate_tucker_tensor(tensor_shape, rank="same", rounding="round", fixed_modes=None):
     r"""Returns the rank of a Tucker Decomposition
 
     Parameters
@@ -445,15 +401,10 @@ def validate_tucker_tensor(
 
             # sorted to be careful with the order when popping and reinserting to not remove/add at wrong index.
             # list (mode, shape) that we removed as they will be kept the same, rank[i] =
-            fixed_modes = [
-                (mode, tensor_shape.pop(mode))
-                for mode in sorted(fixed_modes, reverse=True)
-            ][::-1]
+            fixed_modes = [(mode, tensor_shape.pop(mode)) for mode in sorted(fixed_modes, reverse=True)][::-1]
 
             # number of parameters coming from the fixed modes (these don't have a variable size as a fun of fraction_param)
-            n_fixed_params = np.sum(
-                [s**2 for _, s in fixed_modes]
-            )  # size of the factors
+            n_fixed_params = np.sum([s**2 for _, s in fixed_modes])  # size of the factors
             n_modes_compressed -= len(fixed_modes)
         else:
             n_fixed_params = 0
@@ -481,10 +432,7 @@ def validate_tucker_tensor(
         if fixed_modes is None:
             rank = [rank] * n_modes
         else:
-            rank = [
-                rank if i not in fixed_modes else s
-                for (i, s) in enumerate(tensor_shape)
-            ]  # *n_mode
+            rank = [rank if i not in fixed_modes else s for (i, s) in enumerate(tensor_shape)]  # *n_mode
 
     return rank
 
@@ -530,9 +478,7 @@ class TuckerTensor(nn.Layer):
     rank
     """
 
-    def __init__(
-        self, core_real, core_imag, factors_real, factors_imag, shape=None, rank=None
-    ):
+    def __init__(self, core_real, core_imag, factors_real, factors_imag, shape=None, rank=None):
         super().__init__()
         if shape is not None and rank is not None:
             self.shape, self.rank = shape, rank
@@ -550,23 +496,15 @@ class TuckerTensor(nn.Layer):
     def new(cls, shape, rank, fixed_rank_modes=None, dtype=None, **kwargs):
         # Register the parameters
         rank = validate_tucker_tensor(shape, rank, fixed_modes=fixed_rank_modes)
-        core_real = paddle.create_parameter(
-            rank, paddle.float32, attr=nn.initializer.Constant(value=0.0)
-        )
-        core_imag = paddle.create_parameter(
-            rank, paddle.float32, attr=nn.initializer.Constant(value=0.0)
-        )
+        core_real = paddle.create_parameter(rank, paddle.float32, attr=nn.initializer.Constant(value=0.0))
+        core_imag = paddle.create_parameter(rank, paddle.float32, attr=nn.initializer.Constant(value=0.0))
         # Avoid the issues with ParameterList
         factors_real = [
-            paddle.create_parameter(
-                (s, r), paddle.float32, attr=nn.initializer.Constant(value=0.0)
-            )
+            paddle.create_parameter((s, r), paddle.float32, attr=nn.initializer.Constant(value=0.0))
             for (s, r) in zip(shape, rank)
         ]
         factors_imag = [
-            paddle.create_parameter(
-                (s, r), paddle.float32, attr=nn.initializer.Constant(value=0.0)
-            )
+            paddle.create_parameter((s, r), paddle.float32, attr=nn.initializer.Constant(value=0.0))
             for (s, r) in zip(shape, rank)
         ]
         return cls(core_real, core_imag, factors_real, factors_imag)
@@ -588,9 +526,7 @@ class TuckerTensor(nn.Layer):
             factors_real = [mixing_factor_real[indices, :], *factors_real]
             mixing_factors_imag, *factors_imag = self.factors_imag
             factors_imag = [mixing_factors_imag[indices, :], *factors_imag]
-            return self.__class__(
-                self.core_real, self.core_imag, factors_real, factors_imag
-            )
+            return self.__class__(self.core_real, self.core_imag, factors_real, factors_imag)
         else:
             # Index multiple dimensions
             modes = []
@@ -599,17 +535,13 @@ class TuckerTensor(nn.Layer):
             factors_real_contract = []
             factors_imag_contract = []
 
-            for i, (index, factor_real, factor_imag) in enumerate(
-                zip(indices, self.factors_real, self.factors_imag)
-            ):
+            for i, (index, factor_real, factor_imag) in enumerate(zip(indices, self.factors_real, self.factors_imag)):
                 if index is Ellipsis:
                     raise ValueError(
                         f"Ellipsis is not yet supported, yet got indices={indices}, indices[{i}]={index}."
                     )
                 if isinstance(index, int):
-                    raise NotImplementedError(
-                        f"Indexing with {indices} is not yet supported."
-                    )
+                    raise NotImplementedError(f"Indexing with {indices} is not yet supported.")
                     modes.append(i)
                     factors_real_contract.append(factor_real[index, :])
                     factors_imag_contract.append(factor_imag[index, :])
@@ -618,9 +550,7 @@ class TuckerTensor(nn.Layer):
                     factors_imag.append(factor_imag[index, :])
 
             if modes:
-                raise NotImplementedError(
-                    f"Indexing with {indices} is not yet supported."
-                )
+                raise NotImplementedError(f"Indexing with {indices} is not yet supported.")
                 # core = tenalg.multi_mode_dot(self.core, factors_contract, modes=modes)
             else:
                 core_real = self.core_real
@@ -638,9 +568,7 @@ class TuckerTensor(nn.Layer):
                 )
             else:
                 # Fully contracted tensor
-                raise NotImplementedError(
-                    f"Indexing with {indices} is not yet supported."
-                )
+                raise NotImplementedError(f"Indexing with {indices} is not yet supported.")
             return core_real, core_imag
 
     def normal_(self, mean=0, std=1):
@@ -770,9 +698,9 @@ class SpectralConv(BaseSpectralConv):
         self.factorization = factorization
         self.n_layers = n_layers
         self.implementation = implementation
-        self.output_scaling_factor: Union[
-            None, List[List[float]]
-        ] = validate_scaling_factor(output_scaling_factor, self.order, n_layers)
+        self.output_scaling_factor: Union[None, List[List[float]]] = validate_scaling_factor(
+            output_scaling_factor, self.order, n_layers
+        )
         if init_std == "auto":
             init_std = (2 / (in_channels + out_channels)) ** 0.5
         else:
@@ -818,30 +746,13 @@ class SpectralConv(BaseSpectralConv):
             for w in self.weight:
                 w.normal_(0, init_std)
 
-        self._contract = get_contract_fun(
-            self.weight[0], implementation=implementation, separable=separable
-        )
+        self._contract = get_contract_fun(self.weight[0], implementation=implementation, separable=separable)
         if bias:
             out_0 = paddle.create_parameter(
-                shape=(
-                    init_std
-                    * paddle.randn(
-                        shape=(n_layers, self.out_channels) + (1,) * self.order
-                    )
-                ).shape,
-                dtype=(
-                    init_std
-                    * paddle.randn(
-                        shape=(n_layers, self.out_channels) + (1,) * self.order
-                    )
-                )
-                .numpy()
-                .dtype,
+                shape=(init_std * paddle.randn(shape=(n_layers, self.out_channels) + (1,) * self.order)).shape,
+                dtype=(init_std * paddle.randn(shape=(n_layers, self.out_channels) + (1,) * self.order)).numpy().dtype,
                 default_initializer=paddle.nn.initializer.Assign(
-                    init_std
-                    * paddle.randn(
-                        shape=(n_layers, self.out_channels) + (1,) * self.order
-                    )
+                    init_std * paddle.randn(shape=(n_layers, self.out_channels) + (1,) * self.order)
                 ),
             )
             out_0.stop_gradient = not True
@@ -855,12 +766,7 @@ class SpectralConv(BaseSpectralConv):
     def transform(self, x, layer_index=0, output_shape=None):
         in_shape = list(tuple(x.shape)[2:])
         if self.output_scaling_factor is not None and output_shape is None:
-            out_shape = tuple(
-                [
-                    round(s * r)
-                    for s, r in zip(in_shape, self.output_scaling_factor[layer_index])
-                ]
-            )
+            out_shape = tuple([round(s * r) for s, r in zip(in_shape, self.output_scaling_factor[layer_index])])
         elif output_shape is not None:
             out_shape = output_shape
         else:
@@ -883,9 +789,7 @@ class SpectralConv(BaseSpectralConv):
         n_modes[-1] = n_modes[-1] // 2 + 1
         self._n_modes = n_modes
 
-    def forward(
-        self, x: paddle.Tensor, indices=0, output_shape: Optional[Tuple[int]] = None
-    ):
+    def forward(self, x: paddle.Tensor, indices=0, output_shape: Optional[Tuple[int]] = None):
         """Generic forward pass for the Factorized Spectral Conv
 
         Parameters
@@ -912,9 +816,7 @@ class SpectralConv(BaseSpectralConv):
         if self.order > 1:
             x = paddle.fft.fftshift(x=x, axes=fft_dims[:-1])
         if self.fno_block_precision == "mixed":
-            raise NotImplementedError(
-                "Mixed precision spectral conv currently unsupported"
-            )
+            raise NotImplementedError("Mixed precision spectral conv currently unsupported")
 
         out_fft_real = paddle.zeros(shape=[batchsize, self.out_channels, *fft_size, 1])
         out_fft_img = paddle.zeros(shape=[batchsize, self.out_channels, *fft_size, 1])
@@ -931,24 +833,15 @@ class SpectralConv(BaseSpectralConv):
             for size, n_mode, max_modes in zip(fft_size, self.n_modes, self.max_n_modes)
         ]
         slices_w = [slice(None), slice(None)]
-        slices_w += [
-            (slice(start // 2, -start // 2) if start else slice(start, None))
-            for start in starts[:-1]
-        ]
+        slices_w += [(slice(start // 2, -start // 2) if start else slice(start, None)) for start in starts[:-1]]
         slices_w += [slice(None, -starts[-1]) if starts[-1] else slice(None)]
         weight = self._get_weight(indices)[slices_w]
 
         starts = [
-            (size - min(size, n_mode))
-            for size, n_mode in zip(
-                list(tuple(x.shape)[2:]), list(tuple(weight.shape)[2:])
-            )
+            (size - min(size, n_mode)) for size, n_mode in zip(list(tuple(x.shape)[2:]), list(tuple(weight.shape)[2:]))
         ]
         slices_x = [slice(None), slice(None)]
-        slices_x += [
-            (slice(start // 2, -start // 2) if start else slice(start, None))
-            for start in starts[:-1]
-        ]
+        slices_x += [(slice(start // 2, -start // 2) if start else slice(start, None)) for start in starts[:-1]]
         slices_x += [slice(None, -starts[-1]) if starts[-1] else slice(None)]
 
         # Slice currently not work
@@ -956,19 +849,12 @@ class SpectralConv(BaseSpectralConv):
         out_fft[slices_x] = self._contract(x[slices_x], weight, separable=False)
 
         if self.output_scaling_factor is not None and output_shape is None:
-            mode_sizes = tuple(
-                [
-                    round(s * r)
-                    for s, r in zip(mode_sizes, self.output_scaling_factor[indices])
-                ]
-            )
+            mode_sizes = tuple([round(s * r) for s, r in zip(mode_sizes, self.output_scaling_factor[indices])])
         if output_shape is not None:
             mode_sizes = output_shape
         if self.order > 1:
             out_fft = paddle.fft.fftshift(x=out_fft, axes=fft_dims[:-1])
-        x = paddle.fft.irfftn(
-            x=out_fft, s=mode_sizes, axes=fft_dims, norm=self.fft_norm
-        )
+        x = paddle.fft.irfftn(x=out_fft, s=mode_sizes, axes=fft_dims, norm=self.fft_norm)
         if self.bias is not None:
             x = x + self.bias[indices, ...]
         x = x.astype(dtype_in)
@@ -980,9 +866,7 @@ class SpectralConv(BaseSpectralConv):
         The parametrization of sub-convolutional layers is shared with the main one.
         """
         if self.n_layers == 1:
-            Warning(
-                "A single convolution is parametrized, directly use the main class."
-            )
+            Warning("A single convolution is parametrized, directly use the main class.")
         return SubConv(self, indices)
 
     def __getitem__(self, indices):
@@ -1020,12 +904,8 @@ class FactorizedSpectralConv1d(SpectralConv):
     def forward(self, x, indices=0):
         batchsize, channels, width = x.shape
         x = paddle.fft.rfft(x=x, norm=self.fft_norm)
-        out_fft_real = paddle.zeros(
-            shape=[batchsize, self.out_channels, width // 2 + 1, 1], dtype="float32"
-        )
-        out_fft_img = paddle.zeros(
-            shape=[batchsize, self.out_channels, width // 2 + 1, 1], dtype="float32"
-        )
+        out_fft_real = paddle.zeros(shape=[batchsize, self.out_channels, width // 2 + 1, 1], dtype="float32")
+        out_fft_img = paddle.zeros(shape=[batchsize, self.out_channels, width // 2 + 1, 1], dtype="float32")
         out_fft = paddle.concat([out_fft_real, out_fft_img], axis=-1)
         out_fft = paddle.as_complex(out_fft)
 
@@ -1070,9 +950,7 @@ class FactorizedSpectralConv2d(SpectralConv):
         if self.output_scaling_factor is not None:
             width = int(round(width * self.output_scaling_factor[indices][0]))
             height = int(round(height * self.output_scaling_factor[indices][1]))
-        x = paddle.fft.irfft2(
-            x=out_fft, s=(height, width), axes=(-2, -1), norm=self.fft_norm
-        )
+        x = paddle.fft.irfft2(x=out_fft, s=(height, width), axes=(-2, -1), norm=self.fft_norm)
         if self.bias is not None:
             x = x + self.bias[indices, ...]
         return x
@@ -1081,9 +959,7 @@ class FactorizedSpectralConv2d(SpectralConv):
 class FactorizedSpectralConv3d(SpectralConv):
     def forward(self, x, indices=0):
         batchsize, channels, height, width, depth = x.shape
-        x = paddle.fft.rfftn(
-            x=x.astype(dtype="float32"), norm=self.fft_norm, axes=[-3, -2, -1]
-        )
+        x = paddle.fft.rfftn(x=x.astype(dtype="float32"), norm=self.fft_norm, axes=[-3, -2, -1])
         out_fft_real = paddle.zeros(
             shape=[batchsize, self.out_channels, height, width, depth // 2 + 1, 1],
             dtype="float32",
@@ -1095,9 +971,7 @@ class FactorizedSpectralConv3d(SpectralConv):
         out_fft = paddle.concat([out_fft_real, out_fft_img], axis=-1)
         out_fft = paddle.as_complex(out_fft)
 
-        out_fft[
-            :, :, : self.half_n_modes[0], : self.half_n_modes[1], : self.half_n_modes[2]
-        ] = self._contract(
+        out_fft[:, :, : self.half_n_modes[0], : self.half_n_modes[1], : self.half_n_modes[2]] = self._contract(
             x[
                 :,
                 :,
@@ -1108,13 +982,7 @@ class FactorizedSpectralConv3d(SpectralConv):
             self._get_weight(4 * indices + 0),
             separable=self.separable,
         )
-        out_fft[
-            :,
-            :,
-            : self.half_n_modes[0],
-            -self.half_n_modes[1] :,
-            : self.half_n_modes[2],
-        ] = self._contract(
+        out_fft[:, :, : self.half_n_modes[0], -self.half_n_modes[1] :, : self.half_n_modes[2],] = self._contract(
             x[
                 :,
                 :,
@@ -1125,13 +993,7 @@ class FactorizedSpectralConv3d(SpectralConv):
             self._get_weight(4 * indices + 1),
             separable=self.separable,
         )
-        out_fft[
-            :,
-            :,
-            -self.half_n_modes[0] :,
-            : self.half_n_modes[1],
-            : self.half_n_modes[2],
-        ] = self._contract(
+        out_fft[:, :, -self.half_n_modes[0] :, : self.half_n_modes[1], : self.half_n_modes[2],] = self._contract(
             x[
                 :,
                 :,
@@ -1142,13 +1004,7 @@ class FactorizedSpectralConv3d(SpectralConv):
             self._get_weight(4 * indices + 2),
             separable=self.separable,
         )
-        out_fft[
-            :,
-            :,
-            -self.half_n_modes[0] :,
-            -self.half_n_modes[1] :,
-            : self.half_n_modes[2],
-        ] = self._contract(
+        out_fft[:, :, -self.half_n_modes[0] :, -self.half_n_modes[1] :, : self.half_n_modes[2],] = self._contract(
             x[
                 :,
                 :,
@@ -1175,9 +1031,7 @@ if __name__ == "__main__":
     # let weight be the same
     weight = paddle.randn([32, 32, 8, 8]).astype("complex64")
     weight = paddle.randn([32, 32, 8, 8]).astype("complex64")
-    weight = paddle.create_parameter(
-        weight.shape, weight.dtype, attr=paddle.nn.initializer.Assign(weight)
-    )
+    weight = paddle.create_parameter(weight.shape, weight.dtype, attr=paddle.nn.initializer.Assign(weight))
 
     separable = False
     result = _contract_dense(x, weight, separable=separable)

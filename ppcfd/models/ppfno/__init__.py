@@ -12,10 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ppcfd.models.ppfno import data
+from ppcfd.models.ppfno import data, networks, optim, utils
 from ppcfd.models.ppfno.losses import LpLoss
-from ppcfd.models.ppfno import networks
-from ppcfd.models.ppfno import optim
-from ppcfd.models.ppfno import utils
 
 __all__ = ["data", "LpLoss", "networks", "optim", "utils"]

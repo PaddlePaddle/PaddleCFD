@@ -15,5 +15,4 @@
 
 from ppcfd.utils import logger
 
-
 __all__ = ["logger"]

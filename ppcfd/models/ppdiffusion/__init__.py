@@ -16,7 +16,6 @@ from ppcfd.models.ppdiffusion import modules
 from ppcfd.models.ppdiffusion.base_model import BaseModel
 from ppcfd.models.ppdiffusion.unet_simple import UNet as SimpleUnet
 
-
 __all__ = [
     "BaseModel",
     "SimpleUnet",

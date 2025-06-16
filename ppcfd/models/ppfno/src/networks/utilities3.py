@@ -1,19 +1,19 @@
 import sys
-sys.path.append('/aidsw01/paddlefile/hstasim')
-import paddle
-import numpy as np
-import scipy.io
-import h5py
+
+sys.path.append("/aidsw01/paddlefile/hstasim")
 import operator
-from functools import reduce
-from functools import partial
+from functools import partial, reduce
+
+import h5py
+import numpy as np
+import paddle
 import pynvml
-device = str('cuda' if paddle.device.cuda.device_count() >= 1 else 'cpu'
-    ).replace('cuda', 'gpu')
+import scipy.io
+
+device = str("cuda" if paddle.device.cuda.device_count() >= 1 else "cpu").replace("cuda", "gpu")
 
 
 class MatReader(object):
-
     def __init__(self, file_path, to_torch=True, to_cuda=False, to_float=True):
         super(MatReader, self).__init__()
         self.to_torch = to_torch
@@ -28,7 +28,7 @@ class MatReader(object):
         try:
             self.data = scipy.io.loadmat(self.file_path)
             self.old_mat = True
-        except:
+        except Exception:
             self.data = h5py.File(self.file_path)
             self.old_mat = False
 
@@ -60,7 +60,6 @@ class MatReader(object):
 
 
 class UnitGaussianNormalizer(object):
-
     def __init__(self, x, eps=1e-05, time_last=True):
         super(UnitGaussianNormalizer, self).__init__()
         self.mean = paddle.mean(x=x, axis=0)
@@ -105,7 +104,6 @@ class UnitGaussianNormalizer(object):
 
 
 class GaussianNormalizer(object):
-
     def __init__(self, x, eps=1e-05):
         super(GaussianNormalizer, self).__init__()
         self.mean = paddle.mean(x=x)
@@ -130,13 +128,10 @@ class GaussianNormalizer(object):
 
 
 class RangeNormalizer(object):
-
     def __init__(self, x, low=0.0, high=1.0):
         super(RangeNormalizer, self).__init__()
-        mymin = (paddle.min(x=x, axis=0), paddle.argmin(x=x, axis=0))[0].view(
-            -1)
-        mymax = (paddle.max(x=x, axis=0), paddle.argmax(x=x, axis=0))[0].view(
-            -1)
+        mymin = (paddle.min(x=x, axis=0), paddle.argmin(x=x, axis=0))[0].view(-1)
+        mymax = (paddle.max(x=x, axis=0), paddle.argmax(x=x, axis=0))[0].view(-1)
         self.a = (high - low) / (mymax - mymin)
         self.b = -self.a * mymax + high
 
@@ -158,19 +153,15 @@ class RangeNormalizer(object):
 def count_params(model):
     c = 0
     for p in list(model.parameters()):
-        c += reduce(operator.mul, list(tuple(p.shape) + (2,) if p.
-            is_complex() else tuple(p.shape)))
+        c += reduce(operator.mul, list(tuple(p.shape) + (2,) if p.is_complex() else tuple(p.shape)))
     return c
 
 
 def paddle_memory_usage():
-    cm = paddle.device.cuda.memory_allocated(
-        ) / 1024 ** 3 if paddle.device.cuda.device_count() >= 1 else 0
-    mm = paddle.device.cuda.max_memory_allocated(
-        ) / 1024 ** 3 if paddle.device.cuda.device_count() >= 1 else 0
-    rm = paddle.device.cuda.memory_reserved(
-        ) / 1024 ** 3 if paddle.device.cuda.device_count() >= 1 else 0
-    return f'{cm:.4g}GB/{mm:.4g}GB/{rm:.4g}GB (Current/MAX/Reserved'
+    cm = paddle.device.cuda.memory_allocated() / 1024**3 if paddle.device.cuda.device_count() >= 1 else 0
+    mm = paddle.device.cuda.max_memory_allocated() / 1024**3 if paddle.device.cuda.device_count() >= 1 else 0
+    rm = paddle.device.cuda.memory_reserved() / 1024**3 if paddle.device.cuda.device_count() >= 1 else 0
+    return f"{cm:.4g}GB/{mm:.4g}GB/{rm:.4g}GB (Current/MAX/Reserved"
 
 
 def memory_usage(i=2):
@@ -179,13 +170,13 @@ def memory_usage(i=2):
     mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
     util_info = pynvml.nvmlDeviceGetUtilizationRates(handle)
     temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
-    print(f'GPU {i}:')
-    print(f'  Memory Total: {mem_info.total / 1024 ** 3:.2f} GB')
-    print(f'  Memory Free: {mem_info.free / 1024 ** 3:.2f} GB')
-    print(f'  Memory Used: {mem_info.used / 1024 ** 3:.2f} GB')
-    print(f'  GPU Utilization: {util_info.gpu}%')
-    print(f'  Memory Utilization: {util_info.memory}%')
-    print(f'  Temperature: {temp} C')
+    print(f"GPU {i}:")
+    print(f"  Memory Total: {mem_info.total / 1024 ** 3:.2f} GB")
+    print(f"  Memory Free: {mem_info.free / 1024 ** 3:.2f} GB")
+    print(f"  Memory Used: {mem_info.used / 1024 ** 3:.2f} GB")
+    print(f"  GPU Utilization: {util_info.gpu}%")
+    print(f"  Memory Utilization: {util_info.memory}%")
+    print(f"  Temperature: {temp} C")
     return None
 
 
@@ -194,4 +185,4 @@ def num_of_nans(x):
 
 
 def show_tensor_range(a):
-    return f'{str(a)}:, {a}, max:, {paddle.max(x=a)}, min:, {paddle.min(x=a)}'
+    return f"{str(a)}:, {a}, max:, {paddle.max(x=a)}, min:, {paddle.min(x=a)}"

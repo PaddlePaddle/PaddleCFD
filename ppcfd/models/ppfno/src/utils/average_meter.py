@@ -1,5 +1,4 @@
 class AverageMeter:
-
     def __init__(self):
         self.reset()
 
@@ -17,7 +16,6 @@ class AverageMeter:
 
 
 class AverageMeterDict:
-
     def __init__(self):
         self.reset()
 

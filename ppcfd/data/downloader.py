@@ -22,7 +22,6 @@ import requests
 
 from ppcfd.utils.logger import logger
 
-
 DEFAULT_CACHE_DIR = Path(__file__).resolve().parent / ".tmp"
 
 

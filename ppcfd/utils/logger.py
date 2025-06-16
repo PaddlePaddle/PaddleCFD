@@ -16,7 +16,6 @@
 import logging
 import sys
 
-
 LOG_FORMAT = "[%(asctime)s][%(name)s][%(levelname)s] %(filename)s:%(lineno)d - %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 

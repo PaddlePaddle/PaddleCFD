@@ -5,13 +5,11 @@ import logging
 import os
 import sys
 
-
 sys.path.append("./src")
 sys.path.append("./src/networks")
 import random
 from timeit import default_timer
-from typing import Dict
-from typing import Tuple
+from typing import Dict, Tuple
 
 import hydra
 import numpy as np
@@ -19,13 +17,11 @@ import paddle
 import pyvista as pv
 from omegaconf import DictConfig
 from paddle import distributed as dist
-from paddle.distributed import ParallelEnv
-from paddle.distributed import fleet
+from paddle.distributed import ParallelEnv, fleet
 from src.data import instantiate_datamodule
 from src.losses import LpLoss
 from src.networks import instantiate_network
 from src.utils.average_meter import AverageMeterDict
-
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 # os.environ["HYDRA_FULL_ERROR"] = "0"
@@ -443,10 +439,10 @@ def train(cfg: DictConfig):
                 optimizer.clear_gradients(set_to_zero=False)
                 pred, truth, cd_dict = model(data_dict, idx_batch, loss_fn=loss_fn, decode_fn=datamodule.decode)
                 if "OOM" in cd_dict:
-                    if cd_dict["OOM"] == True:
+                    if cd_dict["OOM"] is True:
                         idx_batch += 1
                         continue
-                    elif cd_dict["OOM"] == False and paddle.any(paddle.isnan(cd_dict["Cd_truth"])):
+                    elif cd_dict["OOM"] is False and paddle.any(paddle.isnan(cd_dict["Cd_truth"])):
                         logging.info(f"WARNING: nan detected on sample {idx_batch}, skipping this sample.")
                         idx_batch += 1
                         continue
@@ -563,7 +559,7 @@ def save_eval_results(
         "cal_err_friction_resistance": delta_wallshearstress,
     }
     centroid = np.load(f"{cfg.train_input_path}/centroid_{centroid_idx}.npy")
-    cells = [("vertex", np.arange(tuple(centroid.shape)[0]).reshape(-1, 1))]
+    [("vertex", np.arange(tuple(centroid.shape)[0]).reshape(-1, 1))]
 
     output_dir = cfg.train_output_path
     os.makedirs(os.path.join(output_dir, "json"), exist_ok=True)

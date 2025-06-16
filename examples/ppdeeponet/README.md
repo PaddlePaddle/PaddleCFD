@@ -23,7 +23,7 @@
         # curl https://paddle-org.bj.bcebos.com/paddlescience/datasets/ldc/ldc_Re1000.mat --create-dirs -o ./data/ldc_Re1000.mat
         # curl https://paddle-org.bj.bcebos.com/paddlescience/datasets/ldc/ldc_Re1600.mat --create-dirs -o ./data/ldc_Re1600.mat
         # curl https://paddle-org.bj.bcebos.com/paddlescience/datasets/ldc/ldc_Re3200.mat --create-dirs -o ./data/ldc_Re3200.mat
-        python ldc_2d_Re3200_piratenet.py TRAIN.optim=soap 
+        python ldc_2d_Re3200_piratenet.py TRAIN.optim=soap
         ```
 
     === "模型评估命令"
@@ -226,7 +226,7 @@ $$
 
 在每个迭代 $t$ 中，SOAP 使用相应的梯度 $G_t$ 更新每层的权重矩阵 $W_t$，如下所示：
 
-- 将梯度投影到特征空间： 
+- 将梯度投影到特征空间：
 
     $$\widetilde{G}_t = Q_L^T G_t Q_R.$$
 

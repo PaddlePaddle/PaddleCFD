@@ -16,13 +16,11 @@ import logging
 import os
 import sys
 
-
 sys.path.append("./src")
 sys.path.append("./src/networks")
 from contextlib import asynccontextmanager
 from timeit import default_timer
-from typing import Dict
-from typing import Tuple
+from typing import Dict, Tuple
 
 import hydra
 import numpy as np
@@ -32,9 +30,7 @@ import pyvista as pv
 # strategy = fleet.DistributedStrategy()
 # strategy.find_unused_parameters = True
 # fleet.init(is_collective=True, strategy=strategy)
-from fastapi import FastAPI
-from fastapi import HTTPException
-from fastapi import status
+from fastapi import FastAPI, HTTPException, status
 from omegaconf import DictConfig
 from paddle.distributed import ParallelEnv
 from pydantic import BaseModel
@@ -42,7 +38,6 @@ from src.data import instantiate_inferencedatamodule
 from src.losses import LpLoss
 from src.networks import instantiate_network
 from src.utils.average_meter import AverageMeterDict
-
 
 # 设置你要的配置打印日志
 
@@ -285,7 +280,6 @@ async def infer_model_task(input_data: InputData) -> OutputData:
             indices.sort(key=extract_number)
             logging.info(f"Start evaluting {CFG.model} ...")
             eval_meter = AverageMeterDict()
-            visualize_data_dicts = []
             loss_fn = LpLoss(size_average=True)
 
             def cal_mre(pred, label):
@@ -344,7 +338,7 @@ async def infer_model_task(input_data: InputData) -> OutputData:
             """
             Cd_pred_modify = cd_dict["Cd_pred_modify"]
             # Cd_truth = out_dict["Cd_truth"]
-            Cd_pred = out_dict["Cd_pred"]
+            out_dict["Cd_pred"]
             # Cd_mre_modify = paddle.abs(x=Cd_pred_modify - Cd_truth) / paddle.abs(x=Cd_truth)
             # eval_meter.update({"Cd_mre_modify": Cd_mre_modify})
             eval_meter.update({"Cd_pred_modify": Cd_pred_modify})
@@ -430,7 +424,7 @@ def save_eval_results(cfg: DictConfig, pred, centroid_idx, caseid, decode_fn=Non
         "pred_wallshearstress": pred_wallshearstress,
     }
     centroid = np.load(f"{cfg.reason_input_path}/centroid_{centroid_idx}.npy")
-    cells = [("vertex", np.arange(tuple(centroid.shape)[0]).reshape(-1, 1))]
+    [("vertex", np.arange(tuple(centroid.shape)[0]).reshape(-1, 1))]
 
     os.makedirs(os.path.join(cfg.reason_output_path, "vtp_csv"), exist_ok=True)
 

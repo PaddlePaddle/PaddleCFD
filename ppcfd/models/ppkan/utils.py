@@ -1,9 +1,10 @@
-import numpy as np
 import random
+
+import numpy as np
 import paddle
 
 
-def generate_sine_data(num_points, num_samples, sinewave_range=[-1.0, 1.0], c_range = [0.0, 1.0]):
+def generate_sine_data(num_points, num_samples, sinewave_range=[-1.0, 1.0], c_range=[0.0, 1.0]):
     num_points = int(num_points)
     num_samples = int(num_samples)
     x = np.linspace(float(sinewave_range[0]), float(sinewave_range[1]), num_points)
@@ -17,9 +18,11 @@ def generate_sine_data(num_points, num_samples, sinewave_range=[-1.0, 1.0], c_ra
 
     return x, c, y
 
+
 def kan_width(input_dim, W, repeat_hid, output_dim):
     width = [input_dim] + [W] * repeat_hid + [output_dim]
     return width
+
 
 def set_seed(seed):
     random.seed(seed)
@@ -29,8 +32,10 @@ def set_seed(seed):
         paddle.seed(seed=seed)
         paddle.seed(seed=seed)
 
+
 def count_learnable_parameters(model):
     return sum(p.size for p in model.parameters() if not p.stop_gradient)
+
 
 def test_model(model, criterion, c_test, y_test, x, batch_size):
     model.eval()
@@ -38,8 +43,8 @@ def test_model(model, criterion, c_test, y_test, x, batch_size):
     num_batches = len(c_test) // batch_size + 1
     with paddle.no_grad():
         for i in range(0, len(c_test), batch_size):
-            c_batch = c_test[i:i+batch_size]
-            y_batch = y_test[i:i+batch_size]
+            c_batch = c_test[i : i + batch_size]
+            y_batch = y_test[i : i + batch_size]
             pred = model(c_batch, x)
             loss = criterion(pred, y_batch)
             total_loss += loss.item()

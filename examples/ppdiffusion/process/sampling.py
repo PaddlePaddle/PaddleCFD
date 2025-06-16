@@ -1,6 +1,5 @@
 from contextlib import ExitStack
-from typing import Callable
-from typing import Optional
+from typing import Callable, Optional
 
 import numpy as np
 import paddle

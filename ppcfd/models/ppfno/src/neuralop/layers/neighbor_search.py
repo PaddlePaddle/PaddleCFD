@@ -19,6 +19,7 @@ class NeighborSearch(paddle.nn.Layer):
             self.use_open3d = use_open3d
         else:
             from .simple_neighbor_search import simple_neighbor_search
+
             self.search_fn = simple_neighbor_search
             self.use_open3d = False
 
@@ -36,7 +37,7 @@ class NeighborSearch(paddle.nn.Layer):
             NOTE: open3d requires d=3
         radius : float
             Radius of each ball: B(queries[j], radius)
-        
+
         Output
         ----------
         return_dict : dict
@@ -45,7 +46,7 @@ class NeighborSearch(paddle.nn.Layer):
                     Index of each neighbor in data for every point
                     in queries. Neighbors are ordered in the same orderings
                     as the points in queries. Open3d and torch_cluster
-                    implementations can differ by a permutation of the 
+                    implementations can differ by a permutation of the
                     neighbors for every point.
                 neighbors_row_splits: torch.Tensor of shape [m+1] with dtype=torch.int64
                     The value at index j is the sum of the number of
@@ -55,10 +56,8 @@ class NeighborSearch(paddle.nn.Layer):
         return_dict = {}
         if self.use_open3d:
             search_return = self.search_fn(data, queries, radius)
-            return_dict['neighbors_index'
-                ] = search_return.neighbors_index.long()
-            return_dict['neighbors_row_splits'
-                ] = search_return.neighbors_row_splits.long()
+            return_dict["neighbors_index"] = search_return.neighbors_index.long()
+            return_dict["neighbors_row_splits"] = search_return.neighbors_row_splits.long()
         else:
             return_dict = self.search_fn(data, queries, radius)
         return return_dict

@@ -1,4 +1,5 @@
 import paddle
+
 from .mlp import MLPLinear
 from .segment_csr import segment_csr
 
@@ -47,24 +48,28 @@ class IntegralTransform(paddle.nn.Layer):
         by default independently of this parameter.
     """
 
-    def __init__(self, mlp=None, mlp_layers=None, mlp_non_linearity=paddle.
-        nn.functional.gelu, transform_type='linear'):
+    def __init__(
+        self, mlp=None, mlp_layers=None, mlp_non_linearity=paddle.nn.functional.gelu, transform_type="linear"
+    ):
         super().__init__()
         assert mlp is not None or mlp_layers is not None
         self.transform_type = transform_type
-        if (self.transform_type != 'linear_kernelonly' and self.
-            transform_type != 'linear' and self.transform_type !=
-            'nonlinear_kernelonly' and self.transform_type != 'nonlinear'):
+        if (
+            self.transform_type != "linear_kernelonly"
+            and self.transform_type != "linear"
+            and self.transform_type != "nonlinear_kernelonly"
+            and self.transform_type != "nonlinear"
+        ):
             raise ValueError(
-                f'Got transform_type={transform_type} but expected one of [linear_kernelonly, linear, nonlinear_kernelonly, nonlinear]'
-                )
+                f"Got transform_type={transform_type} but expected one of [linear_kernelonly, linear, nonlinear_kernelonly, nonlinear]"
+            )
         if mlp is None:
-            self.mlp = MLPLinear(layers=mlp_layers, non_linearity=
-                mlp_non_linearity)
+            self.mlp = MLPLinear(layers=mlp_layers, non_linearity=mlp_non_linearity)
         else:
             self.mlp = mlp
+
     """"
-    
+
 
     Assumes x=y if not specified
     Integral is taken w.r.t. the neighbors
@@ -111,24 +116,21 @@ class IntegralTransform(paddle.nn.Layer):
         """
         if x is None:
             x = y
-        rep_features = y[neighbors['neighbors_index']]
+        rep_features = y[neighbors["neighbors_index"]]
         if f_y is not None:
-            in_features = f_y[neighbors['neighbors_index']]
-        num_reps = neighbors['neighbors_row_splits'][1:] - neighbors[
-            'neighbors_row_splits'][:-1]
+            in_features = f_y[neighbors["neighbors_index"]]
+        num_reps = neighbors["neighbors_row_splits"][1:] - neighbors["neighbors_row_splits"][:-1]
         self_features = paddle.repeat_interleave(x=x, repeats=num_reps, axis=0)
         agg_features = paddle.concat(x=[rep_features, self_features], axis=1)
-        if f_y is not None and (self.transform_type ==
-            'nonlinear_kernelonly' or self.transform_type == 'nonlinear'):
+        if f_y is not None and (self.transform_type == "nonlinear_kernelonly" or self.transform_type == "nonlinear"):
             agg_features = paddle.concat(x=[agg_features, in_features], axis=1)
         rep_features = self.mlp(agg_features)
-        if f_y is not None and self.transform_type != 'nonlinear_kernelonly':
+        if f_y is not None and self.transform_type != "nonlinear_kernelonly":
             rep_features = rep_features * in_features
         if weights is not None:
-            rep_features = weights[neighbors['neighbors_index']] * rep_features
-            reduction = 'sum'
+            rep_features = weights[neighbors["neighbors_index"]] * rep_features
+            reduction = "sum"
         else:
-            reduction = 'mean'
-        out_features = segment_csr(rep_features, neighbors[
-            'neighbors_row_splits'], reduce=reduction)
+            reduction = "mean"
+        out_features = segment_csr(rep_features, neighbors["neighbors_row_splits"], reduce=reduction)
         return out_features

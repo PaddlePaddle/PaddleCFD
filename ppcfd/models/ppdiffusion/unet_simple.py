@@ -18,7 +18,6 @@ from einops import rearrange
 from ppcfd.models.ppdiffusion import BaseModel
 from ppcfd.models.ppdiffusion.modules import get_time_embedder
 
-
 RELU_LEAK = 0.2
 
 

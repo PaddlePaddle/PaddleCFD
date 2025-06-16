@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from .base_process import BaseProcess  # isort:skip
 from .interpolation import Interpolation  # isort:skip
 from .forecasting import Forecasting  # isort:skip

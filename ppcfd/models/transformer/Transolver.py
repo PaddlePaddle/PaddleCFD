@@ -18,7 +18,6 @@
 import numpy as np
 import paddle
 
-
 ACTIVATION = {
     "gelu": paddle.nn.GELU,
     "tanh": paddle.nn.Tanh,

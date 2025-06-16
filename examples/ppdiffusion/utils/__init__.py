@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from .average_meter import AverageMeter  # isort:skip
 from .average_meter import AverageMeterDict  # isort:skip
 from .average_meter import AverageMeterDictList  # isort:skip

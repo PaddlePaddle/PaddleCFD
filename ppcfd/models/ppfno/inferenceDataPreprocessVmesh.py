@@ -20,7 +20,6 @@ from omegaconf import DictConfig
 
 
 class CSVConvert:
-
     def __init__(self, mesh_path, save_path, csvID, index, info):
         self.csv_data = pd.read_csv(os.path.join(mesh_path, csvID)).to_numpy()
         self.centroid = self.csv_data[:, -3:]
@@ -171,8 +170,6 @@ def main(cfg: DictConfig):
                 info = json.load(file)
 
             csv_trans = CSVConvert(mesh_path, save_path, csvID, index, info)
-            area = csv_trans.area
-            normal = csv_trans.normal
             csv_trans.save_volume_mesh()
             csv_trans.save_info()
 
