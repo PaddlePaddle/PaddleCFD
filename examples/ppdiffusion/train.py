@@ -6,6 +6,8 @@ from timeit import default_timer
 import hydra
 import numpy as np
 import paddle
+import paddle.distributed as dist
+import paddle.distributed.fleet as fleet
 from metrics import EnsembleMetrics
 from omegaconf import DictConfig
 from process import DYffusion
@@ -19,6 +21,7 @@ from utils import save_arrays_as_gif
 from utils import save_arrays_as_line_plot
 from utils import set_seed
 
+from ppcfd.models.ppdiffusion import auto_adapt_dataparallel
 from ppcfd.models.ppdiffusion.modules import LitEma
 
 
@@ -52,6 +55,13 @@ class Trainer:
         self.init_metric_fn()
         self.init_ema()
         self.init_meters()
+
+        self.world_size = dist.get_world_size()
+        if self.world_size > 1:
+            fleet.init(is_collective=True)
+            self.model_to_save = fleet.distributed_model(self.model_to_save)
+            self.model_to_save = auto_adapt_dataparallel(self.model_to_save, ["dropout_controller"])
+            self.optimizer = fleet.distributed_optimizer(self.optimizer)
 
     def init_model(self):
         if self.process == "interpolation":
@@ -129,17 +139,29 @@ class Trainer:
         dataloader_train = dataloaders["train"]
         dataloader_val = dataloaders["val"]
 
+        if self.cfg.TRAIN.enable_amp:
+            scaler = paddle.amp.GradScaler(init_loss_scaling=1024)
+
         self.model_to_save.train()
         for ep in range(self.resume_ep, self.cfg.TRAIN.epochs):
             t1 = default_timer()
             self.train_meter.reset()
             for i, data_dict in enumerate(dataloader_train):
-                preds, targets = self.process_obj.forward(data_dict)
+
+                with paddle.amp.auto_cast(enable=self.cfg.TRAIN.enable_amp, level="O1"):
+                    preds, targets = self.process_obj.forward(data_dict)
+
                 loss = self.process_obj.get_loss(preds, targets, self.loss_fn)
-                loss.backward()
+                (loss if not self.cfg.TRAIN.enable_amp else scaler.scale(loss)).backward()
+
                 if (i + 1) % self.accumulate_steps == 0 or (i + 1) == len(dataloader_train):
-                    self.optimizer.step()
+                    if self.cfg.TRAIN.enable_amp:
+                        scaler.step(self.optimizer)
+                        scaler.update()
+                    else:
+                        self.optimizer.step()
                     self.optimizer.clear_grad(set_to_zero=False)
+
                 self.train_meter.update({self.loss_name: loss})
 
             if self.scheduler is not None:
@@ -182,9 +204,7 @@ class Trainer:
     def visualize(self, metric_dict=None, preds=None, targets=None, extra_info=""):
         save_dir = os.path.join(self.cfg.EVAL.save_dir, "visual")
         if metric_dict is not None:
-            timesteps = self.cfg.EVAL.prediction_horizon
-            if self.process == "dyffusion":
-                timesteps += 1
+            timesteps = next(iter(metric_dict.values())).shape[0] + 1
             timesteps = range(1, timesteps)
             save_arrays_as_line_plot(
                 np.array(timesteps),
@@ -222,7 +242,6 @@ class Trainer:
                     if self.visual_metrics:
                         preds_mean = paddle.mean(preds_batch, axis=0)
                         self.visualize(metric_dict, preds_mean, targets_batch, extra_info=f"_{i}")
-                break
 
             if self.calc_ensemble_metrics:
                 self.get_ensemble_metrics(return_lst)
