@@ -1,26 +1,20 @@
-import itertools
 import os
+import vtk
 import random
-from typing import Optional
-from typing import Sequence
+import paddle
+import itertools
+import numpy as np
+
+from tqdm import tqdm
 from typing import Tuple
 from typing import Union
-
-import numpy as np
-import paddle
-import vtk
-from paddle.io import Dataset
-from sklearn.neighbors import NearestNeighbors
-from tqdm import tqdm
-
-from vtk.util.numpy_support import vtk_to_numpy
-
-from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
-
-import numpy as np
-import paddle
+from typing import Sequence
+from typing import Optional
 from scipy.spatial import cKDTree
+from sklearn.neighbors import NearestNeighbors
+from vtk.util.numpy_support import vtk_to_numpy
+from concurrent.futures import ThreadPoolExecutor
 
 
 def radius(
@@ -126,36 +120,23 @@ def radius_graph(
     return paddle.stack([row, col], axis=0)
 
 
-
 class Data:
-    def __init__(self, pos=None, x=None, y=None, edge_index=None, surf=None):
-        self.pos = pos  # 节点的坐标
-        self.x = x  # 节点特征
-        self.y = y  # 标签或目标值
-        self.edge_index = edge_index  # 边的索引
-        self.surf = surf  # 其他自定义属性，如 surf
-
-    def to(self, device):
-        # 将数据移动到指定设备（如GPU或CPU）
-        if self.pos is not None:
-            self.pos = self.pos.to(device)
-        if self.x is not None:
-            self.x = self.x.to(device)
-        if self.y is not None:
-            self.y = self.y.to(device)
-        if self.edge_index is not None:
-            self.edge_index = self.edge_index.to(device)
-        if self.surf is not None:
-            self.surf = self.surf.to(device)
-        return self
+    def __init__(self, pos=None, x=None, y=None, edge_index=None, surf=None, sample_name=None):
+        self.pos = pos
+        self.x = x
+        self.y = y
+        self.edge_index = edge_index
+        self.surf = surf
+        self.sample_name = sample_name
 
     def __repr__(self):
         return (
-            f"Data(x={self._format_attr(self.x)}, "
+            f"\nData(x={self._format_attr(self.x)}, "
             f"edge_index={self._format_attr(self.edge_index)}, "
             f"y={self._format_attr(self.y)}, "
             f"pos={self._format_attr(self.pos)}, "
-            f"surf={self._format_attr(self.surf)})"
+            f"surf={self._format_attr(self.surf)}, "
+            f"sample_name={self._format_attr(self.sample_name)})"
         )
 
     def _format_attr(self, attr):
@@ -202,19 +183,6 @@ def get_normal(unstructured_grid_data):
     normal_filter.SetComputeCellNormals(1)
     normal_filter.SetComputePointNormals(0)
     normal_filter.Update()
-    """
-    normal_filter.SetComputeCellNormals(0)
-    normal_filter.SetComputePointNormals(1)
-    normal_filter.Update()
-    #visualize_poly_data(poly_data, surface_filter, normal_filter)
-    poly_data.GetPointData().SetNormals(normal_filter.GetOutput().GetPointData().GetNormals())
-    p2c = vtk.vtkPointDataToCellData()
-    p2c.ProcessAllArraysOn()
-    p2c.SetInputData(poly_data)
-    p2c.Update()
-    unstructured_grid_data.GetCellData().SetNormals(p2c.GetOutput().GetCellData().GetNormals())
-    #visualize_poly_data(poly_data, surface_filter, p2c)
-    """
     unstructured_grid_data.GetCellData().SetNormals(
         normal_filter.GetOutput().GetCellData().GetNormals()
     )
@@ -288,7 +256,7 @@ def get_datalist(
     dataset = []
     mean_in, mean_out = 0, 0
     std_in, std_out = 0, 0
-    samples = samples[:20]
+
     for k, s in tqdm(enumerate(samples), total=len(samples), desc="Processing Samples"):
         if preprocessed and savedir is not None:
             save_path = os.path.join(savedir, s)
@@ -315,9 +283,7 @@ def get_datalist(
             points_velo = vtk_to_numpy(
                 unstructured_grid_data_velo.GetPoints().GetData()
             )
-            points_press = vtk_to_numpy(
-                unstructured_grid_data_press.GetPoints().GetData()
-            )
+            points_press = vtk_to_numpy(unstructured_grid_data_press.GetPoints().GetData())
             edges_press = get_edges(
                 unstructured_grid_data_press, points_press, cell_size=4
             )
@@ -385,7 +351,7 @@ def get_datalist(
                 ) / new_length
                 old_length = new_length
         data = Data(
-            pos=pos, x=x, y=y, surf=surf.astype(dtype="bool"), edge_index=edge_index
+            pos=pos, x=x, y=y, surf=surf.astype(dtype="bool"), edge_index=edge_index, sample_name=s
         )
         dataset.append(data)
     if norm and coef_norm is None:
@@ -455,6 +421,7 @@ def get_edge_index(pos, edges_press, edges_velo):
 #     num_hops, edge_index=data.edge_index, relabel_nodes=True)
 #     return Data(x=data.x[subset], y=data.y[idx], edge_index=sub_edge_index)
 
+
 def get_samples(root):
     folds = [f'param{i}' for i in range(9)]
     samples = []
@@ -466,13 +433,10 @@ def get_samples(root):
             if os.path.isdir(path):
                 fold_samples.append(os.path.join(fold, file))
         samples.append(fold_samples)
-    return samples  # 100 + 99 + 97 + 100 + 100 + 96 + 100 + 98 + 99 = 889 samples
-
-
+    return samples
 
 
 def get_induced_graph(data, idx, num_hops):
-    # 初始化节点集合和边集合
     subset = set([idx])
     current_layer_nodes = set([idx])
 
@@ -481,12 +445,10 @@ def get_induced_graph(data, idx, num_hops):
         for node in current_layer_nodes:
             neighbors.update(data.edge_index[1][data.edge_index[0] == node].numpy())
             neighbors.update(data.edge_index[0][data.edge_index[1] == node].numpy())
-        current_layer_nodes = neighbors - subset  # 去重
+        current_layer_nodes = neighbors - subset
         subset.update(current_layer_nodes)
 
     subset = paddle.to_tensor(list(subset), dtype="int64")
-
-    # 提取子图的边
     mask = paddle.to_tensor(
         [
             (i in subset) and (j in subset)
@@ -495,9 +457,9 @@ def get_induced_graph(data, idx, num_hops):
         dtype="bool",
     )
     sub_edge_index = data.edge_index[:, mask]
-
-    # 创建子图
     return Data(x=data.x[subset], y=data.y[idx], edge_index=sub_edge_index)
+
+
 def load_train_val_fold(args, preprocessed):
     samples = get_samples(args.data_dir)
     trainlst = []
@@ -506,7 +468,10 @@ def load_train_val_fold(args, preprocessed):
             continue
         trainlst += samples[i]
     vallst = samples[args.fold_id] if 0 <= args.fold_id < len(samples) else None
-
+    trainlst = sorted(trainlst)[:args.n_train]
+    vallst = sorted(vallst)[:args.n_eval]
+    print("n_train", len(trainlst))
+    print("n_valid", len(vallst))
     if preprocessed:
         print("use preprocessed data")
     print("loading data")
@@ -514,39 +479,27 @@ def load_train_val_fold(args, preprocessed):
                                             preprocessed=preprocessed)
     val_dataset = get_datalist(args.data_dir, vallst, coef_norm=coef_norm, savedir=args.save_dir,
                                preprocessed=preprocessed)
+    print("train_dataset[0]", train_dataset[0])
+    print("val_dataset[0]", val_dataset[0])
     print("load data finish")
     return train_dataset, val_dataset, coef_norm
 
 
-
 def pc_normalize(pc):
-    # 计算点云的中心点
     centroid = paddle.mean(pc, axis=0)
-    # 将点云平移到原点
     pc = pc - centroid
-    # 计算点云的最大距离
     m = paddle.max(paddle.sqrt(paddle.sum(pc**2, axis=1)))
-    # 将点云归一化
     pc = pc / m
     return pc
 
 
 def get_shape(data, max_n_point=8192, normalize=True, use_height=False):
-    # data 是一个包含 'surf' 和 'pos' 属性的 Data 对象
     surf_indices = paddle.nonzero(data.surf).squeeze().numpy().tolist()
-
-    # 对采样点数量进行限制
     if len(surf_indices) > max_n_point:
         surf_indices = np.array(random.sample(surf_indices, max_n_point))
-
-    # 获取指定点的坐标
     shape_pc = paddle.gather(data.pos, paddle.to_tensor(surf_indices, dtype="int64"))
-
-    # 如果需要，则对点云数据进行归一化
     if normalize:
         shape_pc = pc_normalize(shape_pc)
-
-    # 如果需要，则增加高度维度
     if use_height:
         gravity_dim = 1
         height_array = shape_pc[:, gravity_dim : gravity_dim + 1] - paddle.min(
@@ -561,8 +514,6 @@ def create_edge_index_radius(data, r, max_neighbors=32):
     data.edge_index = radius_graph(
         x=data.pos, r=r, loop=True, max_num_neighbors=max_neighbors
     )
-    # print(data)
-    # print(f'r = {r}, #edges = {data.edge_index.size(1)}')
     return data
 
 
@@ -576,34 +527,18 @@ class GraphDataset(paddle.io.Dataset):
         self.use_height = use_height
         self._indices: Optional[Sequence] = None
         self.fake_data = paddle.ones([3682,3])
-        # if not use_cfd_mesh:
-        #     assert (
-        #         r is not None
-        #     ), "Parameter 'r' must be provided when 'use_cfd_mesh' is False."
-        #     for i in tqdm(range(len(self.datalist)), desc="Processing neighbors"):
-        #         self.datalist[i] = create_edge_index_radius(self.datalist[i], r)
-        for i in tqdm(range(len(self.datalist)), desc="Processing neighbors"):
+        for i in tqdm(range(len(self.datalist)), desc="Caching Samples"):
             data = self.datalist[i]
-            data, shape = self.get(self.indices()[i])
+            data, _ = self.get(self.indices()[i])
             data = data if self.transform is None else self.transform(data)
-            self.datalist[i] = [data.x, data.y, data.surf]
+            self.datalist[i] = [data.x, data.y, data.surf, data.sample_name]
 
     def __len__(self):
-        # 返回datalist的长度
         return len(self.datalist)
 
     def __getitem__(
         self, idx: Union[int, np.integer, paddle.Tensor, np.ndarray]
     ) -> Tuple["Data", paddle.Tensor]:
-        """获取数据项或数据子集，支持单个索引或索引切片。"""
-        # if (
-        #     isinstance(idx, (int, np.integer))
-        #     or (isinstance(idx, paddle.Tensor) and idx.dim() == 0)
-        #     or (isinstance(idx, np.ndarray) and np.isscalar(idx))
-        # ):
-        #     data, shape = self.get(self.indices()[idx])
-        #     data = data if self.transform is None else self.transform(data)
-        # return data, shape
         return self.datalist[idx]
 
     def get(self, idx):
@@ -612,15 +547,13 @@ class GraphDataset(paddle.io.Dataset):
         return data, shape
 
     def indices(self) -> Sequence:
-        """返回数据集的索引列表。"""
         return range(len(self.datalist)) if self._indices is None else self._indices
 
 
 if __name__ == '__main__':
-    import numpy as np
     file_name = '1a0bc9ab92c915167ae33d942430658c'
-    root = '/workspace/transolver/transolver_torch/Car-Design-ShapeNetCar/data/training_data'
-    save_path = '/workspace/transolver/transolver_torch/Car-Design-ShapeNetCar/data/preprocessed_data/param0/' + file_name
+    root = './data/training_data'
+    save_path = './data/preprocessed_data/param0/' + file_name
     file_name_press = 'param0/' + file_name + '/quadpress_smpl.vtk'
     file_name_velo = 'param0/' + file_name + '/hexvelo_smpl.vtk'
     file_name_press = os.path.join(root, file_name_press)
