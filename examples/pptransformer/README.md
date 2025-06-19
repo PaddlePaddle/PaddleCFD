@@ -1,25 +1,29 @@
+# 1. Speed
 
-# Parrallel
-The parallel efficiency achieved 90.2% in the data parallel computing experiment.
+DataSet  | torch  | paddle 
+-- | -- | -- 
+ShapeNet-Car | 12 hours | 2 hours
+DrivAerNet++ | TODO | TODO
+
+- The parallel efficiency achieved 90.2% in the data parallel computing experiment.
 
 
-# datadownload
-- shapenet-car : https://dataset.bj.bcebos.com/PaddleScience/DNNFluid-Car/ShapeNet-Car/mlcfd_data.zip
-- drivaernet++(downsample) : https://dataset.bj.bcebos.com/PaddleScience/DNNFluid-Car/DrivAer%2B%2B/drivaer_pp.tar
 
+# 2. Percision
+- ShapeNet-Car
 
-# Percision
-
-## ShapeNet-Car
 physics  | l2 torch  | l2 paddle 
 -- | -- | -- 
 surf | 0.0769  | 0.768
 volume | 0.0211 | 0.0253
 
-## DrivAerNet++ (TODO)
+- DrivAerNet++ (TODO)
 
 
-# Train Now
+# 3. Train Now
+## datadownload
+- shapenet-car : https://dataset.bj.bcebos.com/PaddleScience/DNNFluid-Car/ShapeNet-Car/mlcfd_data.zip
+- drivaernet++(downsample) : https://dataset.bj.bcebos.com/PaddleScience/DNNFluid-Car/DrivAer%2B%2B/drivaer_pp.tar
 
 ## ShapeNet-Car
 ```
