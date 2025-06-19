@@ -407,12 +407,6 @@ def get_edge_index(pos, edges_press, edges_velo):
     return edge_index
 
 
-# def get_induced_graph(data, idx, num_hops):
-#     subset, sub_edge_index, _, _ = k_hop_subgraph(node_idx=idx, num_hops=
-#     num_hops, edge_index=data.edge_index, relabel_nodes=True)
-#     return Data(x=data.x[subset], y=data.y[idx], edge_index=sub_edge_index)
-
-
 def get_samples(root):
     folds = [f'param{i}' for i in range(9)]
     samples = []
