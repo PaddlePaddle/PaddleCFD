@@ -54,10 +54,7 @@ def radius(
         else y
     )
 
-    # 使用 cKDTree 创建 KD 树（只支持 CPU）
     tree = cKDTree(x.numpy())
-
-    # 执行多线程查询
     def query_neighbors(idx):
         _, indices = tree.query(
             y[idx].numpy(), k=max_num_neighbors, distance_upper_bound=r + 1e-8
@@ -90,10 +87,7 @@ def radius_graph(
     batch_size: Optional[int] = None,
 ) -> paddle.Tensor:
     assert flow in ["source_to_target", "target_to_source"]
-    # 确保flow参数的值是"source_to_target"或"target_to_source"
-    assert flow in ["source_to_target", "target_to_source"]
 
-    # 使用radius函数计算边索引
     edge_index = radius(
         x,
         x,
@@ -105,18 +99,15 @@ def radius_graph(
         batch_size,
     )
 
-    # 根据flow参数的值设置行和列
     if flow == "source_to_target":
         row, col = edge_index[1], edge_index[0]
     else:
         row, col = edge_index[0], edge_index[1]
 
-    # 如果不允许自环，则过滤掉自环
     if not loop:
         mask = row != col
         row, col = row[mask], col[mask]
 
-    # 将行和列堆叠成一个新的Tensor
     return paddle.stack([row, col], axis=0)
 
 
