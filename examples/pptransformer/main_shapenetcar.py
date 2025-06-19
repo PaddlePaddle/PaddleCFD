@@ -3,7 +3,6 @@ import os
 from re import M
 
 import paddle
-# paddle.set_device('cpu')
 from ppcfd.data import GraphDataset
 from ppcfd.data.shapenetcar_datamodule import load_train_val_fold
 from ppcfd.networks.Transolver_orig import Model, RandomDataset
@@ -17,15 +16,12 @@ import numpy as np
 import paddle
 from paddle.io import DataLoader
 from tqdm import tqdm
-from ppcfd.utils.profiler import init_profiler, update_profiler
-import meshio
+# from ppcfd.utils.profiler import init_profiler, update_profiler
+# import meshio
 paddle.seed(1024)
 np.random.seed(1024)
 
 def get_nb_trainable_params(model):
-    """
-    Return the number of trainable parameters
-    """
     model_parameters = filter(lambda p: not p.stop_gradient, model.parameters())
     return sum([np.prod(tuple(p.shape)) for p in model_parameters])
 
