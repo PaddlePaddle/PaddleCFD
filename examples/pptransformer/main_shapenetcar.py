@@ -3,10 +3,15 @@ import os
 from re import M
 
 import paddle
+from pathlib import Path
+import scipy
+from sklearn.isotonic import spearmanr
+# paddle.set_device('cpu')
 from ppcfd.data import GraphDataset
 from ppcfd.data.shapenetcar_datamodule import load_train_val_fold
-from ppcfd.networks.Transolver_orig import Model, RandomDataset
-
+from ppcfd.networks.Transolver_orig import Model
+from datetime import datetime
+from drag_coefficient import cal_coefficient
 
 import json
 import os
@@ -16,10 +21,10 @@ import numpy as np
 import paddle
 from paddle.io import DataLoader
 from tqdm import tqdm
-# from ppcfd.utils.profiler import init_profiler, update_profiler
-# import meshio
-paddle.seed(1024)
-np.random.seed(1024)
+from ppcfd.utils.profiler import init_profiler, update_profiler
+import meshio
+paddle.seed(42)
+np.random.seed(42)
 
 def get_nb_trainable_params(model):
     model_parameters = filter(lambda p: not p.stop_gradient, model.parameters())
@@ -57,8 +62,8 @@ def train(device, model, train_loader, optimizer, scheduler, reg=1, epoch=0, pro
 def test(device, model, test_loader, coef_norm, enable_test=False):
     model.eval()
     criterion_func = paddle.nn.MSELoss(reduction="none")
-    losses_press = []
-    losses_velo = []
+    losses_press, losses_velo, losses_cd, p_orig, v_orig = [], [], [], [], []
+    cd_pred_list, cd_true_list = [], []
     for i, data in enumerate(test_loader):
         inputs, targets, surf, sample_name = data
         B = inputs.shape[0]
@@ -66,18 +71,29 @@ def test(device, model, test_loader, coef_norm, enable_test=False):
         p_pred = paddle.stack([out[j][surf[j], -1:] for j in range(B)], axis=0)
         p_true = paddle.stack([targets[j][surf[j], -1:] for j in range(B)], axis=0)
 
+        eps = 0.
+        # inputs_orig = (inputs * (coef_norm[1] + eps) + coef_norm[0])
+        out_orig = (out * (coef_norm[3] + eps) + coef_norm[2])
+        targets_orig = (targets *(coef_norm[3] + eps) + coef_norm[2])
+        p_pred_orig = paddle.stack([out_orig[j][surf[j], -1:] for j in range(B)], axis=0)
+        p_true_orig = paddle.stack([targets_orig[j][surf[j], -1:] for j in range(B)], axis=0)
+
+        v_pred_orig = paddle.stack([out_orig[j][:, :-1] for j in range(B)], axis=0)
+        v_true_orig = paddle.stack([targets_orig[j][:, :-1] for j in range(B)], axis=0)
+
+        loss_press_orig = paddle.linalg.norm(p_pred_orig - p_true_orig) / paddle.linalg.norm(p_true_orig)
+        loss_velo_orig = paddle.linalg.norm(v_true_orig - v_pred_orig) / paddle.linalg.norm(v_pred_orig)
+        # import pdb;pdb.set_trace()
+
+        # cd_pred = cal_coefficient(Path(args.data_dir) / Path(sample_name[0]), p_pred_orig[0], v_pred_orig[0])
+        # cd_true = cal_coefficient(Path(args.data_dir) / Path(sample_name[0]), p_true_orig[0], v_true_orig[0])
+        # cd_pred_list.append(cd_pred)
+        # cd_true_list.append(cd_true)
+        # loss_cd = abs(cd_pred - cd_true) / abs(cd_true)
+
         if enable_test == True:
-            inputs_orig = (inputs * (coef_norm[1] + 1e-08) + coef_norm[0])
-            out_orig = (out * (coef_norm[3] + 1e-08) + coef_norm[2])
-            targets_orig = (targets *(coef_norm[3] + 1e-08) + coef_norm[2])
-            p_pred_orig = paddle.stack([out_orig[j][surf[j], -1:] for j in range(B)], axis=0)
-            p_true_orig = paddle.stack([targets_orig[j][surf[j], -1:] for j in range(B)], axis=0)
-
-            v_pred_orig = paddle.stack([out_orig[j][:, :-1] for j in range(B)], axis=0)
-            v_true_orig = paddle.stack([targets_orig[j][:, :-1] for j in range(B)], axis=0)
-
-            loss_press = paddle.linalg.norm(p_pred_orig - p_true_orig) / paddle.linalg.norm(p_true_orig)
-            loss_velo = paddle.linalg.norm(v_true_orig - v_pred_orig) / paddle.linalg.norm(v_pred_orig)  
+            print(f"{i} {sample_name[0]}, loss_velo = {loss_velo_orig.item():.4f}, loss_press = {loss_press_orig.item():.4f}")
+            # print(f"{i} {sample_name[0]}, loss_velo = {loss_velo_orig.item():.4f}, loss_press = {loss_press_orig.item():.4f}, loss_cd = {loss_cd.item():.4f}")
         # centroid = paddle.stack([inputs_orig[j][surf[j], :3] for j in range(B)], axis=0)
         # for j in range(B):
         #     cells = [('vertex', np.arange(tuple(centroid[j].shape)[0]).reshape(-1, 1))]
@@ -92,21 +108,29 @@ def test(device, model, test_loader, coef_norm, enable_test=False):
         #         )
         #     print(f'save file : ./metrics/eval_[{sample_name[j]}].vtk')
         #     mesh.write(f'./metrics/eval_{j}.vtk')
-        else:
-            loss_press = criterion_func(p_pred, p_true).mean()
-            loss_velo_var = criterion_func(out[:, :, :-1], targets[:, :, :-1]).mean()
-            loss_velo = loss_velo_var.mean()
+        loss_press = criterion_func(p_pred, p_true).mean()
+        loss_velo_var = criterion_func(out[:, :, :-1], targets[:, :, :-1]).mean()
+        loss_velo = loss_velo_var.mean()
         losses_press.append(loss_press.item())
         losses_velo.append(loss_velo.item())
-        print(f"loss_velo {i}\t = {loss_velo.item():.4f}, loss_press = {loss_press.item():.4f}")
-    return np.mean(losses_press), np.mean(losses_velo)
+        p_orig.append(loss_press_orig)
+        v_orig.append(loss_velo_orig)
+
+        # losses_cd.append(loss_cd)
+
+    cd_pred_list = np.array(cd_pred_list)
+    cd_true_list = np.array(cd_true_list)
+    # spear = scipy.stats.spearmanr(cd_true_list, cd_pred_list)[0]
+    spear = 0.0
+    # cd_mre = np.mean(losses_cd)
+    cd_mre = 0.0
+    return np.mean(losses_press), np.mean(losses_velo), np.mean(p_orig), np.mean(v_orig), spear, cd_mre
 
 
-class NumpyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return json.JSONEncoder.default(self, obj)
+def save_checkpoint(path, epoch, model):
+    model_path = os.path.join(path, f"model_{epoch+1}.pdparams")
+    state_dict = {k: v.cpu() for k, v in model.state_dict().items()}
+    paddle.save(state_dict, model_path)
 
 
 def main(
@@ -133,74 +157,48 @@ def main(
 
     start = time.time()
     train_loss, val_loss = 100000.0, 100000.0
-    pbar_train = tqdm(range(hparams["nb_epochs"]), position=0)
     prof = init_profiler(False)
     print("Start training...")
     custom_collate_fn = None
     train_loss_list, val_loss_list = [], []
-
+    val_loader = DataLoader(val_dataset, batch_size=1, collate_fn=custom_collate_fn)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=hparams["batch_size"],
+        shuffle=True,
+        drop_last=True,
+        collate_fn=custom_collate_fn,
+    )
 
     if enable_test:
         print("testing...")
-        state_dict = paddle.load("./metrics/model_200.pdparams")
+        state_dict = paddle.load("./metrics/Transolver/20250619_091023/model_131.pdparams")
         model.set_state_dict(state_dict)
-        val_loader = DataLoader(val_dataset, batch_size=1, collate_fn=custom_collate_fn)
-        loss_press, loss_velo = test(device, model, val_loader, coef_norm, enable_test=True)
-        print(f"loss_velo = {loss_velo.item():.4f}, loss_press = {loss_press.item():.4f}")
+        loss_press, loss_velo, p_orig, v_orig, spearmanr, loss_cd = test(device, model, val_loader, coef_norm, enable_test=True)
+        print(f"val_loss = {(loss_press + reg*loss_velo):.4f}, Spearman's Rank Correlations = {spearmanr:.4f}, loss_velo = {v_orig.item():.4f}, loss_press = {p_orig.item():.4f}, loss_cd = {loss_cd:.4f}")
         return
 
+    pbar_train = tqdm(range(hparams["nb_epochs"]), position=0)
     for epoch in pbar_train:
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=hparams["batch_size"],
-            shuffle=True,
-            drop_last=True,
-            collate_fn=custom_collate_fn,
-        )
         loss_velo, loss_press = train(
             device, model, train_loader, optimizer, lr_scheduler, reg=reg, epoch=epoch, prof=prof
         )
         train_loss = loss_velo + reg * loss_press
-        del train_loader
-        if val_iter is not None and (
-            epoch == hparams["nb_epochs"] - 1 or epoch % val_iter == 0 or epoch > hparams["nb_epochs"] - 15
-        ):
-            val_loader = DataLoader(
-                val_dataset, batch_size=1, collate_fn=custom_collate_fn
-            )
-            loss_velo, loss_press = test(device, model, val_loader, coef_norm)
+        if epoch == hparams["nb_epochs"] - 1 or epoch % val_iter == 0:
+            loss_press, loss_velo, p_orig, v_orig, spearmanr, loss_cd = test(device, model, val_loader, coef_norm, enable_test=True)
+            print(f"val_loss = {(loss_press + reg*loss_velo):.4f}, Spearman's Rank Correlations = {spearmanr:.4f}, loss_velo = {v_orig.item():.4f}, loss_press = {p_orig.item():.4f}, loss_cd = {loss_cd:.4f}")
             val_loss = loss_velo + reg * loss_press
-            del val_loader
-            pbar_train.set_postfix(train_loss=train_loss, val_loss=val_loss)
-        else:
-            pbar_train.set_postfix(train_loss=train_loss)
+            save_checkpoint(path, epoch, model)
+        pbar_train.set_postfix(train_loss=train_loss, val_loss=val_loss)
         train_loss_list.append(train_loss.item())
         val_loss_list.append(val_loss.item())
-    np.savetxt(f"./metrics/temp/train_loss_{hparams['nb_epochs']}.txt", train_loss_list)
-    np.savetxt(f"./metrics/temp/val_loss_{hparams['nb_epochs']}.txt", val_loss_list)
+    np.savetxt(f"{path}/train_loss_{hparams['nb_epochs']}.txt", train_loss_list)
+    np.savetxt(f"{path}/val_loss_{hparams['nb_epochs']}.txt", val_loss_list)
     end = time.time()
     time_elapsed = end - start
     params_model = float(get_nb_trainable_params(model))
     print("Number of parameters:", params_model)
     print("Time elapsed: {0:.2f} seconds".format(time_elapsed))
-
-    model_path = os.path.join(path, f"model_{hparams['nb_epochs']}.pdparams")
-    state_dict = {k: v.cpu() for k, v in model.state_dict().items()}
-    paddle.save(state_dict, model_path)
-    
-    if val_iter is not None:
-        log_path = os.path.join(path, f"log_{hparams['nb_epochs']}.json")
-        with open(log_path, "a") as f:
-            log_data = {
-                "nb_parameters": params_model,
-                "time_elapsed": time_elapsed,
-                "hparams": hparams,
-                "train_loss": train_loss,
-                "val_loss": val_loss,
-                "coef_norm": list(coef_norm),
-            }
-            json.dump(log_data, f, indent=4, cls=NumpyEncoder)
-
     return model
 
 
@@ -249,7 +247,6 @@ if args.cfd_model == "Transolver":
         unified_pos=False,
     )
     print("args.cinn", args.cinn)
-    state_dict = np.load("/workspace/transolver/transolver_torch/Car-Design-ShapeNetCar/0617_model.npy", allow_pickle=True).item()
     state_dict = {k: paddle.to_tensor(v).astype(paddle.float32) for k, v in state_dict["model_state"].items()}
     for k in state_dict.keys():
         if "weight" in k and "ln" not in k:
@@ -263,10 +260,11 @@ if args.cfd_model == "Transolver":
         paddle.framework.core._set_prim_all_enabled(True)
         model = paddle.jit.to_static(model, full_graph=True, backend='CINN', input_spec = [paddle.static.InputSpec(shape=[1, None, 7], dtype='float32')])
 
-path = f"metrics/{args.cfd_model}/{args.fold_id}/{args.nb_epochs}_{args.weight}"
-
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+path = f"metrics/{args.cfd_model}/{timestamp}"
 if not os.path.exists(path):
     os.makedirs(path)
+
 model = main(
     device,
     train_ds,
