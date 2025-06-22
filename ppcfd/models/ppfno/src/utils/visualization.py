@@ -1,17 +1,16 @@
 import io
+import open3d as o3d
+import numpy as np
 from typing import Union
-
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import numpy as np
-import open3d as o3d
 from matplotlib import cm
 from PIL import Image
 
 
-def fig_to_numpy(fig: mpl.figure.Figure) -> np.ndarray:
+def fig_to_numpy(fig: mpl.figure.Figure) ->np.ndarray:
     buf = io.BytesIO()
-    fig.savefig(buf, format="png")
+    fig.savefig(buf, format='png')
     buf.seek(0)
     im = Image.open(buf)
     im = np.array(im)
@@ -26,6 +25,7 @@ def fig_to_numpy(fig: mpl.figure.Figure) -> np.ndarray:
 
 
 class MplColorHelper:
+
     def __init__(self, cmap_name, start_val, stop_val):
         self.cmap_name = cmap_name
         self.cmap = plt.get_cmap(cmap_name)
@@ -36,12 +36,11 @@ class MplColorHelper:
         return self.scalarMap.to_rgba(val)[:, 0:3]
 
 
-def vis_pressure(mesh_path, pressures, colormap="plasma", eps=0.5):
+def vis_pressure(mesh_path, pressures, colormap='plasma', eps=0.5):
     mesh = o3d.io.read_triangle_mesh(mesh_path)
     color_mapper = MplColorHelper(colormap, pressures.min(), pressures.max())
-    mesh.vertex_colors = o3d.utility.Vector3dVector(
-        color_mapper.get_rgb(pressures[0, :])
-    )
+    mesh.vertex_colors = o3d.utility.Vector3dVector(color_mapper.get_rgb(
+        pressures[0, :]))
     meshes = [mesh]
     if pressures.shape[0] > 1:
         min_b = np.asarray(mesh.get_min_bound())
@@ -50,8 +49,7 @@ def vis_pressure(mesh_path, pressures, colormap="plasma", eps=0.5):
         for j in range(1, pressures.shape[0]):
             new_mesh = o3d.io.read_triangle_mesh(mesh_path)
             new_mesh.translate(j * translation)
-            new_mesh.vertex_colors = o3d.utility.Vector3dVector(
-                color_mapper.get_rgb(pressures[j, :])
-            )
+            new_mesh.vertex_colors = o3d.utility.Vector3dVector(color_mapper
+                .get_rgb(pressures[j, :]))
             meshes.append(new_mesh)
     o3d.visualization.draw_geometries(meshes)

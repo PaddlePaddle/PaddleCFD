@@ -1,5 +1,4 @@
 class AverageMeter:
-
     def __init__(self):
         self.reset()
 
@@ -16,8 +15,8 @@ class AverageMeter:
         self.avg = self.sum / self.count
 
 
+# Average Meter with dictionary values
 class AverageMeterDict:
-
     def __init__(self):
         self.reset()
 

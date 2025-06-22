@@ -1,17 +1,14 @@
-from functools import partialmethod
-
 import paddle
-
-from ..layers.fno_block import FNOBlocks
-from ..layers.mlp import MLP
-
+from functools import partialmethod
+from ..layers.spectral_convolution import SpectralConv
 # from ..layers.spherical_convolution import SphericalConv
 from ..layers.padding import DomainPadding
-from ..layers.spectral_convolution import SpectralConv
+from ..layers.fno_block import FNOBlocks
+from ..layers.mlp import MLP
 from .base_model import BaseModel
 
 
-class FNO(BaseModel, name="FNO"):
+class FNO(BaseModel, name='FNO'):
     """N-Dimensional Fourier Neural Operator
 
     Parameters
@@ -90,40 +87,17 @@ class FNO(BaseModel, name="FNO"):
         by default 'forward'
     """
 
-    def __init__(
-        self,
-        n_modes,
-        hidden_channels,
-        in_channels=3,
-        out_channels=1,
-        lifting_channels=256,
-        projection_channels=256,
-        n_layers=4,
-        output_scaling_factor=None,
-        max_n_modes=None,
-        fno_block_precision="full",
-        use_mlp=False,
-        mlp_dropout=0,
-        mlp_expansion=0.5,
-        non_linearity=paddle.nn.functional.gelu,
-        stabilizer=None,
-        norm=None,
-        preactivation=False,
-        fno_skip="linear",
-        mlp_skip="soft-gating",
-        separable=False,
-        factorization=None,
-        rank=1.0,
-        joint_factorization=False,
-        fixed_rank_modes=False,
-        implementation="factorized",
-        decomposition_kwargs=dict(),
-        domain_padding=None,
-        domain_padding_mode="one-sided",
-        fft_norm="forward",
-        SpectralConv=SpectralConv,
-        **kwargs
-    ):
+    def __init__(self, n_modes, hidden_channels, in_channels=3,
+        out_channels=1, lifting_channels=256, projection_channels=256,
+        n_layers=4, output_scaling_factor=None, max_n_modes=None,
+        fno_block_precision='full', use_mlp=False, mlp_dropout=0,
+        mlp_expansion=0.5, non_linearity=paddle.nn.functional.gelu,
+        stabilizer=None, norm=None, preactivation=False, fno_skip='linear',
+        mlp_skip='soft-gating', separable=False, factorization=None, rank=
+        1.0, joint_factorization=False, fixed_rank_modes=False,
+        implementation='factorized', decomposition_kwargs=dict(),
+        domain_padding=None, domain_padding_mode='one-sided', fft_norm=
+        'forward', SpectralConv=SpectralConv, **kwargs):
         super().__init__()
         self.n_dim = len(n_modes)
         self._n_modes = n_modes
@@ -139,24 +113,19 @@ class FNO(BaseModel, name="FNO"):
         self.factorization = factorization
         self.fixed_rank_modes = fixed_rank_modes
         self.decomposition_kwargs = decomposition_kwargs
-        self.fno_skip = (fno_skip,)
-        self.mlp_skip = (mlp_skip,)
+        self.fno_skip = fno_skip,
+        self.mlp_skip = mlp_skip,
         self.fft_norm = fft_norm
         self.implementation = implementation
         self.separable = separable
         self.preactivation = preactivation
         self.fno_block_precision = fno_block_precision
-        if domain_padding is not None and (
-            isinstance(domain_padding, list)
-            and sum(domain_padding) > 0
-            or isinstance(domain_padding, (float, int))
-            and domain_padding > 0
-        ):
-            self.domain_padding = DomainPadding(
-                domain_padding=domain_padding,
-                padding_mode=domain_padding_mode,
-                output_scaling_factor=output_scaling_factor,
-            )
+        if domain_padding is not None and (isinstance(domain_padding, list) and
+            sum(domain_padding) > 0 or isinstance(domain_padding, (float,
+            int)) and domain_padding > 0):
+            self.domain_padding = DomainPadding(domain_padding=
+                domain_padding, padding_mode=domain_padding_mode,
+                output_scaling_factor=output_scaling_factor)
         else:
             self.domain_padding = None
         self.domain_padding_mode = domain_padding_mode
@@ -164,58 +133,31 @@ class FNO(BaseModel, name="FNO"):
             if isinstance(output_scaling_factor, (float, int)):
                 output_scaling_factor = [output_scaling_factor] * self.n_layers
         self.output_scaling_factor = output_scaling_factor
-        self.fno_blocks = FNOBlocks(
-            in_channels=hidden_channels,
-            out_channels=hidden_channels,
-            n_modes=self.n_modes,
-            output_scaling_factor=output_scaling_factor,
-            use_mlp=use_mlp,
-            mlp_dropout=mlp_dropout,
-            mlp_expansion=mlp_expansion,
-            non_linearity=non_linearity,
-            stabilizer=stabilizer,
-            norm=norm,
-            preactivation=preactivation,
-            fno_skip=fno_skip,
-            mlp_skip=mlp_skip,
-            max_n_modes=max_n_modes,
-            fno_block_precision=fno_block_precision,
-            rank=rank,
-            fft_norm=fft_norm,
-            fixed_rank_modes=fixed_rank_modes,
-            implementation=implementation,
-            separable=separable,
-            factorization=factorization,
-            decomposition_kwargs=decomposition_kwargs,
-            joint_factorization=joint_factorization,
-            SpectralConv=SpectralConv,
-            n_layers=n_layers,
-            **kwargs
-        )
+        self.fno_blocks = FNOBlocks(in_channels=hidden_channels,
+            out_channels=hidden_channels, n_modes=self.n_modes,
+            output_scaling_factor=output_scaling_factor, use_mlp=use_mlp,
+            mlp_dropout=mlp_dropout, mlp_expansion=mlp_expansion,
+            non_linearity=non_linearity, stabilizer=stabilizer, norm=norm,
+            preactivation=preactivation, fno_skip=fno_skip, mlp_skip=
+            mlp_skip, max_n_modes=max_n_modes, fno_block_precision=
+            fno_block_precision, rank=rank, fft_norm=fft_norm,
+            fixed_rank_modes=fixed_rank_modes, implementation=
+            implementation, separable=separable, factorization=
+            factorization, decomposition_kwargs=decomposition_kwargs,
+            joint_factorization=joint_factorization, SpectralConv=
+            SpectralConv, n_layers=n_layers, **kwargs)
         if self.lifting_channels:
-            self.lifting = MLP(
-                in_channels=in_channels,
-                out_channels=self.hidden_channels,
-                hidden_channels=self.lifting_channels,
-                n_layers=2,
-                n_dim=self.n_dim,
-            )
+            self.lifting = MLP(in_channels=in_channels, out_channels=self.
+                hidden_channels, hidden_channels=self.lifting_channels,
+                n_layers=2, n_dim=self.n_dim)
         else:
-            self.lifting = MLP(
-                in_channels=in_channels,
-                out_channels=self.hidden_channels,
-                hidden_channels=self.hidden_channels,
-                n_layers=1,
-                n_dim=self.n_dim,
-            )
-        self.projection = MLP(
-            in_channels=self.hidden_channels,
-            out_channels=out_channels,
-            hidden_channels=self.projection_channels,
-            n_layers=2,
-            n_dim=self.n_dim,
-            non_linearity=non_linearity,
-        )
+            self.lifting = MLP(in_channels=in_channels, out_channels=self.
+                hidden_channels, hidden_channels=self.hidden_channels,
+                n_layers=1, n_dim=self.n_dim)
+        self.projection = MLP(in_channels=self.hidden_channels,
+            out_channels=out_channels, hidden_channels=self.
+            projection_channels, n_layers=2, n_dim=self.n_dim,
+            non_linearity=non_linearity)
 
     def forward(self, x, output_shape=None, **kwargs):
         """TFNO's forward pass
@@ -238,7 +180,8 @@ class FNO(BaseModel, name="FNO"):
         if self.domain_padding is not None:
             x = self.domain_padding.pad(x)
         for layer_idx in range(self.n_layers):
-            x = self.fno_blocks(x, layer_idx, output_shape=output_shape[layer_idx])
+            x = self.fno_blocks(x, layer_idx, output_shape=output_shape[
+                layer_idx])
         if self.domain_padding is not None:
             x = self.domain_padding.unpad(x)
         x = self.projection(x)
@@ -265,68 +208,31 @@ class FNO1d(FNO):
         number of Fourier modes to keep along the height
     """
 
-    def __init__(
-        self,
-        n_modes_height,
-        hidden_channels,
-        in_channels=3,
-        out_channels=1,
-        lifting_channels=256,
-        projection_channels=256,
-        max_n_modes=None,
-        fno_block_precision="full",
-        n_layers=4,
-        output_scaling_factor=None,
-        non_linearity=paddle.nn.functional.gelu,
-        stabilizer=None,
-        use_mlp=False,
-        mlp_dropout=0,
-        mlp_expansion=0.5,
-        norm=None,
-        skip="soft-gating",
-        separable=False,
-        preactivation=False,
-        factorization=None,
-        rank=1.0,
-        joint_factorization=False,
-        fixed_rank_modes=False,
-        implementation="factorized",
-        decomposition_kwargs=dict(),
-        domain_padding=None,
-        domain_padding_mode="one-sided",
-        fft_norm="forward",
-        **kwargs
-    ):
-        super().__init__(
-            n_modes=(n_modes_height,),
-            hidden_channels=hidden_channels,
-            in_channels=in_channels,
-            out_channels=out_channels,
-            lifting_channels=lifting_channels,
-            projection_channels=projection_channels,
-            n_layers=n_layers,
-            output_scaling_factor=output_scaling_factor,
-            non_linearity=non_linearity,
-            stabilizer=stabilizer,
-            use_mlp=use_mlp,
-            mlp_dropout=mlp_dropout,
-            mlp_expansion=mlp_expansion,
-            max_n_modes=max_n_modes,
-            fno_block_precision=fno_block_precision,
-            norm=norm,
-            skip=skip,
-            separable=separable,
-            preactivation=preactivation,
-            factorization=factorization,
-            rank=rank,
-            joint_factorization=joint_factorization,
-            fixed_rank_modes=fixed_rank_modes,
-            implementation=implementation,
-            decomposition_kwargs=decomposition_kwargs,
-            domain_padding=domain_padding,
-            domain_padding_mode=domain_padding_mode,
-            fft_norm=fft_norm,
-        )
+    def __init__(self, n_modes_height, hidden_channels, in_channels=3,
+        out_channels=1, lifting_channels=256, projection_channels=256,
+        max_n_modes=None, fno_block_precision='full', n_layers=4,
+        output_scaling_factor=None, non_linearity=paddle.nn.functional.gelu,
+        stabilizer=None, use_mlp=False, mlp_dropout=0, mlp_expansion=0.5,
+        norm=None, skip='soft-gating', separable=False, preactivation=False,
+        factorization=None, rank=1.0, joint_factorization=False,
+        fixed_rank_modes=False, implementation='factorized',
+        decomposition_kwargs=dict(), domain_padding=None,
+        domain_padding_mode='one-sided', fft_norm='forward', **kwargs):
+        super().__init__(n_modes=(n_modes_height,), hidden_channels=
+            hidden_channels, in_channels=in_channels, out_channels=
+            out_channels, lifting_channels=lifting_channels,
+            projection_channels=projection_channels, n_layers=n_layers,
+            output_scaling_factor=output_scaling_factor, non_linearity=
+            non_linearity, stabilizer=stabilizer, use_mlp=use_mlp,
+            mlp_dropout=mlp_dropout, mlp_expansion=mlp_expansion,
+            max_n_modes=max_n_modes, fno_block_precision=
+            fno_block_precision, norm=norm, skip=skip, separable=separable,
+            preactivation=preactivation, factorization=factorization, rank=
+            rank, joint_factorization=joint_factorization, fixed_rank_modes
+            =fixed_rank_modes, implementation=implementation,
+            decomposition_kwargs=decomposition_kwargs, domain_padding=
+            domain_padding, domain_padding_mode=domain_padding_mode,
+            fft_norm=fft_norm)
         self.n_modes_height = n_modes_height
 
 
@@ -343,69 +249,31 @@ class FNO2d(FNO):
         number of Fourier modes to keep along the height
     """
 
-    def __init__(
-        self,
-        n_modes_height,
-        n_modes_width,
-        hidden_channels,
-        in_channels=3,
-        out_channels=1,
-        lifting_channels=256,
-        projection_channels=256,
-        n_layers=4,
-        output_scaling_factor=None,
-        max_n_modes=None,
-        fno_block_precision="full",
-        non_linearity=paddle.nn.functional.gelu,
-        stabilizer=None,
-        use_mlp=False,
-        mlp_dropout=0,
-        mlp_expansion=0.5,
-        norm=None,
-        skip="soft-gating",
-        separable=False,
-        preactivation=False,
-        factorization=None,
-        rank=1.0,
-        joint_factorization=False,
-        fixed_rank_modes=False,
-        implementation="factorized",
-        decomposition_kwargs=dict(),
-        domain_padding=None,
-        domain_padding_mode="one-sided",
-        fft_norm="forward",
-        **kwargs
-    ):
-        super().__init__(
-            n_modes=(n_modes_height, n_modes_width),
-            hidden_channels=hidden_channels,
-            in_channels=in_channels,
-            out_channels=out_channels,
-            lifting_channels=lifting_channels,
-            projection_channels=projection_channels,
-            n_layers=n_layers,
-            output_scaling_factor=output_scaling_factor,
-            non_linearity=non_linearity,
-            stabilizer=stabilizer,
-            use_mlp=use_mlp,
-            mlp_dropout=mlp_dropout,
-            mlp_expansion=mlp_expansion,
-            max_n_modes=max_n_modes,
-            fno_block_precision=fno_block_precision,
-            norm=norm,
-            skip=skip,
-            separable=separable,
-            preactivation=preactivation,
-            factorization=factorization,
-            rank=rank,
-            joint_factorization=joint_factorization,
-            fixed_rank_modes=fixed_rank_modes,
-            implementation=implementation,
-            decomposition_kwargs=decomposition_kwargs,
-            domain_padding=domain_padding,
-            domain_padding_mode=domain_padding_mode,
-            fft_norm=fft_norm,
-        )
+    def __init__(self, n_modes_height, n_modes_width, hidden_channels,
+        in_channels=3, out_channels=1, lifting_channels=256,
+        projection_channels=256, n_layers=4, output_scaling_factor=None,
+        max_n_modes=None, fno_block_precision='full', non_linearity=paddle.
+        nn.functional.gelu, stabilizer=None, use_mlp=False, mlp_dropout=0,
+        mlp_expansion=0.5, norm=None, skip='soft-gating', separable=False,
+        preactivation=False, factorization=None, rank=1.0,
+        joint_factorization=False, fixed_rank_modes=False, implementation=
+        'factorized', decomposition_kwargs=dict(), domain_padding=None,
+        domain_padding_mode='one-sided', fft_norm='forward', **kwargs):
+        super().__init__(n_modes=(n_modes_height, n_modes_width),
+            hidden_channels=hidden_channels, in_channels=in_channels,
+            out_channels=out_channels, lifting_channels=lifting_channels,
+            projection_channels=projection_channels, n_layers=n_layers,
+            output_scaling_factor=output_scaling_factor, non_linearity=
+            non_linearity, stabilizer=stabilizer, use_mlp=use_mlp,
+            mlp_dropout=mlp_dropout, mlp_expansion=mlp_expansion,
+            max_n_modes=max_n_modes, fno_block_precision=
+            fno_block_precision, norm=norm, skip=skip, separable=separable,
+            preactivation=preactivation, factorization=factorization, rank=
+            rank, joint_factorization=joint_factorization, fixed_rank_modes
+            =fixed_rank_modes, implementation=implementation,
+            decomposition_kwargs=decomposition_kwargs, domain_padding=
+            domain_padding, domain_padding_mode=domain_padding_mode,
+            fft_norm=fft_norm)
         self.n_modes_height = n_modes_height
         self.n_modes_width = n_modes_width
 
@@ -425,70 +293,31 @@ class FNO3d(FNO):
         number of Fourier modes to keep along the depth
     """
 
-    def __init__(
-        self,
-        n_modes_height,
-        n_modes_width,
-        n_modes_depth,
-        hidden_channels,
-        in_channels=3,
-        out_channels=1,
-        lifting_channels=256,
-        projection_channels=256,
-        n_layers=4,
-        output_scaling_factor=None,
-        max_n_modes=None,
-        fno_block_precision="full",
-        non_linearity=paddle.nn.functional.gelu,
-        stabilizer=None,
-        use_mlp=False,
-        mlp_dropout=0,
-        mlp_expansion=0.5,
-        norm=None,
-        skip="soft-gating",
-        separable=False,
-        preactivation=False,
-        factorization=None,
-        rank=1.0,
-        joint_factorization=False,
-        fixed_rank_modes=False,
-        implementation="factorized",
-        decomposition_kwargs=dict(),
-        domain_padding=None,
-        domain_padding_mode="one-sided",
-        fft_norm="forward",
-        **kwargs
-    ):
-        super().__init__(
-            n_modes=(n_modes_height, n_modes_width, n_modes_depth),
-            hidden_channels=hidden_channels,
-            in_channels=in_channels,
-            out_channels=out_channels,
-            lifting_channels=lifting_channels,
-            projection_channels=projection_channels,
-            n_layers=n_layers,
-            output_scaling_factor=output_scaling_factor,
-            non_linearity=non_linearity,
-            stabilizer=stabilizer,
-            max_n_modes=max_n_modes,
-            fno_block_precision=fno_block_precision,
-            use_mlp=use_mlp,
-            mlp_dropout=mlp_dropout,
-            mlp_expansion=mlp_expansion,
-            norm=norm,
-            skip=skip,
-            separable=separable,
-            preactivation=preactivation,
-            factorization=factorization,
-            rank=rank,
-            joint_factorization=joint_factorization,
-            fixed_rank_modes=fixed_rank_modes,
-            implementation=implementation,
-            decomposition_kwargs=decomposition_kwargs,
-            domain_padding=domain_padding,
-            domain_padding_mode=domain_padding_mode,
-            fft_norm=fft_norm,
-        )
+    def __init__(self, n_modes_height, n_modes_width, n_modes_depth,
+        hidden_channels, in_channels=3, out_channels=1, lifting_channels=
+        256, projection_channels=256, n_layers=4, output_scaling_factor=
+        None, max_n_modes=None, fno_block_precision='full', non_linearity=
+        paddle.nn.functional.gelu, stabilizer=None, use_mlp=False,
+        mlp_dropout=0, mlp_expansion=0.5, norm=None, skip='soft-gating',
+        separable=False, preactivation=False, factorization=None, rank=1.0,
+        joint_factorization=False, fixed_rank_modes=False, implementation=
+        'factorized', decomposition_kwargs=dict(), domain_padding=None,
+        domain_padding_mode='one-sided', fft_norm='forward', **kwargs):
+        super().__init__(n_modes=(n_modes_height, n_modes_width,
+            n_modes_depth), hidden_channels=hidden_channels, in_channels=
+            in_channels, out_channels=out_channels, lifting_channels=
+            lifting_channels, projection_channels=projection_channels,
+            n_layers=n_layers, output_scaling_factor=output_scaling_factor,
+            non_linearity=non_linearity, stabilizer=stabilizer, max_n_modes
+            =max_n_modes, fno_block_precision=fno_block_precision, use_mlp=
+            use_mlp, mlp_dropout=mlp_dropout, mlp_expansion=mlp_expansion,
+            norm=norm, skip=skip, separable=separable, preactivation=
+            preactivation, factorization=factorization, rank=rank,
+            joint_factorization=joint_factorization, fixed_rank_modes=
+            fixed_rank_modes, implementation=implementation,
+            decomposition_kwargs=decomposition_kwargs, domain_padding=
+            domain_padding, domain_padding_mode=domain_padding_mode,
+            fft_norm=fft_norm)
         self.n_modes_height = n_modes_height
         self.n_modes_width = n_modes_width
         self.n_modes_depth = n_modes_depth
@@ -511,20 +340,17 @@ def partialclass(new_name, cls, *args, **kwargs):
     Instead, here, we define dynamically a new class, inheriting from the existing one.
     """
     __init__ = partialmethod(cls.__init__, *args, **kwargs)
-    new_class = type(
-        new_name,
-        (cls,),
-        {"__init__": __init__, "__doc__": cls.__doc__, "forward": cls.forward},
-    )
+    new_class = type(new_name, (cls,), {'__init__': __init__, '__doc__':
+        cls.__doc__, 'forward': cls.forward})
     return new_class
 
 
-TFNO = partialclass("TFNO", FNO, factorization="Tucker")
-TFNO1d = partialclass("TFNO1d", FNO1d, factorization="Tucker")
-TFNO2d = partialclass("TFNO2d", FNO2d, factorization="Tucker")
-TFNO3d = partialclass("TFNO3d", FNO3d, factorization="Tucker")
+TFNO = partialclass('TFNO', FNO, factorization='Tucker')
+TFNO1d = partialclass('TFNO1d', FNO1d, factorization='Tucker')
+TFNO2d = partialclass('TFNO2d', FNO2d, factorization='Tucker')
+TFNO3d = partialclass('TFNO3d', FNO3d, factorization='Tucker')
 # SFNO = partialclass('SFNO', FNO, factorization='dense', SpectralConv=
-# SphericalConv)
+    # SphericalConv)
 # SFNO.__doc__ = SFNO.__doc__.replace('Fourier', 'Spherical Fourier', 1)
 # SFNO.__doc__ = SFNO.__doc__.replace('FNO', 'SFNO')
 # SFNO.__doc__ = SFNO.__doc__.replace('fno', 'sfno')

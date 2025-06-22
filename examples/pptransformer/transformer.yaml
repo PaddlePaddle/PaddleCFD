@@ -1,0 +1,83 @@
+hydra:
+  run:
+    # dynamic output directory according to running time and override name
+    dir: output/${now:%Y-%m-%d-%H-%M-%S}
+  job:
+    name: ${mode} # name of logfile
+    chdir: false # keep current working direcotry unchaned
+  sweep:
+    # output directory for multirun
+    dir: ${hydra.run.dir}
+    subdir: ./
+
+# Setting
+mode: "train"
+checkpoint: null
+seed: 0
+output_dir: ${hydra:run.dir}
+
+# Model
+model:
+  _target_: ppcfd.networks.Point_Transformer
+  in_dim: 3
+  out_dim: 1
+  out_num: 1
+  reshape: true
+  remove_channel_dim: true
+
+
+# Run
+model_name: "Point_Transformer"
+project_name: "DNNFluid-Car"
+
+
+# Hyper-parameters
+lr: 0.001
+lr_schedular: "CosineAnnealingLR"
+num_epochs: 50 # 300
+enable_dp: false
+enable_mp: false
+enable_pp: false
+only_save_sdf: false
+lazy_loading: true
+cd_finetune: false
+car_loss: true
+val_freq: 50
+cd_loss_weight: 1.0
+enable_cinn: false
+enable_profiler: false
+
+
+# DataSet
+data_module:
+  _target_: ppcfd.data.DrivAerNet_Aug_DataModule
+  data_dir: "../data/drivaerpp/paddle_tensor/"
+  n_train_num: 4968 # 4968
+  n_test_num: 1200 # 1200
+  train_sample_number: 40000
+  inputs_key: ["vertices"]
+  targets_key: ["Cd"]
+  weight_keys: ["weight_keys"]
+  subset_dir: "../data/drivaerpp/subset_dir/"
+  train_ids_file: "train_design_ids.txt"
+  test_ids_file: "test_design_ids.txt"
+  val_ids_file: "val_design_ids.txt"
+  csv_file: "../data/drivaerpp/DrivAerNetPlusPlus_Drag_8k.csv"
+  # area_file: "../data/drivaerpp/DrivAerNetPlusPlus_Area_8k.csv"
+  num_points: 100000
+  transform: null
+
+
+num_workers: 0
+batch_size: 128
+out_channels: [1]
+out_keys: ["Cd"]
+input_filename: "test.ply"
+output_filename: "test.vtk"
+large_stl: false
+
+
+# Physics
+mass_density: 1.0
+flow_speed: 30.0
+simulation_type: "AeroDynamic"

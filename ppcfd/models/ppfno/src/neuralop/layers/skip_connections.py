@@ -1,9 +1,8 @@
 import paddle
 
 
-def skip_connection(
-    in_features, out_features, n_dim=2, bias=False, skip_type="soft-gating"
-):
+def skip_connection(in_features, out_features, n_dim=2, bias=False,
+    skip_type='soft-gating'):
     """A wrapper for several types of skip connections.
     Returns an nn.Module skip connections, one of  {'identity', 'linear', soft-gating'}
 
@@ -26,23 +25,18 @@ def skip_connection(
     nn.Module
         module that takes in x and returns skip(x)
     """
-    if skip_type.lower() == "soft-gating":
-        return SoftGating(
-            in_features=in_features, out_features=out_features, bias=bias, n_dim=n_dim
-        )
-    elif skip_type.lower() == "linear":
-        return getattr(paddle.nn, f"Conv{n_dim}D")(
-            in_channels=in_features,
-            out_channels=out_features,
-            kernel_size=1,
-            bias_attr=bias,
-        )
-    elif skip_type.lower() == "identity":
+    if skip_type.lower() == 'soft-gating':
+        return SoftGating(in_features=in_features, out_features=
+            out_features, bias=bias, n_dim=n_dim)
+    elif skip_type.lower() == 'linear':
+        return getattr(paddle.nn, f'Conv{n_dim}D')(in_channels=in_features,
+            out_channels=out_features, kernel_size=1, bias_attr=bias)
+    elif skip_type.lower() == 'identity':
         return paddle.nn.Identity()
     else:
         raise ValueError(
             f"Got skip-connection type={skip_type}, expected one of {'soft-gating', 'linear', 'id'}."
-        )
+            )
 
 
 class SoftGating(paddle.nn.Layer):
@@ -67,17 +61,15 @@ class SoftGating(paddle.nn.Layer):
         super().__init__()
         if out_features is not None and in_features != out_features:
             raise ValueError(
-                f"Got in_features={in_features} and out_features={out_features}but these two must be the same for soft-gating"
-            )
+                f'Got in_features={in_features} and out_features={out_features}but these two must be the same for soft-gating'
+                )
         self.in_features = in_features
         self.out_features = out_features
-        self.weight = paddle.base.framework.EagerParamBase.from_tensor(
-            tensor=paddle.ones(shape=[1, self.in_features, *((1,) * n_dim)])
-        )
+        self.weight = paddle.base.framework.EagerParamBase.from_tensor(tensor
+            =paddle.ones(shape=[1, self.in_features, *((1,) * n_dim)]))
         if bias:
-            self.bias = paddle.base.framework.EagerParamBase.from_tensor(
-                tensor=paddle.ones(shape=[1, self.in_features, *((1,) * n_dim)])
-            )
+            self.bias = paddle.base.framework.EagerParamBase.from_tensor(tensor
+                =paddle.ones(shape=[1, self.in_features, *((1,) * n_dim)]))
         else:
             self.bias = None
 

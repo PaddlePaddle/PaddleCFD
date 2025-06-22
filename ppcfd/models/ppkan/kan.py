@@ -251,6 +251,90 @@ class KAN(paddle.nn.Layer):
         return sum(layer.regularization_loss(regularize_activation,
             regularize_entropy) for layer in self.layers)
 
+
+class KANONet(paddle.nn.Layer):
+
+    def __init__(
+        self, 
+        width_branch1,
+        grid_range_b1,
+        grid_size_b1,
+        width_trunk,
+        grid_range_t,
+        grid_size_t,
+        spline_order=3,
+        width_branch2: Optional[List[int]] = None,
+        grid_range_b2=None,
+        grid_size_b2=None,
+        width_branch3: Optional[List[int]] = None,
+        grid_range_b3=None,
+        grid_size_b3=None,
+        **kwargs
+        ):
+        super(KANONet, self).__init__()
+        self.hidden_out = width_branch1[-1]
+        self.branch2 = False
+        self.branch3 = False
+        self.branch_net1 = KAN(
+            layers_hidden=width_branch1,
+            grid_size=grid_size_b1,
+            spline_order=spline_order,
+            grid_range=grid_range_b1,
+            **kwargs
+        )
+        self.trunk_net = KAN(
+            layers_hidden=width_trunk,
+            grid_size=grid_size_t,
+            spline_order=spline_order,
+            grid_range=grid_range_t,
+            **kwargs
+        )
+        if width_branch2 is not None:
+            self.branch2 = True
+            self.branch_net2 = KAN(
+                layers_hidden=width_branch2,
+                grid_size=grid_size_b2,
+                spline_order=spline_order,
+                grid_range=grid_range_b2,
+                **kwargs
+            )
+        if width_branch3 is not None:
+            self.branch_net3 = True
+            self.branch_net3 = KAN(
+                layers_hidden=width_branch3,
+                grid_size=grid_size_b3,
+                spline_order=spline_order,
+                grid_range=grid_range_b3,
+                **kwargs
+            )
+    def forward(self, inputs):
+        b1_out = self.branch_net1(inputs['branch1'])
+        if self.branch2:
+            b2_out = self.branch_net2(inputs['branch2'])
+        if self.branch3:
+            b3_out = self.branch_net3(inputs['branch3'])
+
+        t_out = self.trunk_net(inputs['trunk'])    # [Ni, 64]
+        # y = paddle.mean(b1_out * t_out, axis=1, keepdim=True)
+        # return y
+        step = int(self.hidden_out/4)
+        if not self.branch2:
+            y1 = paddle.sum(b1_out[:,0:step] * t_out[:,0:step], axis=1, keepdim=True) # [Ni, 1])
+            y2 = paddle.sum(b1_out[:,step:2*step] * t_out[:,step:2*step], axis=1, keepdim=True) # [Ni, 1])
+            y3 = paddle.sum(b1_out[:,2*step:3*step] * t_out[:,2*step:3*step], axis=1, keepdim=True) # [Ni, 1]
+            y4 = paddle.sum(b1_out[:,3*step:] * t_out[:,3*step:], axis=1, keepdim=True) # [Ni, 1]
+        elif not self.branch3:
+            y1 = paddle.sum(b1_out[:,0:step] * b2_out[:,0:step] * t_out[:,0:step], axis=1, keepdim=True) # [Ni, 1])
+            y2 = paddle.sum(b1_out[:,step:2*step] * b2_out[:,0:step] * t_out[:,step:2*step], axis=1, keepdim=True) # [Ni, 1])
+            y3 = paddle.sum(b1_out[:,2*step:3*step] * b2_out[:,0:step] * t_out[:,2*step:3*step], axis=1, keepdim=True) # [Ni, 1]
+            y4 = paddle.sum(b1_out[:,3*step:] * b2_out[:,0:step] * t_out[:,3*step:], axis=1, keepdim=True) # [Ni, 1]
+        else:
+            y1 = paddle.sum(b1_out[:,0:step] * b2_out[:,0:step] * b3_out[:,0:step] * t_out[:,0:step], axis=1, keepdim=True) # [Ni, 1])
+            y2 = paddle.sum(b1_out[:,step:2*step] * b2_out[:,0:step] * b3_out[:,0:step] * t_out[:,step:2*step], axis=1, keepdim=True) # [Ni, 1])
+            y3 = paddle.sum(b1_out[:,2*step:3*step] * b2_out[:,0:step] * b3_out[:,0:step] * t_out[:,2*step:3*step], axis=1, keepdim=True) # [Ni, 1]
+            y4 = paddle.sum(b1_out[:,3*step:] * b2_out[:,0:step] * b3_out[:,0:step] * t_out[:,3*step:], axis=1, keepdim=True) # [Ni, 1]
+        return paddle.concat([y1, y2, y3, y4], axis=1)  # [Ni, 4]
+
 def dim2perm(ndim, dim0, dim1):
     perm = list(range(ndim))
     perm[dim0], perm[dim1] = perm[dim1], perm[dim0]

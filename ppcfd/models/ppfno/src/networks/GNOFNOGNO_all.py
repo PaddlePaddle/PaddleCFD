@@ -1,6 +1,10 @@
-import paddle
+import copy
+import sys
 
-from src.neuralop.models import FNO
+import paddle
+import paddle.nn as nn
+
+from ..neuralop.models import FNO
 from .base_model import BaseModel
 from .integral_finetuning import Integral_Cd
 from .neighbor_ops import NeighborMLPConvLayer
@@ -12,11 +16,10 @@ from .net_utils import AdaIN
 from .net_utils import PositionalEmbedding
 from .net_utils import Projection
 from .utilities3 import count_params
-
-# from .utilities3 import memory_usage
-# from .utilities3 import num_of_nans
-# from .utilities3 import paddle_memory_usage
-# from .utilities3 import show_tensor_range
+from .utilities3 import memory_usage
+from .utilities3 import num_of_nans
+from .utilities3 import paddle_memory_usage
+from .utilities3 import show_tensor_range
 
 
 class GNOFNOGNO(BaseModel):
@@ -47,7 +50,7 @@ class GNOFNOGNO(BaseModel):
         self.linear_kernel = linear_kernel
         kernel1 = MLP([10 * embed_dim, 512, 256, hidden_channels[0]], paddle.nn.GELU)
         self.gno1 = NeighborMLPConvLayerWeighted(mlp=kernel1)
-        if not linear_kernel:
+        if linear_kernel == False:
             kernel2 = MLP(
                 [fno_out_channels + 4 * embed_dim, 512, 256, hidden_channels[1]],
                 paddle.nn.GELU,
@@ -119,7 +122,7 @@ class GNOFNOGNO(BaseModel):
         )
         u = self.fno(u)
         u = u.squeeze().transpose(perm=[1, 2, 3, 0]).reshape((resolution**3, -1))
-        if not self.linear_kernel:
+        if self.linear_kernel == False:
             if x_eval is not None:
                 u = self.gno2(u, out_to_in_nb, x_eval_embed)
             else:
@@ -269,7 +272,7 @@ class GNOFNOGNO_all(GNOFNOGNO):
                     area_eval=area_chunks[j],
                 )
                 pred_chunks.append(pred_index_j)
-                paddle.device.cuda.empty_cache()  # clear GPU memory
+                # paddle.device.cuda.empty_cache()  # clear GPU memory
             pred = paddle.concat(x=tuple(pred_chunks), axis=0)
         else:
             pred = self(x_in, x_out, df, area=area)
@@ -347,6 +350,7 @@ class GNOFNOGNO_all(GNOFNOGNO):
             x_in_chunks = paddle.split(x=x_in, num_or_sections=x_in_sections, axis=0)
             area_chunks = paddle.split(x=area, num_or_sections=area_sections, axis=0)
             for j in range(len(x_in_chunks)):
+                # t = time.perf_counter()
                 pred_index_j = super().forward(
                     x_in,
                     x_out,
@@ -356,7 +360,9 @@ class GNOFNOGNO_all(GNOFNOGNO):
                     area_eval=area_chunks[j],
                 )
                 pred_chunks.append(pred_index_j)
-                paddle.device.cuda.empty_cache()  # clear GPU memory
+                # paddle.device.cuda.empty_cache()  # clear GPU memory
+                # t = time.perf_counter() - t
+                # print(f"chunk {j}: {t:.3f} s")
             pred = paddle.concat(x=tuple(pred_chunks), axis=0)
         else:
             pred = self(x_in, x_out, df, area=area)
@@ -389,9 +395,11 @@ class GNOFNOGNO_all(GNOFNOGNO):
                 out_dict["Cd_pred"] += drag_pred
 
         cd_dict = {}
-        cd_dict.update({"Cd_pred": out_dict["Cd_pred"]})
-        cd_dict.update({"Cd_pressure_pred": out_dict["Cd_pressure_pred"]})
-        cd_dict.update({"Cd_wallshearstress_pred": out_dict["Cd_wallshearstress_pred"]})
+        cd_dict.update({"Cd_pred": out_dict["Cd_pred"].item()})
+        cd_dict.update({"Cd_pressure_pred": out_dict["Cd_pressure_pred"].item()})
+        cd_dict.update(
+            {"Cd_wallshearstress_pred": out_dict["Cd_wallshearstress_pred"].item()}
+        )
         cd_dict = self.integral_cd(cd_dict, self.out_keys)
 
         velocity = data_dict["info"][0]["velocity"]
@@ -399,10 +407,24 @@ class GNOFNOGNO_all(GNOFNOGNO):
         density = data_dict["info"][0]["density"]
         const = 0.5 * density * velocity**2 * reference_area
 
-        cd_dict.update({"total_drag_pred": const * out_dict["Cd_pred"]})
-        cd_dict.update({"pressure_drag_pred": const * out_dict["Cd_pressure_pred"]})
+        cd_dict.update({"total_drag_pred": const * cd_dict["Cd_pred_modify"].item()})
+
         cd_dict.update(
-            {"wallshearstress_drag_pred": const * out_dict["Cd_wallshearstress_pred"]}
+            {
+                "pressure_drag_pred": const
+                * (
+                    cd_dict["Cd_pressure_pred"]
+                    + cd_dict["Cd_pred_modify"].item()
+                    - out_dict["Cd_pred"].item()
+                )
+            }
+        )
+
+        cd_dict.update(
+            {
+                "wallshearstress_drag_pred": const
+                * out_dict["Cd_wallshearstress_pred"].item()
+            }
         )
 
         return out_dict, pred, cd_dict
@@ -436,16 +458,16 @@ class GNOFNOGNO_all(GNOFNOGNO):
             truth.append(truth_key)
         truth = paddle.concat(x=truth, axis=-1)
 
-        if self.integral_cd.parameters()[0].stop_gradient is True:
+        if self.integral_cd.parameters()[0].stop_gradient == True:
             pred = super().forward(
                 x_in, x_out, df, x_in[indices, ...], area, area[indices]
             )
         else:
             pred = truth
-            paddle.device.cuda.empty_cache()  # clear GPU memory
+            # paddle.device.cuda.empty_cache()  # clear GPU memory
 
         cd_dict = {}
-        if self.integral_cd.parameters()[0].stop_gradient is False:
+        if self.integral_cd.parameters()[0].stop_gradient == False:
             # cd_dict = self.integral_cd(pred, truth, self.out_channels,
             #    data_dict, decode_fn=decode_fn,
             #    out_keys=self.out_keys,
