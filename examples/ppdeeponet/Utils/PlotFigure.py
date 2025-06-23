@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import scienceplots  # noqa
 from matplotlib import cm
 from matplotlib.ticker import LinearLocator
 from scipy.interpolate import griddata
