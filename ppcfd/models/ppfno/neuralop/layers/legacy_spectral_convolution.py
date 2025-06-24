@@ -29,7 +29,7 @@ def _contract_dense(x, weight, separable=False):
     eq = f"{''.join(x_syms)},{''.join(weight_syms)}->{''.join(out_syms)}"
     if not paddle.is_tensor(x=weight):
         weight = weight.to_tensor()
->>>>>>    if x.dtype == torch.complex32:
+    if x.dtype == paddle.complex32:
         return einsum_complexhalf(eq, x, weight)
     else:
         return tl.einsum(eq, x, weight)
@@ -54,7 +54,7 @@ def _contract_cp(x, cp_weight, separable=False):
         factor_syms = [einsum_symbols[1] + rank_sym, out_sym + rank_sym]
     factor_syms += [(xs + rank_sym) for xs in x_syms[2:]]
     eq = f"{x_syms},{rank_sym},{','.join(factor_syms)}->{''.join(out_syms)}"
->>>>>>    if x.dtype == torch.complex32:
+    if x.dtype == paddle.complex32:
         return einsum_complexhalf(eq, x, cp_weight.weights, *cp_weight.factors)
     else:
         return tl.einsum(eq, x, cp_weight.weights, *cp_weight.factors)
@@ -75,7 +75,7 @@ def _contract_tucker(x, tucker_weight, separable=False):
             ]
         factor_syms += [(xs + rs) for xs, rs in zip(x_syms[2:], core_syms[2:])]
     eq = f"{x_syms},{core_syms},{','.join(factor_syms)}->{''.join(out_syms)}"
->>>>>>    if x.dtype == torch.complex32:
+    if x.dtype == paddle.complex32:
         return einsum_complexhalf(eq, x, tucker_weight.core, *tucker_weight
             .factors)
     else:
@@ -98,7 +98,7 @@ def _contract_tt(x, tt_weight, separable=False):
         tt_syms.append([rank_syms[i], s, rank_syms[i + 1]])
     eq = ''.join(x_syms) + ',' + ','.join(''.join(f) for f in tt_syms
         ) + '->' + ''.join(out_syms)
->>>>>>    if x.dtype == torch.complex32:
+    if x.dtype == paddle.complex32:
         return einsum_complexhalf(eq, x, *tt_weight.factors)
     else:
         return tl.einsum(eq, x, *tt_weight.factors)
@@ -351,10 +351,10 @@ class SpectralConv(BaseSpectralConv):
         x = paddle.fft.rfftn(x=x, norm=self.fft_norm, axes=fft_dims)
         if self.fno_block_precision == 'mixed':
             """Class Method: *.chalf, can not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*/torch.distributions.Distribution.*/torch.autograd.function.FunctionCtx.*/torch.profiler.profile.*/torch.autograd.profiler.profile.*, and convert manually"""
->>>>>>            x = x.chalf()
+            x = x.chalf()
         if self.fno_block_precision in ['half', 'mixed']:
             out_fft = paddle.zeros(shape=[batchsize, self.out_channels, *
->>>>>>                fft_size], dtype=torch.chalf)
+                fft_size], dtype=torch.chalf)
         else:
             out_fft = paddle.zeros(shape=[batchsize, self.out_channels, *
                 fft_size], dtype='complex64')

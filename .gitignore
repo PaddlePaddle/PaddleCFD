@@ -159,6 +159,6 @@ trainedModel/*
 *.pyc
 
 # log
-# hybrid_parallel/
-# hydraLog/
+hybrid_parallel/
+hydraLog/
 log/
