@@ -1,8 +1,0 @@
-- train_input_path=/home/chenkai26/dataset/zhongche-paddle/train
-- train_ratio=0.7
-- test_ratio=0.3
-- task_id=1
-- save_per_epoch=200
-- train_output_path=/home/chenkai26/Paddle-AeroSim-DataModel/train_output/ppcfd
-- num_epochs=850
-- finetuning_epochs=51
