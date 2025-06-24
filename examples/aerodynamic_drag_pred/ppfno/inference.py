@@ -3,8 +3,8 @@ import logging
 import os
 import sys
 
-sys.path.append("./src")
-sys.path.append("./src/networks")
+# sys.path.append("./src")
+# sys.path.append("./src/networks")
 from timeit import default_timer
 from typing import Dict
 from typing import List
@@ -24,14 +24,14 @@ from paddle.distributed import fleet
 from paddle.io import DataLoader
 from paddle.io import DistributedBatchSampler
 
-from src.data import instantiate_inferencedatamodule
-from src.losses import LpLoss
-from src.networks import instantiate_network
-from src.optim.schedulers import instantiate_scheduler
-from src.utils.average_meter import AverageMeter
-from src.utils.average_meter import AverageMeterDict
-from src.utils.dot_dict import DotDict
-from src.utils.dot_dict import flatten_dict
+from ppcfd.models.ppfno.data import instantiate_inferencedatamodule
+from ppcfd.models.ppfno.losses import LpLoss
+from ppcfd.models.ppfno.networks import instantiate_network
+from ppcfd.models.ppfno.optim.schedulers import instantiate_scheduler
+from ppcfd.models.ppfno.utils.average_meter import AverageMeter
+from ppcfd.models.ppfno.utils.average_meter import AverageMeterDict
+from ppcfd.models.ppfno.utils.dot_dict import DotDict
+from ppcfd.models.ppfno.utils.dot_dict import flatten_dict
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "4,"
 # os.environ["HYDRA_FULL_ERROR"] = "0"
