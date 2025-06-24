@@ -1,6 +1,6 @@
 import sys
 # sys.path.append('/home/chenkai26/PaddleScience-AeroShapeOpt/paddle_project')
-import utils
+# from .. import utils
 import paddle
 
 

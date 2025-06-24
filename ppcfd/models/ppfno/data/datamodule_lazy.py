@@ -16,13 +16,126 @@ import numpy as np
 import open3d as o3d
 import paddle
 
-from src.data.base_datamodule import BaseDataModule
+from .base_datamodule import BaseDataModule
 
 from ..neuralop.utils import UnitGaussianNormalizer
 
 
 def get_last_dir(path):
     return os.path.basename(os.path.normpath(path))
+
+
+class LoadMesh:
+
+    def __init__(self, path, query_points=None, closest_points_to_query=False):
+        self.path = path
+        self.query_points = query_points
+        self.closest_points_to_query = closest_points_to_query
+
+    def index_to_mesh_path(self, index, extension: str = ".ply") -> Path:
+        return self.path / ("mesh_" + index + extension)
+
+    def load_mesh(self, mesh_path: Path) -> o3d.geometry.TriangleMesh:
+        assert mesh_path.exists(), "Mesh path does not exist"
+        mesh = o3d.io.read_triangle_mesh(str(mesh_path))
+        return mesh
+
+    def load_mesh_tri(self, mesh_path: Path) -> o3d.t.geometry.TriangleMesh:
+        mesh = self.load_mesh(mesh_path)
+        mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
+        return mesh
+
+    def vertices_from_mesh(self, mesh: o3d.geometry.TriangleMesh) -> paddle.Tensor:
+        return paddle.to_tensor(data=np.asarray(mesh.vertices).astype(np.float32))
+
+    def triangles_from_mesh(self, mesh: o3d.geometry.TriangleMesh) -> paddle.Tensor:
+        return paddle.to_tensor(data=np.asarray(mesh.triangles).astype(np.int64))
+
+    def get_triangle_centroids(
+        self, vertices: paddle.Tensor, triangles: paddle.Tensor
+    ) -> paddle.Tensor:
+        A, B, C = (
+            vertices[triangles[:, 0]],
+            vertices[triangles[:, 1]],
+            vertices[triangles[:, 2]],
+        )
+        centroids = (A + B + C) / 3
+        areas = (
+            paddle.sqrt(x=paddle.sum(x=paddle.cross(x=B - A, y=C - A) ** 2, axis=1)) / 2
+        )
+        return centroids, areas
+
+    def compute_df(self, mesh: o3d.t.geometry.TriangleMesh) -> np.ndarray:
+        scene = o3d.t.geometry.RaycastingScene()
+        _ = scene.add_triangles(mesh)
+        distance = scene.compute_distance(self.query_points).numpy()
+        if self.closest_points_to_query:
+            closest_points = scene.compute_closest_points(self.query_points)[
+                "points"
+            ].numpy()
+        else:
+            closest_points = None
+        return distance, closest_points
+
+    def save_df_closest(self, df_closest_dict, index: str, file_type="npy"):
+        if file_type == ".pdparams":
+            for k, v in df_closest_dict.items():
+                df_closest_dict[k] = paddle.to_tensor(data=v)
+            paddle.save(
+                obj=df_closest_dict,
+                path=os.path.join(
+                    os.path.dirname(self.path), f"df_closest_{index}.pdparams"
+                ),
+            )
+        elif file_type == "npy":
+            np.save(
+                os.path.join(os.path.dirname(self.path), f"df/df_{index}.npy"),
+                df_closest_dict["df"],
+            )
+            np.save(
+                os.path.join(os.path.dirname(self.path), f"df/closest_{index}.npy"),
+                df_closest_dict["closest"],
+            )
+
+    def get_df_closest(
+        self, mesh: Union[Path, o3d.t.geometry.TriangleMesh], index: str = None
+    ):
+        assert self.query_points is not None, "query_points does not be None"
+        if isinstance(mesh, Path):
+            mesh = self.load_mesh_tri(mesh)
+        df, closest = self.compute_df(mesh)
+        df_closest_dict = {"df": df, "closest": closest}
+        if index is not None:
+            self.save_df_closest(df_closest_dict, index)
+        return paddle.to_tensor(data=df), paddle.to_tensor(data=closest)
+
+    def compute_sdf(self, mesh: Union[Path, o3d.t.geometry.TriangleMesh]) -> np.ndarray:
+        if isinstance(mesh, Path):
+            mesh = self.load_mesh(mesh)
+        scene = o3d.t.geometry.RaycastingScene()
+        _ = scene.add_triangles(mesh)
+        signed_distance = scene.compute_signed_distance(self.query_points).numpy()
+        if self.closest_points_to_query:
+            closest_points = scene.compute_closest_points(self.query_points)[
+                "points"
+            ].numpy()
+        else:
+            closest_points = None
+        return signed_distance, closest_points
+
+    def sdf_vertices_closest_from_mesh(
+        self, mesh: Union[Path, o3d.t.geometry.TriangleMesh]
+    ) -> Tuple[np.ndarray, np.ndarray, Union[np.ndarray, None]]:
+        assert self.query_points is not None, "query_points does not be None"
+        if isinstance(mesh, Path):
+            mesh = self.load_mesh_tri(mesh)
+        sdf, closest_points = self.compute_sdf(mesh)
+        vertices = mesh.vertex.positions.numpy()
+        return (
+            paddle.to_tensor(data=sdf),
+            vertices,
+            paddle.to_tensor(data=closest_points),
+        )
 
 
 class LoadFile:
@@ -53,22 +166,25 @@ class LoadFile:
         return data
 
 
-class PathDictDataset(paddle.io.Dataset, LoadFile):
+class PathDictDataset(paddle.io.Dataset, LoadMesh, LoadFile):
 
     def __init__(
         self,
         path: str = None,
         query_points=None,
+        closest_points_to_query=False,
         indices: Optional[List[str]] = None,
         norms_dict: Optional[Dict[str, Callable]] = {},
+        data_keys: Optional[List[str]] = ["info", "pressure", "wallshearstress"],
         lazy_loading=True,
     ):
+        LoadMesh.__init__(self, path, query_points, closest_points_to_query)
         LoadFile.__init__(self, path)
         assert path is not None, "path is None"
         self.path = Path(path)
-        self.query_points = query_points
         self.indices = indices
         self.norms_dict = norms_dict
+        self.data_keys = data_keys
         self.lazy_loading = lazy_loading
         if not self.lazy_loading:
             self.all_return_dict = [self.get_item(i) for i in range(len(self.indices))]
@@ -76,19 +192,49 @@ class PathDictDataset(paddle.io.Dataset, LoadFile):
     def get_item(self, index):
         t1 = default_timer()
         file_index = self.indices[index] if self.indices else str(index).zfill(4)
-
         return_dict = {}
-        extension = ".pdparams"
-        file_key = "info"
-        return_dict["info"] = self.load_file(f"{file_key}_{file_index}", extension)
-        return_dict["df"] = self.load_file(f"df_{file_index}")
+        file_key_dict = {"pressure": "pressure", "wallshearstress": "wallshearstress"}
+        for key in self.data_keys:
+            extension = ".pdparams" if key == "info" else ".npy"
+            file_key = file_key_dict[key] if key in file_key_dict else key
+            return_dict[key] = self.load_file(f"{file_key}_{file_index}", extension)
+        try:
+            return_dict["df"] = self.load_file(f"df_{file_index}")
+            if self.closest_points_to_query:
+                return_dict["closest_points"] = self.load_file(f"closest_{file_index}")
+        except Exception:
+            print(
+                "Warning: No 'df' files now, please generate them at first or set 'num_workers=0' for this dataloader."
+            )
+            return_dict["df"], closest_points = self.get_df_closest(
+                self.index_to_mesh_path(file_index)
+            )
+            if self.closest_points_to_query:
+                return_dict["closest_points"] = closest_points
         return_dict["df_query_points"] = paddle.to_tensor(data=self.query_points)
-        return_dict["vertices"] = None
-        reference_area = return_dict["info"]["reference_area"]
-        areas = self.load_file(f"area_{file_index}")
-        centroids = self.load_file(f"centroid_{file_index}")
-        triangle_normals = self.load_file(f"normal_{file_index}")
-
+        if not return_dict["info"]["compute_normal"]:
+            return_dict["vertices"] = None
+            reference_area = return_dict["info"]["reference_area"]
+            areas = self.load_file(f"area_{file_index}")
+            centroids = self.load_file(f"centroid_{file_index}")
+            triangle_normals = self.load_file(f"normal_{file_index}")
+            mesh_test_path = self.path / f"mesh_rec_{file_index}.ply"
+            if get_last_dir(self.path) == "test" and os.path.exists(mesh_test_path):
+                mesh = meshio.read(mesh_test_path)
+                return_dict["mesh"] = mesh
+        else:
+            mesh = self.load_mesh(self.index_to_mesh_path(file_index))
+            vertices = self.vertices_from_mesh(mesh)
+            triangles = self.triangles_from_mesh(mesh)
+            centroids, areas = self.get_triangle_centroids(vertices, triangles)
+            return_dict["vertices"] = vertices
+            mesh.compute_triangle_normals()
+            triangle_normals = paddle.to_tensor(
+                data=mesh.triangle_normals, dtype="float64"
+            ).reshape((-1, 3))
+            reference_area = (
+                return_dict["info"]["width"] * return_dict["info"]["height"] / 2 * 1e-06
+            )
         flow_directions = paddle.zeros_like(x=triangle_normals)
         flow_directions[:, 0] = -1
         mass_density = return_dict["info"]["density"]
@@ -113,6 +259,10 @@ class PathDictDataset(paddle.io.Dataset, LoadFile):
             return_dict["df_query_points"] = self.norms_dict["location"](
                 return_dict["df_query_points"]
             ).transpose(perm=[3, 0, 1, 2])
+            if self.closest_points_to_query:
+                return_dict["closest_points"] = self.norms_dict["location"](
+                    return_dict["closest_points"]
+                ).transpose(perm=[3, 0, 1, 2])
         t2 = default_timer()
         return_dict["Data_loading_time"] = t2 - t1
         return return_dict
@@ -133,8 +283,16 @@ class BaseCFDDataModule(BaseDataModule):
         super().__init__()
 
     @property
-    def inference_data(self):
-        return self._inference_data
+    def train_data(self):
+        return self._train_data
+
+    @property
+    def val_data(self):
+        return self._val_data
+
+    @property
+    def test_data(self):
+        return self._test_data
 
     def encode(self, norm_fn, data: paddle.Tensor) -> paddle.Tensor:
         norm_fn.to(data.place)
@@ -147,8 +305,7 @@ class BaseCFDDataModule(BaseDataModule):
     def load_bound(
         self, data_dir, filename="watertight_global_bounds.txt", eps=1e-06
     ) -> Tuple[List[float], List[float]]:
-        # with open(data_dir / filename, 'r') as fp:
-        with open(data_dir / "../../" / filename, "r") as fp:
+        with open(data_dir / filename, "r") as fp:
             min_bounds = fp.readline().split(" ")
             max_bounds = fp.readline().split(" ")
             min_bounds = [(float(a) - eps) for a in min_bounds]
@@ -191,19 +348,23 @@ class BaseCFDDataModule(BaseDataModule):
         return (area - min_bounds) / (max_bounds - min_bounds)
 
 
-class SAEInferenceDataModule(BaseCFDDataModule):
+class SAEDataModule(BaseCFDDataModule):
 
     def __init__(
         self,
         data_dir,
         out_keys: List[str] = ["pressure"],
         out_channels: List[int] = [1],
-        n_inference: int = 1,
+        n_train: int = 1,
+        n_val: int = 1,
+        n_test: int = 1,
         spatial_resolution: Tuple[int, int, int] = None,
         query_points=None,
+        closest_points_to_query=False,
         eps=0.01,
         lazy_loading=True,
-        bounds_dir=None,
+        train_ratio: float = None,
+        test_ratio: float = None,
     ):
         super().__init__()
         if isinstance(data_dir, str):
@@ -215,12 +376,37 @@ class SAEInferenceDataModule(BaseCFDDataModule):
         self.out_keys = out_keys
         self.out_channels = out_channels
         self.query_points = query_points
+        self.closest_points_to_query = closest_points_to_query
         self.spatial_resolution = spatial_resolution
         self.eps = eps
         self.lazy_loading = lazy_loading
-        self.get_indices(n_inference)
-        self.get_norms(bounds_dir)
+        self.train_ratio = train_ratio
+        self.test_ratio = test_ratio
+        self.get_indices(n_train, n_val, n_test)
+        self.get_norms(data_dir)
         self.get_data()
+
+    @staticmethod
+    def split_list_(input_list, train_ratio, test_ratio):
+        # 检查train_ratio和test_ratio之和是否为1
+        if not (
+            0 <= train_ratio <= 1
+            and 0 <= test_ratio <= 1
+            and train_ratio + test_ratio == 1.0
+        ):
+            raise ValueError("train_ratio和test_ratio之和必须为1.0")
+
+        # 随机打乱输入列表
+        random.shuffle(input_list)
+
+        # 计算训练集的大小
+        train_size = int(len(input_list) * train_ratio)
+
+        # 划分列表
+        train_list = input_list[:train_size]
+        test_list = input_list[train_size:]
+
+        return train_list, test_list
 
     def load_ids(self, idx_path: str):
         idx_str_lst = []
@@ -242,35 +428,60 @@ class SAEInferenceDataModule(BaseCFDDataModule):
             ), f"only {len(indices)} meshes are available, but {n_data} are requested."
             indices = indices[:n_data]
         else:
+            # all_files = os.listdir(self.data_dir / mode)
             all_files = os.listdir(self.data_dir)
+            all_files = [file for file in all_files if file.endswith(".npy")]
             prefix = "area"
             indices = [item[5:9] for item in all_files if item.startswith(prefix)]
 
             def extract_number(s):
                 return int(s)
 
+            def extract_number2(s):
+                return int(s[0:4])
+
             indices.sort(key=extract_number)
             indices = indices[:n_data]
-
-            full_caseids = [os.path.basename(self.data_dir)]
-            # full_caseids = full_caseids[:n_data]
+            full_caseids = os.listdir(self.data_dir)
+            full_caseids = [d for d in full_caseids if os.path.isdir(os.path.join(self.data_dir, d))]
+            full_caseids.sort(key=extract_number2)
+            full_caseids = full_caseids[:n_data]
+            # print('indices_%s:' % mode, indices)
         return indices, full_caseids
 
-    def get_indices(self, n_inference):
-        self.inference_indices, self.inference_full_caseids = self.init_idx(
-            n_inference, "inference", "inference_design_ids.txt"
+    def init_data(self, indices, mode="train"):
+        data_keys = ["info"]
+        data_keys.extend(self.out_keys)
+        data_dict = PathDictDataset(
+            path=self.data_dir,
+            query_points=self.query_points,
+            closest_points_to_query=self.closest_points_to_query,
+            indices=indices,
+            norms_dict=self.norms_dict,
+            data_keys=data_keys,
+            lazy_loading=self.lazy_loading,
         )
+        return data_dict
 
-    def load_bound(
-        self, data_dir, filename="watertight_global_bounds.txt", eps=1e-06
-    ) -> Tuple[List[float], List[float]]:
-        # with open(data_dir / filename, 'r') as fp:
-        with open(os.path.join(data_dir, filename), "r") as fp:
-            min_bounds = fp.readline().split(" ")
-            max_bounds = fp.readline().split(" ")
-            min_bounds = [(float(a) - eps) for a in min_bounds]
-            max_bounds = [(float(a) + eps) for a in max_bounds]
-        return min_bounds, max_bounds
+    def get_indices(self, n_train, n_val, n_test):
+        if self.train_ratio is None:
+            self.train_indices, self.train_full_caseids = self.init_idx(n_train, "train", "train_design_ids.txt")
+            self.test_indices, self.test_full_caseids = self.init_idx(n_test, "test", "test_design_ids.txt")
+        else:
+            self.train_indices, self.train_full_caseids = self.init_idx(n_train, "train", "train_design_ids.txt")
+            index = list(range(len(self.train_indices)))
+            train_index, test_index = self.split_list_(
+                index, train_ratio=self.train_ratio, test_ratio=self.test_ratio
+            )
+            self.train_indices, self.test_indices = (
+                [self.train_indices[j] for j in train_index],
+                [self.train_indices[k] for k in test_index],
+            )
+            self.train_full_caseids, self.test_full_caseids = (
+                [self.train_full_caseids[j] for j in train_index],
+                [self.train_full_caseids[k] for k in test_index],
+            )
+            print(self.train_full_caseids, self.test_full_caseids)
 
     def get_norms(self, data_dir):
         min_bounds, max_bounds = self.load_bound(
@@ -306,15 +517,16 @@ class SAEInferenceDataModule(BaseCFDDataModule):
         for i in range(len(self.out_keys)):
             key = self.out_keys[i]
             if key == "pressure":
-                data = np.zeros((100,))
+                file_path = data_dir / f"pressure_{self.train_indices[0]}.npy"
             elif key == "wallshearstress":
-                data = np.zeros((100, 3))
-
-            key_normalization = UnitGaussianNormalizer(
-                paddle.to_tensor(data=data), eps=1e-06, reduce_dim=[0], verbose=False
-            )
-
+                file_path = data_dir / f"wallshearstress_{self.train_indices[0]}.npy"
             mean_std_filename = f"train_{key}_mean_std.txt"
+            key_normalization = UnitGaussianNormalizer(
+                paddle.to_tensor(data=self.load_file(file_path)),
+                eps=1e-06,
+                reduce_dim=[0],
+                verbose=False,
+            )
             mean, std = self.load_bound(data_dir, filename=mean_std_filename, eps=0.0)
             key_normalization.mean, key_normalization.std = paddle.to_tensor(
                 data=mean[: self.out_channels[i]]
@@ -322,19 +534,9 @@ class SAEInferenceDataModule(BaseCFDDataModule):
             self.norms_dict[key] = copy.deepcopy(key_normalization).encode
             self.output_normalization.append(key_normalization)
 
-    def init_data(self, indices, mode="inference"):
-        data_keys = ["info"]
-        data_dict = PathDictDataset(
-            path=self.data_dir,
-            query_points=self.query_points,
-            indices=indices,
-            norms_dict=self.norms_dict,
-            lazy_loading=self.lazy_loading,
-        )
-        return data_dict
-
     def get_data(self):
-        self._inference_data = self.init_data(self.inference_indices, "inference")
+        self._train_data = self.init_data(self.train_indices, "train")
+        self._test_data = self.init_data(self.test_indices, "test")
         self._aggregatable = ["df", "df_query_points"]
 
     def load_file(self, file_path: Path) -> np.ndarray:

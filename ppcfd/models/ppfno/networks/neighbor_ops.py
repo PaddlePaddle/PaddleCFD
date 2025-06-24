@@ -1,12 +1,12 @@
 import sys
-sys.path.append("/home/")
-sys.path.append("/home/src/networks")
+# sys.path.append("/home/")
+# sys.path.append("/home/src/networks")
 
 import paddle
 import unittest
 from typing import Optional
-from net_utils import MLP
-from utilities3 import paddle_memory_usage, memory_usage, num_of_nans, show_tensor_range
+from .net_utils import MLP
+from .utilities3 import paddle_memory_usage, memory_usage, num_of_nans, show_tensor_range
 
 import fused_segment_csr
 

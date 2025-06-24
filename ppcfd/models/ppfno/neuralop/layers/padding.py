@@ -1,8 +1,8 @@
 import paddle
 from typing import List, Union
 import sys
-sys.path.append('/home/src')
-from neuralop.utils import validate_scaling_factor
+# sys.path.append('/home/src')
+from ..utils import validate_scaling_factor
 
 
 class DomainPadding(paddle.nn.Layer):
