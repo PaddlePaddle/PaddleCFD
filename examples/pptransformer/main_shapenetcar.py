@@ -12,15 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 import os
 import time
-import scipy
 import paddle
 import argparse
 import numpy as np
 
 from tqdm import tqdm
-from pathlib import Path
 from datetime import datetime
 from paddle.io import DataLoader
 from ppcfd.data import GraphDataset
@@ -136,6 +135,7 @@ def test(model, test_loader, coef_norm, enable_test=False):
         loss_press_orig = paddle.linalg.norm(p_pred_orig - p_true_orig) / paddle.linalg.norm(p_true_orig)
         loss_velo_orig = paddle.linalg.norm(v_true_orig - v_pred_orig) / paddle.linalg.norm(v_pred_orig)
 
+        # from pathlib import Path
         # cd_pred = cal_coefficient(Path(args.data_dir) / Path(sample_name[0]), p_pred_orig[0], v_pred_orig[0])
         # cd_true = cal_coefficient(Path(args.data_dir) / Path(sample_name[0]), p_true_orig[0], v_true_orig[0])
         # cd_pred_list.append(cd_pred)
@@ -173,6 +173,7 @@ def test(model, test_loader, coef_norm, enable_test=False):
 
     cd_pred_list = np.array(cd_pred_list)
     cd_true_list = np.array(cd_true_list)
+    # import scipy
     # spear = scipy.stats.spearmanr(cd_true_list, cd_pred_list)[0]
     # cd_mre = np.mean(losses_cd)
     spear = 0.0
@@ -205,7 +206,7 @@ def main(
     path,
     reg=1,
     val_iter=1,
-    coef_norm=[],
+    coef_norm=None,
     enable_test=False,
     enable_prof=False
 ):
@@ -228,6 +229,8 @@ def main(
         Model: 训练后的模型。
 
     """
+    if coef_norm is None:
+        coef_norm = []
     optimizer = paddle.optimizer.Adam(
         parameters=model.parameters(), learning_rate=hparams["lr"], weight_decay=0.0
     )
@@ -253,7 +256,7 @@ def main(
     )
 
     if enable_test:
-        state_dict = paddle.load("./model_131.pdparams")
+        state_dict = paddle.load("./checkpoint/model_131.pdparams")
         # val_loss = 0.0619, Spearman's Rank Correlations = 0.0000, loss_velo = 0.0238, loss_press = 0.0760, loss_cd = 0.0000
         model.set_state_dict(state_dict)
         loss_press, loss_velo, p_orig, v_orig, spearmanr, loss_cd = test(model, val_loader, coef_norm, enable_test=True)
@@ -302,8 +305,10 @@ if __name__ == "__main__":
     parser.add_argument("--profiler", default=False, type=bool)
     parser.add_argument("--n_train", default=800, type=int)
     parser.add_argument("--n_eval", default=200, type=int)
+    parser.add_argument("--gpu", default=0, type=int)
     args = parser.parse_args()
     print(args)
+    paddle.device.set_device(f"gpu:{args.gpu}")
     hparams = {"lr": args.lr, "batch_size": args.batch_size, "nb_epochs": args.nb_epochs}
     train_data, val_data, coef_norm = load_train_val_fold(
         args, preprocessed=args.preprocessed
@@ -325,8 +330,6 @@ if __name__ == "__main__":
         )
         
         if args.cinn:
-            import einops
-            paddle.jit.ignore_module([einops])
             paddle.framework.core._set_prim_all_enabled(True)
             model = paddle.jit.to_static(model, full_graph=True, input_spec = [paddle.static.InputSpec(shape=[32186, 7], dtype='float32')])
     else:
@@ -349,3 +352,5 @@ if __name__ == "__main__":
         enable_test=args.enable_test,
         enable_prof=args.profiler
     )
+
+# python main.py --enable_test True
