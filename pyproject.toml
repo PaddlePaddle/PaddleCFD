@@ -19,8 +19,8 @@ license = { text = "Apache-2.0" }
 dynamic = ["dependencies"]
 
 [project.urls]
-Homepage = "https://github.com/pypa/sampleproject"
-Issues = "https://github.com/pypa/sampleproject/issues"
+Homepage = "https://github.com/PaddlePaddle/PaddleCFD"
+Issues = "https://github.com/PaddlePaddle/PaddleCFD/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
