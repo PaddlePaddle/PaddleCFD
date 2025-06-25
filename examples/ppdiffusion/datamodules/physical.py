@@ -4,14 +4,18 @@ from collections import defaultdict
 from typing import Dict
 
 import numpy as np
-import paddle
+import paddle.distributed as dist
 from einops import rearrange
+from paddle.io import BatchSampler
+from paddle.io import DataLoader
+from paddle.io import Dataset
+from paddle.io import DistributedBatchSampler
 from tqdm import tqdm
 
 import ppcfd
 
 
-class PhysicalDatastet(paddle.io.Dataset):
+class PhysicalDatastet(Dataset):
     def __init__(
         self,
         data_dir: str,
@@ -132,18 +136,31 @@ class PhysicalDatastet(paddle.io.Dataset):
         return {key: self.dataset[key][idx] for key in self.dataset.keys()}
 
 
-class PhysicalDataLoader(paddle.io.DataLoader):
+class PhysicalDataLoader:
     def __init__(self, dataset):
         self.dataset = dataset
 
     def dataloader(self, batch_size, shuffle=False, drop_last=False, num_workers=0, **kwargs):
         if not batch_size:
             batch_size = len(self.dataset)
-        return paddle.io.DataLoader(
-            dataset=self.dataset,
+
+        try:
+            world_size = dist.get_world_size()
+            use_distributed = world_size > 1
+        except Exception:
+            use_distributed = False
+        sampler_cls = DistributedBatchSampler if use_distributed else BatchSampler
+
+        batch_sampler = sampler_cls(
+            self.dataset,
             batch_size=batch_size,
             shuffle=shuffle,
             drop_last=drop_last,
+        )
+
+        return DataLoader(
+            dataset=self.dataset,
+            batch_sampler=batch_sampler,
             num_workers=num_workers,
             use_shared_memory=True,
             **kwargs,

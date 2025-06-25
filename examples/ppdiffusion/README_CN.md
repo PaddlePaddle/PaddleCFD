@@ -54,20 +54,43 @@ forecast ckpt: https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusio
 
 检查 `configs/config.yaml` 文件中 `root_data_dir` 的设置。
 
+#### 自动混合精度训练
+
+若需减小训练显存占用，提升训练速度，可以将`configs/config.yaml` 文件中 `TRAIN.enable_amp` 设置为 true，以开启混合精度训练(AMP)。
+
+开启后，在默认配置下，Interpolation 过程每个 epoch 训练时间缩短约 45%，显存占用减小约 15%，Forecast 过程每个 epoch 训练时间缩短约 37%，显存占用减小约 25%。
+
+#### 分布式训练（数据并行）
+
+若需进一步提升训练速度，可以开启分布式训练。
+
+开启后，若使用双卡训练，在默认配置下，Interpolation 和 Forecast 过程每个 epoch 训练时间都缩短约 50%，但需要注意的是，由于需要保存中间结果在多卡间通信，以及一些其他开销，当开启分布式训练后，显存将增大。
+
+若需开启分布式训练，需要将运行命令改为如下形式：
+
+```python
+python -m paddle.distributed.launch --gpus=0,1,2,3 python_file.py --args
+```
+
+如 Interpolation 过程的训练命令将变为：
+
+```python
+python -m paddle.distributed.launch --gpus=0,1,2,3 train.py mode=train process=interpolation
+```
+
 ### Interpolation 过程
 
 #### 训练
 
-```sh
-env PYTHONPATH=$PYTHONPATH:$(pwd)
+```python
 python train.py mode=train process=interpolation
 ```
 
 #### 评估
 
 ```python
-python train.py mode=eval process=interpolation INTERPOLATION.ckpt_no_suffix="your checkpoint path"
-# 或使用预训练模型: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp.pdparams"
+python train.py mode=test process=interpolation INTERPOLATION.ckpt_no_suffix="your checkpoint path"
+# 或使用预训练模型: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp"
 ```
 
 ### Forecast 过程
@@ -76,14 +99,14 @@ python train.py mode=eval process=interpolation INTERPOLATION.ckpt_no_suffix="yo
 
 ```python
 python train.py mode=train process=dyffusion INTERPOLATION.ckpt_no_suffix="your checkpoint path"
-# 或使用预训练模型: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp.pdparams"
+# 或使用预训练模型: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp"
 ```
 
 #### 评估
 
 ```python
-python train.py mode=eval process=dyffusion INTERPOLATION.ckpt_no_suffix="your checkpoint path" FORECASTING.ckpt_no_suffix="your forecast checkpoint path"
-# 或使用预训练模型: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp.pdparams" FORECASTING.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/forecast.pdparams"
+python train.py mode=test process=dyffusion INTERPOLATION.ckpt_no_suffix="your checkpoint path" FORECASTING.ckpt_no_suffix="your forecast checkpoint path"
+# 或使用预训练模型: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp" FORECASTING.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/forecast"
 ```
 
 ### 可视化
@@ -92,7 +115,7 @@ python train.py mode=eval process=dyffusion INTERPOLATION.ckpt_no_suffix="your c
 
 ```python
 python train.py mode=test process=dyffusion INTERPOLATION.ckpt_no_suffix="your checkpoint path" FORECASTING.ckpt_no_suffix="your forecast checkpoint path"
-# 或使用预训练模型: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp.pdparams" FORECASTING.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/forecast.pdparams"
+# 或使用预训练模型: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp" FORECASTING.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/forecast"
 ```
 
 ## 参考文献与引用

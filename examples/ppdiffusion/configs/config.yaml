@@ -32,7 +32,7 @@ DATA:
       test: 1
     num_workers: 0
     drop_last: false
-  num_test_obstacles: 1
+  num_test_obstacles: 4
   test_out_of_distribution: false
 
 INTERPOLATION:
@@ -112,6 +112,7 @@ TRAIN:
     weight_decay: 0.0001
     grad_clip: ["norm", 1.0]
   metric_fns: ["mse", "crps", "ssr"]
+  enable_amp: false
 
 EVAL:
   batch_size: ${DATA.dataloader.batch_size.val}
@@ -124,7 +125,7 @@ EVAL:
   autoregressive_steps: 0
   verbose: false
   save_dir: ${output_dir}
-  metric_fns: ["mse", "ssr"]
+  metric_fns: ["mse", "crps", "ssr"]
   enable_ar: false
   calc_ensemble_metrics: true
   calc_batch_metrics: true

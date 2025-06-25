@@ -45,7 +45,7 @@ def get_data_path(
         test_t = {(1): 65, (4): 16, (16): 4}[num_test_obstacles]
         test_set_name = f"ns-runs_eval-{ood_infix}cors{num_test_obstacles}-navier-stokes-n5-t{test_t}-n0_tagcors{num_test_obstacles}_00001"
         subdirs = {
-            "train": "ns-runs_train-navier-stokes-n25-t65-n0_00001",
+            "train": "ns-runs_train-navier-stokes-n100-t65-n0_00001",
             "val": "ns-runs_val-navier-stokes-n2-t65-n0_00001",
             "test": test_set_name,
         }
