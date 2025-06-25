@@ -1,10 +1,11 @@
 import math
-from typing import Any, Dict
+from typing import Any
+from typing import Dict
 
 import paddle
 from omegaconf import DictConfig
 
-from .base_process import BaseProcess
+from ppcfd.models.ppdiffusion.process.base_process import BaseProcess
 
 
 class Forecasting(BaseProcess):

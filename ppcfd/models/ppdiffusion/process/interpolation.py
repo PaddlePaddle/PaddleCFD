@@ -1,11 +1,12 @@
-from typing import Dict, List
+from typing import Dict
+from typing import List
 
 import numpy as np
 import paddle
 from einops import rearrange
 from omegaconf import DictConfig
 
-from .base_process import BaseProcess
+from ppcfd.models.ppdiffusion.process.base_process import BaseProcess
 
 
 class Interpolation(BaseProcess):

@@ -8,10 +8,7 @@ import numpy as np
 import paddle
 import paddle.distributed as dist
 import paddle.distributed.fleet as fleet
-from metrics import EnsembleMetrics
 from omegaconf import DictConfig
-from process import DYffusion
-from process import Interpolation
 from utils import AverageMeterDict
 from utils import get_dataloader
 from utils import get_optimizer
@@ -22,7 +19,10 @@ from utils import save_arrays_as_line_plot
 from utils import set_seed
 
 from ppcfd.models.ppdiffusion import auto_adapt_dataparallel
+from ppcfd.models.ppdiffusion.metrics import EnsembleMetrics
 from ppcfd.models.ppdiffusion.modules import LitEma
+from ppcfd.models.ppdiffusion.process import DYffusion
+from ppcfd.models.ppdiffusion.process import Interpolation
 
 
 warnings.filterwarnings("ignore", category=UserWarning)

@@ -14,7 +14,9 @@
 
 from functools import wraps
 
+from ppcfd.models.ppdiffusion import metrics
 from ppcfd.models.ppdiffusion import modules
+from ppcfd.models.ppdiffusion import process
 from ppcfd.models.ppdiffusion.base_model import BaseModel
 from ppcfd.models.ppdiffusion.unet_simple import UNet as SimpleUnet
 
@@ -23,6 +25,8 @@ __all__ = [
     "BaseModel",
     "SimpleUnet",
     "modules",
+    "process",
+    "metrics",
 ]
 
 
