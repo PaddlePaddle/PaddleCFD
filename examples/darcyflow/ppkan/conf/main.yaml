@@ -18,7 +18,7 @@ device: gpu
 dtype: float32
 
 # Model
-model: "KANONet" # "KANONet"
+model: "KANONet" # "KANONet" or "DeepONet"
 MLPMODEL:
   branch1_in: 841
   branch1_hidden: [128, 128]

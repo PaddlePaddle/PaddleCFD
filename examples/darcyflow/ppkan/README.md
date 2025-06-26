@@ -107,7 +107,7 @@ $$ Pressure(x, y) = \sum_{k=1}^p b_k(x, y) \cdot t_k(x, y)$$
 The hyperparameters of model arch and training porcess can be found in the ./conf/main.yaml file. The training curve is shown in the following figure:
 ![Training Curve](./docs/figures/training_curve.png)
 **Results**:
-The pressure field prediction MRE on the test set is 4.3 %.
+The pressure field prediction relative err on the test set is 4.3 %, MSE is 0.007.
 ![Pressure Field Test](./docs/figures/output.png)
 
 ## Code
@@ -123,31 +123,27 @@ pwd
 cd ../../
 env PYTHONPATH=$PYTHONPATH:$(pwd)   # set temporary path
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-cd ./examples/ppkan
+cd ./examples/darcyflow/ppkan
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 ## Data
 
-We use the open-source dataset AirfRANS for airfoil task, more details about the data and preprocess methods please refer to [Paper](https://airfrans.readthedocs.io/en/latest/notes/introduction.html). You can either follow the subsequent instructions or acquire the same data following the instructions of the mentioned website.
+We use an open-source PDE dataset for darcy flow task, more details about the data and preprocess methods please refer to [link](https://www.kaggle.com/datasets/scaomath/pde-dataset). You can either follow the subsequent instructions or acquire the same data following the instructions of the mentioned website.
 
 ### Get the dataset
 
 #### If you want to get all files
 
-```sh
-wget https://paddle-org.bj.bcebos.com/paddlecfd/datasets/ppkan/AirFoilDataset.zip
-unzip AirFoilDataset.zip
-```
-We also provide a smaller demo dataset for the 2D Darcy flow prediction task, which can be downloaded using the following command:
+We provide a demo dataset for the 2D Darcy flow prediction task, which can be downloaded using the following command:
 ```sh 
 wget https://paddle-org.bj.bcebos.com/paddlecfd/datasets/ppkan/piececonst_r421_N1024_smooth1.mat
 ```
+After download the dataset, pls put the file in ./data/***.mat folder.
 
 ### Prepocess scripts
 
-See `dataset_creation_sim.py`.
-Noted: the airfoil geometry is extracted using a specific intorpolating method, which is NURBS curve fitting algorithm.
+The data preprocess follows the instructions that can be found in the mentinoed website and has been implemented in the main.py file, which invloves a simple downsample strategy to extract permeability fields. The dataset contains 1000 pairs of permeability fields "c", and corresbonding solution fields "y", we split 800 pairs for training and 200 pairs for testing.
 
 ## Run
 
@@ -169,8 +165,8 @@ python main.py mode=train
 #### Eval
 
 ```python
-python main.py mode=eval ckpt_no_suffix="your checkpoint path"
-# or using our pretrained checkpoint: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp.pdparams"
+python main.py mode=eval checkpoint="your checkpoint path"
+# or using our pretrained checkpoint: "https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppkan/darcy/KANONet_Darcy.pdparams"
 ```
 
 # References and citations
