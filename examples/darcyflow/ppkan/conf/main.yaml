@@ -1,0 +1,54 @@
+hydra:
+  run:
+    # dynamic output directory according to running time and override name
+    dir: outputs-${model}/${now:%Y-%m-%d}/${now:%H-%M-%S}/
+  job:
+    name: ${mode} # name of logfile
+    chdir: false # keep current working direcotry unchanged
+  sweep:
+    # output directory for multirun
+    dir: ${hydra.run.dir}
+    subdir: ./
+
+# Setting
+mode: "train"
+seed: 0
+output_dir: ${hydra:run.dir}
+device: gpu
+dtype: float32
+
+# Model
+model: "KANONet" # "KANONet"
+MLPMODEL:
+  branch1_in: 841
+  branch1_hidden: [128, 128]
+  trunk_in: 2
+  trunk_hidden: [128, 128]
+KANMODEL:
+  width_trunk: [2, 64, 40]
+  width_branch: [841, 64, 40]
+  trunk_min_grid: 0.0
+  trunk_max_grid: 1.0
+  branch_min_grid: 0.0
+  branch_max_grid: 1.0
+  grid_count: 3
+  branch_kan_func: "rbf"
+  trunk_kan_func: "rbf"
+  grid_opt: False
+  apply_base_update: True
+  noise_scale: 0.01
+  dtype: ${dtype}
+
+# Hyper-parameters
+TRAIN:
+  epochs: 1000
+  lr: 0.001
+  save_freq: 10
+  resume_ep: -1
+  batch_size: 32
+  
+checkpoint: null
+enable_ddp: false
+
+# eval
+pred_ckpt: null
