@@ -151,9 +151,9 @@ The data preprocess follows the instructions that can be found in the mentinoed 
 
 ### Check config at first
 
-Check setting of `DATA.path` in Airfoil/main.yaml, pls make sure the
+Check setting of `DATA.path` in ppkan/conf/main.yaml, pls make sure the
 path is correctly modified to the dataset directory where you download the 
-AirfRANS dataset.
+pde dataset.
 
 #### Train
 
@@ -165,7 +165,7 @@ python main.py mode=train
 #### Eval
 
 ```python
-python main.py mode=eval checkpoint="your checkpoint path"
+python main.py mode=test checkpoint="your checkpoint path"
 # or using our pretrained checkpoint: "https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppkan/darcy/KANONet_Darcy.pdparams"
 ```
 
