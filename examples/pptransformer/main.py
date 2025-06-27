@@ -385,10 +385,9 @@ class Structural_Loss:
             else:
                 raise NotImplementedError
 
-            # 保存为CSV
             output_df.to_csv(
                 output_dir / f"{others['file_name']}_test_train.csv",
-                index=False,  # 不保存行索引
+                index=False,
             )
         if cal_metric:
             return self.structural_metric
@@ -589,18 +588,16 @@ def train(config, model, datamodule, eval_dataloader, loss_logger):
     car_loss = Car_Loss(config)
     structural_loss = Structural_Loss(config)
 
-    # 创建优化器
     optimizer = op.adamw_fn(
         parameters=model.parameters(), learning_rate=config.lr, weight_decay=1e-6
     )
 
-    # 断点续训
     if config.checkpoint is not None:
         log.info(f"loading checkpoint from: {config.checkpoint}")
         ep_start = load_checkpoint(config, model, optimizer)
     else:
         ep_start = 0
-    # 学习率调度器
+
     optimizer, scheduler = op.lr_schedular_fn(
         scheduler_name=config.lr_schedular,
         learning_rate=optimizer.get_lr(),
@@ -628,11 +625,9 @@ def train(config, model, datamodule, eval_dataloader, loss_logger):
     t0 = time.time()
     for ep in range(ep_start, config.num_epochs):
         t1 = time.time()
-        # 训练循环
         for n_iter, data in enumerate(train_dataloader):
             outputs = model(data["inputs"])
             inputs, targets, others = data_to_dict(data)
-            # 模型前向传播
             if config.simulation_type == "AeroDynamic":
                 loss_list = car_loss(
                     inputs, outputs, targets, others, loss_fn, loss_cd_fn
@@ -660,26 +655,19 @@ def train(config, model, datamodule, eval_dataloader, loss_logger):
                 loss_logger.record_train_loss(loss_list)
                 l2_loss = loss_list[0]
                 train_loss = l2_loss
-            # 清除梯度
             optimizer.clear_grad()
-            # 反向传播
             train_loss.backward()
-            # 更新模型参数
             optimizer.step()
-        # 更新学习率
         if config.lr_schedular is not None:
             scheduler.step()
-        # 测试循环
         test(config, model, eval_dataloader, loss_logger, ep)
         model.train()
-        # 打印训练信息
         loss_logger.record_tensorboard(
             ep,
             (time.time() - t1),
             optimizer.get_lr(),
         )
 
-        # Save the weights
         if ((ep + 1) % 50 == 0) or ((ep + 1) == config.num_epochs):
             model_name = f"{config.output_dir}/{config.model_name}_{ep}"
             if config.enable_mp is True or config.enable_pp is True:
@@ -708,19 +696,10 @@ def main(config):
         None
     """
 
-    # 初始化损失记录器
     loss_logger = Loss_logger(config.output_dir, config.mode, config.simulation_type)
-
-    # 设置随机种子
     set_seed(config.seed)
-
-    # 数据生成
     datamodule = hydra.utils.instantiate(config.data_module)
-
-    # 模型构建
     model = hydra.utils.instantiate(config.model)
-
-    # 模型训练
     test_dataloader = datamodule.test_dataloader(
         batch_size=config.batch_size, num_workers=config.num_workers
     )
@@ -729,9 +708,7 @@ def main(config):
     # )
     if config.mode == "train":
         train(config, model, datamodule, test_dataloader, loss_logger)
-    # 模型测试
     elif config.mode == "test":
-        # 创建测试数据加载器
         model.eval()
         test(config, model, test_dataloader, loss_logger)
 
