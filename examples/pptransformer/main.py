@@ -15,8 +15,6 @@ from paddle.io import BatchSampler
 
 import ppcfd.utils.op as op
 import ppcfd.utils.parallel as parallel
-from ppcfd.utils.loss import LpLoss
-from ppcfd.utils.metric import R2Score
 
 log = logging.getLogger(__name__)
 
@@ -439,26 +437,9 @@ class Loss_logger:
         df = pd.DataFrame(m.csv_list[1:], columns=m.csv_list[0])
         df.to_csv(self.output_dir / f"test_epoch_{epoch}.csv", mode="w", index=False)
         if self.mode == "test":
-            outputs = {
-                # "Cp": op.to_tensor([cx.c_p_pred for cx in self.cx_test_list]),
-                # "cf": op.to_tensor([cx.c_f_pred for cx in self.cx_test_list]),
-                "Cd": op.to_tensor([cx.c_d_pred for cx in self.cx_test_list]),
-            }
-
-            targets = {
-                # "Cp": op.to_tensor([cx.c_p_true for cx in self.cx_test_list]),
-                # "cf": op.to_tensor([cx.c_f_true for cx in self.cx_test_list]),
-                "Cd": op.to_tensor([cx.c_d_true for cx in self.cx_test_list]),
-            }
-            r2_metric = R2Score()
-            r2_metric_dict = r2_metric(outputs, targets)
-            # m.cp_r2_score=r2_metric_dict["cp"]
-            # m.cf_r2_score=r2_metric_dict["cf"]
-            m.cd_r2_score = r2_metric_dict["Cd"]
-            # m.cp_r2_score=r2_metric_dict["Cp"]
             if isinstance(m, AeroDynamicMetrics):
                 log.info(
-                    f"MSE:{np.mean(m.mse_cd):.2e}, MRE:[Cp], {np.mean(m.mre_cp)*100:.2f}%, [Cf], {np.mean(m.mre_cf)*100:.2f}%, [Cd], {np.mean(m.mre_cd)*100:.2f}%, [Cl], {np.mean(m.mre_cl)*100:.2f}% \tL2:[P], {np.mean(m.l2_p):.4f}, [WSS], {np.mean(m.l2_wss):.4f}, [VEL], {np.mean(m.l2_vel):.4f}, R2 Score: [Cd], {m.cd_r2_score:.2f}"
+                    f"MSE:{np.mean(m.mse_cd):.2e}, MRE:[Cp], {np.mean(m.mre_cp)*100:.2f}%, [Cf], {np.mean(m.mre_cf)*100:.2f}%, [Cd], {np.mean(m.mre_cd)*100:.2f}%, [Cl], {np.mean(m.mre_cl)*100:.2f}% \tL2:[P], {np.mean(m.l2_p):.4f}, [WSS], {np.mean(m.l2_wss):.4f}, [VEL], {np.mean(m.l2_vel):.4f}"
                 )
             elif isinstance(m, StructuralMetrics):
                 log.info(f"Mean Relative L-2 Error [Stress]: {np.mean(m.l2):.2f}")
@@ -553,7 +534,6 @@ def test(config, model, test_dataloader, loss_logger, ep=None):
         )
     model.eval()
     loss_cd_fn = op.mse_fn()
-    # loss_fn = LpLoss(size_average=True)
     loss_fn = paddle.nn.MSELoss()
 
     if config.simulation_type == "AeroDynamic":
@@ -604,8 +584,6 @@ def train(config, model, datamodule, eval_dataloader, loss_logger):
     """
     model.train()
 
-    # 损失函数
-    # loss_fn = LpLoss(size_average=True)
     loss_fn = paddle.nn.MSELoss()
     loss_cd_fn = op.mse_fn()
     car_loss = Car_Loss(config)
