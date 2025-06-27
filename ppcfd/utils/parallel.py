@@ -62,15 +62,8 @@ def parallelize(model, optimizer, config):
         )
     
     if config.enable_cinn is True:
-        # os.environ["TRANSLATOR_VERBOSITY"] = '3'
         paddle.framework.core._set_prim_all_enabled(True)
         model = paddle.jit.to_static(model, full_graph=True, backend='CINN', input_spec = paddle.static.InputSpec(shape=[1, 32186, 7], dtype='float32'))
-        # build_strategy = paddle.static.BuildStrategy()
-        # build_strategy.build_cinn_pass = True
-        # build_strategy.debug_graphviz_path = "./cinn_graph/"
-        # program = paddle.static.default_main_program()
-        # program = paddle.static.CompiledProgram(program, build_strategy=build_strategy)
-    
     return model, optimizer
 
 
