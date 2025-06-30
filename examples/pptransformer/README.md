@@ -22,8 +22,7 @@ volume | 0.0211 | 0.0253
 
 # 3. Train Now
 ## datadownload
-- shapenet-car : https://dataset.bj.bcebos.com/PaddleScience/DNNFluid-Car/ShapeNet-Car/mlcfd_data.zip
-- drivaernet++(downsample) : https://dataset.bj.bcebos.com/PaddleScience/DNNFluid-Car/DrivAer%2B%2B/drivaer_pp.tar
+- shapenet-car : https://dataset.bj.bcebos.com/PaddleScience/PaddleCFD/mlcfd_data.zip
 
 ## ShapeNet-Car
 ```
