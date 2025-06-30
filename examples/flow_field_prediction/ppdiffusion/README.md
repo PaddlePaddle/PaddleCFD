@@ -19,6 +19,10 @@ cd ./examples/ppdiffusion
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
+## Introduction
+
+This case is used to solve the problem of flow field prediction. The case is based on the flow around cylinders. For a detailed introduction, please refer to the original paper [paper](https://arxiv.org/abs/2306.01984).
+
 ## Data
 
 We use the same data as the original paper, while is a Navier-Stokes dataset form another [Paper](https://arxiv.org/abs/2108.07799). If you want to get the dataset by following the instructions given by the paper and skip this part.
@@ -90,7 +94,7 @@ python train.py mode=train process=interpolation
 
 ```python
 python train.py mode=test process=interpolation INTERPOLATION.ckpt_no_suffix="your checkpoint path"
-# or using our pretrained checkpoint: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp"
+# or using our pretrained checkpoint, download it and set the parameters to INTERPOLATION.ckpt_no_suffix="/path/interp"
 ```
 
 ### Forecast process
@@ -99,14 +103,14 @@ python train.py mode=test process=interpolation INTERPOLATION.ckpt_no_suffix="yo
 
 ```python
 python train.py mode=train process=dyffusion INTERPOLATION.ckpt_no_suffix="your checkpoint path"
-# or using our pretrained checkpoint: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp"
+# or using our pretrained checkpoint, download it and set the parameters to INTERPOLATION.ckpt_no_suffix="/path/interp"
 ```
 
 #### Eval
 
 ```python
 python train.py mode=test process=dyffusion INTERPOLATION.ckpt_no_suffix="your checkpoint path" FORECASTING.ckpt_no_suffix="your forecast checkpoint path"
-# or using our pretrained checkpoint: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp" FORECASTING.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/forecast"
+# or using our pretrained checkpoint, download it and set the parameters to INTERPOLATION.ckpt_no_suffix="/path/interp" FORECASTING.ckpt_no_suffix="/path/forecast"
 ```
 
 ### Visulization
@@ -115,7 +119,7 @@ Run the following command and results will be found in `./outputs/the lasted dat
 
 ```python
 python train.py mode=test process=dyffusion INTERPOLATION.ckpt_no_suffix="your checkpoint path" FORECASTING.ckpt_no_suffix="your forecast checkpoint path"
-# or using our pretrained checkpoint: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp" FORECASTING.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/forecast"
+# or using our pretrained checkpoint, download it and set the parameters to INTERPOLATION.ckpt_no_suffix="/path/interp" FORECASTING.ckpt_no_suffix="/path/forecast"
 ```
 
 # References and citations
