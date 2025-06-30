@@ -1,4 +1,5 @@
-# 1. Speed
+This model can predict drag of the vehicle in different geometry
+# 1. Speed Up
 
 DataSet  | torch  | paddle 
 -- | -- | -- 
@@ -41,3 +42,6 @@ python -m paddle.distributed.launch --gpus=0,1 main_v2.py \
     data_module.n_test_num=1 \
     num_epochs=10
 ```
+
+reference 
+[1] Wu H, Luo H, Wang H, et al. Transolver: A fast transformer solver for pdes on general geometries[J]. arXiv preprint arXiv:2402.02366, 2024.
