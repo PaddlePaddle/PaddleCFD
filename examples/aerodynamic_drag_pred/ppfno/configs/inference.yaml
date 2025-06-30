@@ -31,7 +31,7 @@ sdf_spatial_resolution: [64, 64, 64] # or [64, 64, 64]
 # data
 data_module: SAE
 n_train_num: 166 # 862
-n_val_num: 1 #
+n_val_num: 1 # 
 n_test_num: 20 # 166
 n_inference_num: 1
 only_save_sdf: false  # generate sdf&closest_points or training
@@ -58,7 +58,7 @@ resume_ep: -1
 # inference params
 state: null
 pd_path: null
-reason_input_path: null # /pre_process/{case_id}
-reason_output_path: null # /reason_output/reason_{taskId}
-pre_output_path: null # /pre_output/{数据集id} for bounds txt files
+reason_input_path: null # /aidsw01/paddlefile/hstasim/pre_process/{case_id}
+reason_output_path: null # /aidsw01/paddlefile/hstasim/reason_output/reason_{taskId}
+pre_output_path: null # /aidsw01/paddlefile/hstasim/pre_output/{数据集id} for bounds txt files
 # gpu: null

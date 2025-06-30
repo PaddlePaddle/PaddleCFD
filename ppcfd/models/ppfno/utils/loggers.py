@@ -42,7 +42,7 @@ class TensorBoardLogger(Logger):
 
     def __init__(self, log_dir: str):
         super().__init__()
->>>>>>        self.writer = torch.utils.tensorboard.SummaryWriter(log_dir)
+        self.writer = torch.utils.tensorboard.SummaryWriter(log_dir)
 
     def log_scalar(self, tag: str, value: float, step: int):
         self.writer.add_scalar(tag, value, step)

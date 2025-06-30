@@ -16,32 +16,44 @@ import logging
 import os
 import sys
 
-
-sys.path.append("./src")
-sys.path.append("./src/networks")
+# sys.path.append("./src")
+# sys.path.append("./src/networks")
 from contextlib import asynccontextmanager
 from timeit import default_timer
 from typing import Dict
+from typing import List
 from typing import Tuple
+from typing import Union
 
+import anyio
 import hydra
+import meshio
 import numpy as np
 import paddle
 import pyvista as pv
-
-# strategy = fleet.DistributedStrategy()
-# strategy.find_unused_parameters = True
-# fleet.init(is_collective=True, strategy=strategy)
+import vtk
 from fastapi import FastAPI
 from fastapi import HTTPException
 from fastapi import status
 from omegaconf import DictConfig
 from paddle.distributed import ParallelEnv
+from paddle.distributed import fleet
+from paddle.io import DataLoader
+from paddle.io import DistributedBatchSampler
 from pydantic import BaseModel
-from src.data import instantiate_inferencedatamodule
-from src.losses import LpLoss
-from src.networks import instantiate_network
-from src.utils.average_meter import AverageMeterDict
+
+from ppcfd.models.ppfno.data import instantiate_inferencedatamodule
+from ppcfd.models.ppfno.losses import LpLoss
+from ppcfd.models.ppfno.networks import instantiate_network
+from ppcfd.models.ppfno.optim.schedulers import instantiate_scheduler
+from ppcfd.models.ppfno.utils.average_meter import AverageMeter
+from ppcfd.models.ppfno.utils.average_meter import AverageMeterDict
+from ppcfd.models.ppfno.utils.dot_dict import DotDict
+from ppcfd.models.ppfno.utils.dot_dict import flatten_dict
+
+# strategy = fleet.DistributedStrategy()
+# strategy.find_unused_parameters = True
+# fleet.init(is_collective=True, strategy=strategy)
 
 
 # 设置你要的配置打印日志
@@ -117,7 +129,8 @@ def save_vtp_from_dict(
         raise ValueError(f"type of coord({type(coord)}) should be ndarray.")
     if len(coord) % num_timestamps != 0:
         raise ValueError(
-            f"coord length({len(coord)}) should be an integer multiple of " f"num_timestamps({num_timestamps})"
+            f"coord length({len(coord)}) should be an integer multiple of "
+            f"num_timestamps({num_timestamps})"
         )
     if coord.shape[1] not in [3]:
         raise ValueError(f"ndim of coord({coord.shape[1]}) should be 3 in vtp format.")
@@ -138,7 +151,9 @@ def save_vtp_from_dict(
             if value_ is not None and not isinstance(value_, np.ndarray):
                 raise ValueError(f"type of value({type(value_)}) should be ndarray.")
             if value_ is not None and len(coord_) != len(value_):
-                raise ValueError(f"coord length({len(coord_)}) should be equal to value length({len(value_)})")
+                raise ValueError(
+                    f"coord length({len(coord_)}) should be equal to value length({len(value_)})"
+                )
             point_cloud[k] = value_
 
         if num_timestamps > 1:
@@ -172,10 +187,12 @@ def load_model():
         state = paddle.load(path=str(CFG.pd_path))
         MODEL.set_state_dict(state_dict=state["model"])
         device = ParallelEnv().device_id
-        memory_allocated = paddle.device.cuda.memory_allocated(device=device) / (1024 * 1024 * 1024)
+        memory_allocated = paddle.device.cuda.memory_allocated(device=device) / (
+            1024 * 1024 * 1024
+        )
         logging.info(f"Memory usage with model loading: {memory_allocated:.2f} GB")
 
-        logging.info("Model loaded successfully")
+        logging.info(f"Model loaded successfully")
     except Exception as e:
         logging.error(f"Error loading model: {str(e)}")
         raise
@@ -210,6 +227,33 @@ app = FastAPI(lifespan=lifespan)
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "model_loaded": MODEL is not None}
+
+
+async def async_save_eval_results(
+    cfg, pred, indices, caseid, decode_fn, output: OutputData
+):
+    try:
+        (
+            pred_pressure_csv_path,
+            pred_pressure_vtp_path,
+            pred_wallshearstress_csv_path,
+            pred_wallshearstress_vtp_path,
+        ) = save_eval_results(
+            cfg,
+            pred,
+            indices[0],
+            caseid,
+            decode_fn=decode_fn,
+        )
+        
+        # 更新输出对象中的文件路径
+        output.pred_pressure_csv_path = pred_pressure_csv_path
+        output.pred_pressure_vtp_path = pred_pressure_vtp_path
+        output.pred_wallshearstress_csv_path = pred_wallshearstress_csv_path
+        output.pred_wallshearstress_vtp_path = pred_wallshearstress_vtp_path
+        
+    except Exception as e:
+        logging.error(f"Error in async file saving: {str(e)}")
 
 
 # @app.post("/api/v1/inference", response_model=OutputData)
@@ -303,20 +347,56 @@ async def infer_model_task(input_data: InputData) -> OutputData:
                     device, data_dict, loss_fn=loss_fn, decode_fn=datamodule.decode
                 )
                 t2 = default_timer()
-                msg += f"Inference(pure) took {t2 - t1:.2f} seconds."
+                paddle.device.cuda.empty_cache()
+                msg += f"Inference (pure) took {t2 - t1:.2f} seconds."
                 # logging.info('cd_dict:', cd_dict)
+                (
+                    pred_pressure_csv_path,
+                    pred_pressure_vtp_path,
+                    pred_wallshearstress_csv_path,
+                    pred_wallshearstress_vtp_path,
+                ) = get_pathes(
+                    CFG,
+                    datamodule.inference_full_caseids[0],
+                )
+
+                output = OutputData(
+                    error_code=0,
+                    error_message="",
+                    cost_forward=t2 - t1,
+                    cost_all=0.0,
+                    Cd_pred_modify=cd_dict["Cd_pred_modify"],
+                    pred_pressure_csv_path=pred_pressure_csv_path,
+                    pred_pressure_vtp_path=pred_pressure_vtp_path,
+                    pred_wallshearstress_csv_path=pred_wallshearstress_csv_path,
+                    pred_wallshearstress_vtp_path=pred_wallshearstress_vtp_path,
+                )
                 if CFG.save_eval_results:
 
-                    (
-                        pred_pressure_csv_path,
-                        pred_pressure_vtp_path,
-                        pred_wallshearstress_csv_path,
-                        pred_wallshearstress_vtp_path,
-                    ) = save_eval_results(
-                        CFG, pred, indices[0], datamodule.inference_full_caseids[0], decode_fn=datamodule.decode
+                    # (
+                    #     pred_pressure_csv_path,
+                    #     pred_pressure_vtp_path,
+                    #     pred_wallshearstress_csv_path,
+                    #     pred_wallshearstress_vtp_path,
+                    # ) = save_eval_results(
+                    #     CFG,
+                    #     pred,
+                    #     indices[0],
+                    #     datamodule.inference_full_caseids[0],
+                    #     decode_fn=datamodule.decode,
+                    # )
+
+                    asyncio.create_task(
+                        async_save_eval_results(
+                            CFG,
+                            pred,
+                            indices[0],
+                            datamodule.inference_full_caseids[0],
+                            datamodule.decode,
+                            output
+                        )
                     )
 
-                paddle.device.cuda.empty_cache()
             except MemoryError as e:
                 logging.info(e)
                 if "Out of memory" in str(e):
@@ -332,7 +412,7 @@ async def infer_model_task(input_data: InputData) -> OutputData:
                 if k.split("_")[0] == "L2":
                     msg += f"{k}: {v.item():.4f}, "
                     eval_meter.update({k: v})
-            msg += "|| MRE and Value: "
+            msg += f"|| MRE and Value: "
             """
             for k, v in out_dict.items():
                 if "Cd" and "pred" in k.split("_"):
@@ -344,7 +424,7 @@ async def infer_model_task(input_data: InputData) -> OutputData:
             """
             Cd_pred_modify = cd_dict["Cd_pred_modify"]
             # Cd_truth = out_dict["Cd_truth"]
-            Cd_pred = out_dict["Cd_pred"]
+            # Cd_pred = out_dict["Cd_pred"].item()
             # Cd_mre_modify = paddle.abs(x=Cd_pred_modify - Cd_truth) / paddle.abs(x=Cd_truth)
             # eval_meter.update({"Cd_mre_modify": Cd_mre_modify})
             eval_meter.update({"Cd_pred_modify": Cd_pred_modify})
@@ -355,11 +435,20 @@ async def infer_model_task(input_data: InputData) -> OutputData:
 
             inference_json_dict["parts"] = os.path.basename(CFG.reason_input_path)
             inference_json_dict["drag_coefficient"] = Cd_pred_modify.item()
-            inference_json_dict["pressure_drag_coefficient"] = cd_dict["Cd_pressure_pred"].item()
-            inference_json_dict["friction_resistance_coefficient"] = cd_dict["Cd_wallshearstress_pred"].item()
-            inference_json_dict["total_drag"] = cd_dict["total_drag_pred"].item()
-            inference_json_dict["pressure_drag"] = cd_dict["pressure_drag_pred"].item()
-            inference_json_dict["friction_resistance"] = cd_dict["wallshearstress_drag_pred"].item()
+            inference_json_dict["pressure_drag_coefficient"] = (
+                cd_dict["Cd_pressure_pred"]
+                + cd_dict["Cd_pred_modify"].item()
+                - out_dict["Cd_pred"].item()
+            )
+
+            inference_json_dict["friction_resistance_coefficient"] = cd_dict[
+                "Cd_wallshearstress_pred"
+            ]
+            inference_json_dict["total_drag"] = cd_dict["total_drag_pred"]
+            inference_json_dict["pressure_drag"] = cd_dict["pressure_drag_pred"]
+            inference_json_dict["friction_resistance"] = cd_dict[
+                "wallshearstress_drag_pred"
+            ]
             t3 = default_timer()
 
             inference_json_dict["cost_all"] = t3 - t1
@@ -373,20 +462,22 @@ async def infer_model_task(input_data: InputData) -> OutputData:
             for k, v in eval_dict.items():
                 msg += f"{v.item():.4f}({k}), "
             logging.info(msg)
-            max_memory_allocated = paddle.device.cuda.max_memory_allocated(device=device) / (1024 * 1024 * 1024)
+            max_memory_allocated = paddle.device.cuda.max_memory_allocated(
+                device=device
+            ) / (1024 * 1024 * 1024)
             logging.info(f"Memory Usage: {max_memory_allocated:.2f} GB (MAX).")
 
-            output = OutputData(
-                error_code=0,
-                error_message="",
-                cost_forward=t2 - t1,
-                cost_all=t3 - t1,
-                Cd_pred_modify=Cd_pred_modify,
-                pred_pressure_csv_path=pred_pressure_csv_path,
-                pred_pressure_vtp_path=pred_pressure_vtp_path,
-                pred_wallshearstress_csv_path=pred_wallshearstress_csv_path,
-                pred_wallshearstress_vtp_path=pred_wallshearstress_vtp_path,
-            )
+            # output = OutputData(
+            #     error_code=0,
+            #     error_message="",
+            #     cost_forward=t2 - t1,
+            #     cost_all=t3 - t1,
+            #     Cd_pred_modify=Cd_pred_modify,
+            #     pred_pressure_csv_path=pred_pressure_csv_path,
+            #     pred_pressure_vtp_path=pred_pressure_vtp_path,
+            #     pred_wallshearstress_csv_path=pred_wallshearstress_csv_path,
+            #     pred_wallshearstress_vtp_path=pred_wallshearstress_vtp_path,
+            # )
             logging.info(f"请求处理完成(线程ID: {id(asyncio.get_running_loop())})")
             return output
         except Exception as e:
@@ -401,7 +492,9 @@ async def infer_model_task(input_data: InputData) -> OutputData:
 @app.post("/api/v1/inference", response_model=OutputData)
 async def infer_model(input_data: InputData) -> OutputData:
     if MODEL is None:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Model not loaded")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Model not loaded"
+        )
 
     # logging.info("got input:{}".format(input_data.input_file))
     try:
@@ -422,7 +515,9 @@ async def infer_model(input_data: InputData) -> OutputData:
         )
 
 
-def save_eval_results(cfg: DictConfig, pred, centroid_idx, caseid, decode_fn=None) -> Tuple[str, str, str]:
+def save_eval_results(
+    cfg: DictConfig, pred, centroid_idx, caseid, decode_fn=None
+) -> Tuple[str, str, str]:
     pred_pressure = decode_fn(pred[0:1, :], 0).cpu().detach().numpy()
     pred_wallshearstress = decode_fn(pred[1:4, :], 1).cpu().detach().numpy()
     evals_results = {
@@ -508,6 +603,50 @@ def save_eval_results(cfg: DictConfig, pred, centroid_idx, caseid, decode_fn=Non
     )
 
 
+def get_pathes(
+    cfg: DictConfig, caseid
+) -> Tuple[str, str, str, str]:
+    # pred_pressure = decode_fn(pred[0:1, :], 0).cpu().detach().numpy()
+    # pred_wallshearstress = decode_fn(pred[1:4, :], 1).cpu().detach().numpy()
+    evals_results = {
+        "pred_pressure": None,
+        "pred_wallshearstress": None,
+    }
+
+    pred_pressure_csv_path = None
+    pred_pressure_vtp_path = None
+    pred_wallshearstress_csv_path = None
+    pred_wallshearstress_vtp_path = None
+
+    for k, v in evals_results.items():
+        csv_filename = os.path.join(
+            cfg.reason_output_path,
+            "vtp_csv",
+            f"{caseid}_{k}.csv",
+        )
+        vtp_filename = os.path.join(
+            cfg.reason_output_path,
+            "vtp_csv",
+            f"{caseid}_{k}.vtp",
+        )
+
+
+        if k == "pred_pressure":
+            pred_pressure_csv_path = csv_filename
+            pred_pressure_vtp_path = vtp_filename
+        elif k == "pred_wallshearstress":
+            pred_wallshearstress_csv_path = csv_filename
+            pred_wallshearstress_vtp_path = vtp_filename
+
+    return (
+        pred_pressure_csv_path,
+        pred_pressure_vtp_path,
+        pred_wallshearstress_csv_path,
+        pred_wallshearstress_vtp_path,
+    )
+
+
+
 @hydra.main(version_base=None, config_path="./configs", config_name="inference")
 def main(cfg: DictConfig):
     global CFG
@@ -518,16 +657,14 @@ def main(cfg: DictConfig):
     uvicorn.run(app, host="0.0.0.0", workers=1, port=int(port))
 
     """
-    CUDA_VISIBLE_DEVICES=6 python inference_server.py \
-        -cn inference.yaml pd_path=/home/chenkai26/Paddle-AeroSimOpt/train_output/train_2/pd/GNOFNOGNO_all.pdparams \
-        =
+    CUDA_VISIBLE_DEVICES=1 python inference_server.py \
+        -cn inference.yaml pd_path=/home/chenkai26/Paddle-AeroSim-DataModel/checkpoints/GNOFNOGNO_all.pdparams
     """
 
     """
-    curl -X POST \
-        "http://0.0.0.0:8087/api/v1/inference" \
+    curl -X POST "http://0.0.0.0:8087/api/v1/inference" \
         -H "Content-Type: application/json" \
-        -d '{"reason_output_path":"/home/chenkai26/Paddle-AeroSimOpt/reason_output/reason_1", "reason_input_path":"/home/chenkai26/Paddle-AeroSimOpt/pre_process/2014-f-6103", "pre_output_path":"/home/chenkai26/Paddle-AeroSimOpt/pre_output/dataset1"}'
+        -d '{"reason_output_path":"/home/chenkai26/Paddle-AeroSim-DataModel/inference_output/dataset1/case016", "reason_input_path":"/home/chenkai26/Paddle-AeroSim-DataModel/pre_output/inference_dataset1/case016", "pre_output_path":"/home/chenkai26/Paddle-AeroSim-DataModel/pre_output/train_dataset1"}'
     """
 
     """

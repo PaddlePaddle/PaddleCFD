@@ -10,13 +10,21 @@ Date:    2025/4/18
 
 import logging
 import os
+import re
 import shutil
+import sys
 from os import path as osp
+from typing import List, Tuple
 
 import gmsh
 import hydra
+import meshio
+import numpy as np
+import open3d as o3d
+import paddle
 import pandas as pd
 from omegaconf import DictConfig
+from stl import mesh
 
 
 def copy_json_file(src_file_path, dest_dir_path):
@@ -126,7 +134,9 @@ class STPRefine:
         os.makedirs(self.save_path, exist_ok=True)
         gmsh.write(osp.join(self.save_path, f"{self.stpID[:-4]}.stl"))
 
-        logging.info(f"The new stl file is saved to {osp.join(self.save_path, f'{self.stpID[:-4]}.stl')}")
+        logging.info(
+            f"The new stl file is saved to {osp.join(self.save_path, f'{self.stpID[:-4]}.stl')}"
+        )
 
         # 可视化（可选）
         # if '-nopopup' not in sys.argv:
@@ -164,7 +174,9 @@ def get_refine_params(stp_path):
 @hydra.main(version_base=None, config_path="./configs", config_name="train.yaml")
 def main(cfg: DictConfig):
     geo_path = cfg.refine_input_path  # '/home/chenkai26/Paddle-AeroSimOpt/data/'
-    save_path = cfg.refine_output_path  # '/home/chenkai26/Paddle-AeroSimOpt/data/extracted_info/'
+    save_path = (
+        cfg.refine_output_path
+    )  # '/home/chenkai26/Paddle-AeroSimOpt/data/extracted_info/'
     # refine meshing, extract & save elements from stl
     os.makedirs(os.path.join(save_path, "log"), exist_ok=True)
     logging.basicConfig(

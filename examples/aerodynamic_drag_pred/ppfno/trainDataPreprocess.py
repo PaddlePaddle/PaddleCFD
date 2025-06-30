@@ -2,15 +2,15 @@ import os
 
 import paddle
 
-
 """
 Authors: chenkai26(chenkai26@baidu.com)
 Date:    2024/8/27
 """
 # ginoDataTrans_CSV_STL
-import json
 import logging
+import random
 import re
+from typing import List, Tuple
 
 import hydra
 import meshio
@@ -20,6 +20,7 @@ import pandas as pd
 import pymeshlab
 from omegaconf import DictConfig
 from stl import mesh
+import json
 
 
 class CFDDataTransiton:
@@ -27,7 +28,9 @@ class CFDDataTransiton:
     def __init__(self, case_path, save_path, caseID, info):
         self.inward_surface_normal = None
         self.cell_area = None
-        self.csv_data = pd.read_csv(os.path.join(case_path, f"{caseID[5:]}.csv")).to_numpy()
+        self.csv_data = pd.read_csv(
+            os.path.join(case_path, f"{caseID[5:]}.csv")
+        ).to_numpy()
         self.centroid = self.csv_data[:, -3:]
         self.press = self.csv_data[:, 0]
         self.wallshearstress = self.csv_data[:, 1:4] * -1
@@ -38,7 +41,9 @@ class CFDDataTransiton:
         self.velocity = self.info["velocity"]
         self.reference_area = self.info["reference_area"]
         self.density = self.info["density"]
-        self.const = 2.0 / (self.density * self.velocity**2 * self.reference_area)
+        self.const = 2.0 / (
+            self.density * self.velocity**2 * self.reference_area
+        )
         self.save_path = save_path
         self.case_path = case_path
         self.caseID = caseID
@@ -53,17 +58,25 @@ class CFDDataTransiton:
 
     @property
     def normal(self):
-        self.inward_surface_normal = -1 * self.cell_area_ijk / self.cell_area[:, np.newaxis]
+        self.inward_surface_normal = (
+            -1 * self.cell_area_ijk / self.cell_area[:, np.newaxis]
+        )
         return self.inward_surface_normal
 
     def drag_c(self):
         def pressure_drag_c():
-            cell_fp = self.cell_area * self.press * np.sum(self.inward_surface_normal * self.flow_direction, axis=1)
+            cell_fp = (
+                self.cell_area
+                * self.press
+                * np.sum(self.inward_surface_normal * self.flow_direction, axis=1)
+            )
             cd_p = np.sum(cell_fp, axis=0) * self.const
             return cd_p
 
         def friction_drag_c():
-            cell_ff = self.cell_area * np.sum(self.wallshearstress * self.flow_direction, axis=1)
+            cell_ff = self.cell_area * np.sum(
+                self.wallshearstress * self.flow_direction, axis=1
+            )
             cd_f = np.sum(cell_ff, axis=0) * self.const
             return cd_f
 
@@ -73,12 +86,18 @@ class CFDDataTransiton:
 
     def lift_c(self):
         def pressure_lift_c():
-            cell_fp = self.cell_area * self.press * np.sum(self.inward_surface_normal * self.lift_direction, axis=1)
+            cell_fp = (
+                self.cell_area
+                * self.press
+                * np.sum(self.inward_surface_normal * self.lift_direction, axis=1)
+            )
             cl_p = np.sum(cell_fp, axis=0) * self.const
             return cl_p
 
         def friction_lift_c():
-            cell_ff = self.cell_area * np.sum(self.wallshearstress * self.lift_direction, axis=1)
+            cell_ff = self.cell_area * np.sum(
+                self.wallshearstress * self.lift_direction, axis=1
+            )
             cl_f = np.sum(cell_ff, axis=0) * self.const
             return cl_f
 
@@ -103,7 +122,9 @@ class CFDDataTransiton:
             self.press,
         )
         np.save(
-            os.path.join(self.save_path, f"wallshearstress_{self.caseID[:4].zfill(4)}.npy"),
+            os.path.join(
+                self.save_path, f"wallshearstress_{self.caseID[:4].zfill(4)}.npy"
+            ),
             self.wallshearstress,
         )
         np.save(
@@ -120,7 +141,9 @@ class CFDDataTransiton:
         )
         paddle.save(
             obj=self.info,
-            path=os.path.join(self.save_path, f"info_{self.caseID[:4].zfill(4)}.pdparams"),
+            path=os.path.join(
+                self.save_path, f"info_{self.caseID[:4].zfill(4)}.pdparams"
+            ),
         )
         return None
 
@@ -166,7 +189,9 @@ class MeshFormatTransition:
         stl_mesh = o3d.io.read_triangle_mesh(self.case_path + f"/{self.caseID[5:]}.stl")
         logging.info(stl_mesh)
         stl_mesh.compute_vertex_normals()
-        o3d.io.write_triangle_mesh(self.save_path + f"/mesh_{self.caseID[:4].zfill(4)}.ply", stl_mesh)
+        o3d.io.write_triangle_mesh(
+            self.save_path + f"/mesh_{self.caseID[:4].zfill(4)}.ply", stl_mesh
+        )
 
 
 class ComputeDF:
@@ -188,7 +213,9 @@ class ComputeDF:
         tx = np.linspace(min_bounds[0], max_bounds[0], sdf_spatial_resolution[0])
         ty = np.linspace(min_bounds[1], max_bounds[1], sdf_spatial_resolution[1])
         tz = np.linspace(min_bounds[2], max_bounds[2], sdf_spatial_resolution[2])
-        query_points = np.stack(np.meshgrid(tx, ty, tz, indexing="ij"), axis=-1).astype(np.float32)
+        query_points = np.stack(np.meshgrid(tx, ty, tz, indexing="ij"), axis=-1).astype(
+            np.float32
+        )
         return query_points
 
     def compute_df_from_mesh(self):
@@ -197,7 +224,9 @@ class ComputeDF:
         scene = o3d.t.geometry.RaycastingScene()
         _ = scene.add_triangles(stl_mesh)
         df = scene.compute_distance(o3d.core.Tensor(self.query_points)).numpy()
-        closest_point = scene.compute_closest_points(o3d.core.Tensor(self.query_points))["points"].numpy()
+        closest_point = scene.compute_closest_points(
+            o3d.core.Tensor(self.query_points)
+        )["points"].numpy()
         df_dict = {
             "df": df,
         }
@@ -208,7 +237,9 @@ class ComputeDF:
         query_points = o3d.utility.Vector3dVector(query_points)
         pcd_query_points = o3d.geometry.PointCloud()
         pcd_query_points.points = query_points
-        train_point = np.load(os.path.join(self.case_path, f"centroid_{self.caseID[:4].zfill(4)}.npy"))
+        train_point = np.load(
+            os.path.join(self.case_path, f"centroid_{self.caseID[:4].zfill(4)}.npy")
+        )
         train_point = o3d.utility.Vector3dVector(train_point)
         pcd_train = o3d.geometry.PointCloud()
         pcd_train.points = train_point
@@ -237,7 +268,11 @@ def compute_save_bounds_all(dataset_path, save_path, info):
     os.makedirs(save_path, exist_ok=True)
     included_num = 0
     logging.info("Computing bounds...")
-    caseIDs = [d for d in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, d))]
+    caseIDs = [
+        d
+        for d in os.listdir(dataset_path)
+        if os.path.isdir(os.path.join(dataset_path, d))
+    ]
     area_bounds_all = []
     global_bounds_all = []
     p_all = []
@@ -253,7 +288,7 @@ def compute_save_bounds_all(dataset_path, save_path, info):
         max_value = np.amax(csv_data)
         min_value = np.amin(csv_data)
         if max_value > 1e10:
-            logging.info(f"Abnormal cfd case detected, skip {caseID} sample.")
+            logging.info(f'Abnormal cfd case detected, skip {caseID} sample.')
             continue
 
         area = data_trans.area
@@ -278,7 +313,9 @@ def compute_save_bounds_all(dataset_path, save_path, info):
     logging.info(f"{included_num}/{len(caseIDs)} cases included")
 
     area_bounds_all = [np.concatenate(column) for column in zip(*area_bounds_all)]
-    global_bounds_all = [np.concatenate(column, axis=0) for column in zip(*global_bounds_all)]
+    global_bounds_all = [
+        np.concatenate(column, axis=0) for column in zip(*global_bounds_all)
+    ]
     p_all = np.concatenate(p_all, axis=0)
     wss_all = np.concatenate(wss_all, axis=0)
 
@@ -307,7 +344,9 @@ def compute_save_bounds_all(dataset_path, save_path, info):
                 for i in range(len(v)):
                     f.write("%s\n" % v[i].tolist())
     with open(save_path + "/" + "info_bounds" + ".txt", "w") as f:
-        f.write("744 269 228 30 0 80 20 1039189.1\n" "1344 509 348 90 40 120 80 5347297.3")
+        f.write(
+            "744 269 228 30 0 80 20 1039189.1\n" "1344 509 348 90 40 120 80 5347297.3"
+        )
     logging.info("Bounds computed.")
     return None
 
@@ -321,7 +360,7 @@ def auto_trans(case_path, save_path, caseID, info):
     max_value = np.amax(csv_data)
     min_value = np.amin(csv_data)
     if max_value > 1e10:
-        logging.info(f"Abnormal cfd case detected, skip {caseID} sample.")
+        logging.info(f'Abnormal cfd case detected, skip {caseID} sample.')
         return None
 
     press = data_trans.press
@@ -336,9 +375,9 @@ def auto_trans(case_path, save_path, caseID, info):
     cl_p, cl_f = data_trans.lift_c()
     np.set_printoptions(precision=4)
     logging.info(f"{len(normal)} CFD cells")
-    logging.info("cd_p\tcd_f\tcd")
+    logging.info(f"cd_p\tcd_f\tcd")
     print_floats(cd_p, cd_f, cd_p + cd_f)
-    logging.info("cl_p\tcl_f\tcl")
+    logging.info(f"cl_p\tcl_f\tcl")
     print_floats(cl_p, cl_f, cl_p + cl_f)
     logging.info("\n")
     # data_trans.generate_visual_vtk()
@@ -367,7 +406,11 @@ def main(cfg: DictConfig):
 
         dataset_path = cfg.pre_input_path
         save_path = cfg.pre_output_path
-        caseIDs = [d for d in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, d))]
+        caseIDs = [
+            d
+            for d in os.listdir(dataset_path)
+            if os.path.isdir(os.path.join(dataset_path, d))
+        ]
         caseIDs.sort(key=extract_number)
 
         # caseIDs = caseIDs[77:]
@@ -405,7 +448,7 @@ def main(cfg: DictConfig):
             case_path = os.path.join(dataset_path, caseID)
 
             json_file_path = os.path.join(case_path, caseID[5:] + ".json")
-            with open(json_file_path, "r", encoding="utf-8") as file:
+            with open(json_file_path, 'r', encoding='utf-8') as file:
                 info = json.load(file)
 
             # auto_trans(case_path, os.path.join(save_path, 'train'), caseID, params)

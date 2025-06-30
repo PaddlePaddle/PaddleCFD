@@ -8,24 +8,31 @@ Authors: chenkai26(chenkai26@baidu.com)
 Date:    2025/4/18
 """
 
+import json
 import os
+import re
+import sys
+from typing import List
+from typing import Tuple
 
+import gmsh
 import hydra
+import meshio
 import numpy as np
 import open3d as o3d
 import paddle
+import pandas as pd
 from omegaconf import DictConfig
 from stl import mesh
 
 
 class STLConvert:
-    def __init__(self, geo_path, save_path, stpID, info, index, compute_closest_point=False):
+    def __init__(self, geo_path, save_path, stpID, index, info):
         self.geo_path = geo_path
         self.save_path = save_path
         self.stpID = stpID
         self.info = info
         self.index = index
-        self.compute_closest_point = compute_closest_point
 
     def extract_values_from_arrays(self):
 
@@ -35,12 +42,14 @@ class STLConvert:
 
         # 提取法向量数组 [每个面含1个法向量]
         normals = stl_mesh.normals  # 形状为(n,3)的数组‌
-        print("normals_n3:", normals)
-        unit_normals = -1 * normals / np.linalg.norm(normals, axis=1, keepdims=True)  # 单位法向量‌
+        # print("normals_n3:", normals)
+        unit_normals = (
+            -1 * normals / np.linalg.norm(normals, axis=1, keepdims=True)
+        )  # 单位法向量‌
 
         # 计算网格中心点
-        vertices = stl_mesh.points.reshape(-1, 3, 3) * 1e-3  # 将顶点数据重组为(n,3,3)结构
-        centers = vertices.mean(axis=1)  # 计算每个三角面三个顶点的几何中心‌
+        vertices = stl_mesh.points.reshape(-1, 3, 3)  # 将顶点数据重组为(n,3,3)结构
+        centroid = vertices.mean(axis=1)  # 计算每个三角面三个顶点的几何中心‌
 
         # 计算网格单元面积
         v0, v1, v2 = vertices[:, 0], vertices[:, 1], vertices[:, 2]
@@ -49,8 +58,10 @@ class STLConvert:
         cross_product = np.cross(vec1, vec2)  # 计算叉乘
         areas = np.linalg.norm(cross_product, axis=1) / 2  # 面积公式‌
 
-        print("stl cell number:", len(centers))
-        print("centers:", centers, "\n", "areas:", areas, "\n", "normals:", unit_normals)
+        print("stl cell number:", len(centroid))
+        print(
+            "centroid:", centroid, "\n", "areas:", areas, "\n", "normals:", unit_normals
+        )
 
         # 保存为numpy文件
         print(f"area, centrods, normal has been saved to : {self.save_path}")
@@ -61,7 +72,7 @@ class STLConvert:
         )  # 保存面积
         np.save(
             f"{self.save_path}/centroid_{str(self.index).zfill(4)}.npy",
-            centers.astype(np.float32),
+            centroid.astype(np.float32),
         )  # 保存中心点‌
         np.save(
             f"{self.save_path}/normal_{str(self.index).zfill(4)}.npy",
@@ -71,23 +82,25 @@ class STLConvert:
         print("Mesh information extracted and saved as NumPy arrays.")
 
     def save_info(self):
-        info_dict = {
-            "length": 0,
-            "width": 0,
-            "height": 0,
-            "clearance": 0,
-            "slant": 0,
-            "radius": 0,
-            "velocity": self.info["velocity"],
-            "re": 0,
-            "reference_area": self.info["reference_area"],
-            "density": self.info["density"],
-            "compute_normal": False,
-        }
-        print(f"info has been saved to : {f'{self.save_path}/info_{str(self.index).zfill(4)}.pdparams'}")
+        # info_dict = {
+        #     "length": 0,
+        #     "width": 0,
+        #     "height": 0,
+        #     "clearance": 0,
+        #     "slant": 0,
+        #     "radius": 0,
+        #     "velocity": self.info["velocity"],
+        #     "re": 0,
+        #     "reference_area": self.info["reference_area"],
+        #     "density": self.info["density"],
+        #     "compute_normal": False,
+        # }
         paddle.save(
-            obj=info_dict,
+            obj=self.info,
             path=f"{self.save_path}/info_{str(self.index).zfill(4)}.pdparams",
+        )
+        print(
+            f"info has been saved to : {f'{self.save_path}/info_{str(self.index).zfill(4)}.pdparams'}"
         )
         return None
 
@@ -102,12 +115,6 @@ class Compute_df_stl:
         self.index = index
 
     def compute_query_points(self, eps=1e-6):
-        # with open(os.path.join(self.save_path, "global_bounds.txt"), "w") as fp:
-        #     fp.write(
-        #         "744 269 228 30 0 80 20 1039189.1\n"
-        #         "1344 509 348 90 40 120 80 5347297.3"
-        #     )
-
         with open(os.path.join(self.bounds_dir, "global_bounds.txt"), "r") as fp:
             min_bounds = fp.readline().split(" ")
             max_bounds = fp.readline().split(" ")
@@ -117,41 +124,50 @@ class Compute_df_stl:
         tx = np.linspace(min_bounds[0], max_bounds[0], sdf_spatial_resolution[0])
         ty = np.linspace(min_bounds[1], max_bounds[1], sdf_spatial_resolution[1])
         tz = np.linspace(min_bounds[2], max_bounds[2], sdf_spatial_resolution[2])
-        query_points = np.stack(np.meshgrid(tx, ty, tz, indexing="ij"), axis=-1).astype(np.float32)
+        query_points = np.stack(np.meshgrid(tx, ty, tz, indexing="ij"), axis=-1).astype(
+            np.float32
+        )
         return query_points
 
     def compute_df_from_mesh(self):
-        # 读取CATIA导出的二进制STL文件
-        stl_mesh = mesh.Mesh.from_file(os.path.join(self.geo_path, self.stlID))
-        vertices = stl_mesh.vectors.reshape(-1, 3) * 1e-3
-        print("vertices:", vertices)
-        faces = np.arange(vertices.shape[0]).reshape(-1, 3)
+        # 读取starccm导出的stl文件
+        stl_mesh = o3d.io.read_triangle_mesh(os.path.join(self.geo_path, self.stlID))
+        num_triangles = len(stl_mesh.triangles)
+        print(f"Mesh num in stl: {num_triangles}")
 
-        # 构建Open3D网格
-        o3d_mesh = o3d.geometry.TriangleMesh()
-        o3d_mesh.vertices = o3d.utility.Vector3dVector(vertices)
-        o3d_mesh.triangles = o3d.utility.Vector3iVector(faces)
+        json_file_path = os.path.join(
+            self.save_path, self.stlID[:-4] + "_mesh_num.json"
+        )
+        os.makedirs(os.path.dirname(json_file_path), exist_ok=True)
+        if os.path.isfile(json_file_path):
+            os.remove(json_file_path)
+        with open(json_file_path, "w", encoding="utf-8") as file:
+            json.dump({"surface_mesh_num": num_triangles}, file)
 
-        print("o3d_mesh:", o3d_mesh)
-
-        # stl_mesh = o3d.io.read_triangle_mesh(self.save_path + f'/2014-f-6103.stl')
-        o3d_mesh = o3d.t.geometry.TriangleMesh.from_legacy(o3d_mesh)
+        o3d_mesh = o3d.t.geometry.TriangleMesh.from_legacy(stl_mesh)
         scene = o3d.t.geometry.RaycastingScene()
         _ = scene.add_triangles(o3d_mesh)
         df = scene.compute_distance(o3d.core.Tensor(self.query_points)).numpy()
-        closest_point = scene.compute_closest_points(o3d.core.Tensor(self.query_points))["points"].numpy()
+        # closest_point = scene.compute_closest_points(
+        #     o3d.core.Tensor(self.query_points)
+        # )["points"].numpy()
         df_dict = {
             "df": df,
         }
         np.save(f"{self.save_path}/df_{str(self.index).zfill(4)}.npy", df_dict["df"])
-        return df_dict
+        print(
+            f"df has been saved to : {os.path.join(self.save_path, f'df_{str(self.index).zfill(4)}.npy')}"
+        )
+        return None
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="train")
 def main(cfg: DictConfig):
     if cfg.process_mode == "infer":
         geo_path = cfg.pre_input_path  # '/home/chenkai26/Paddle-AeroSimOpt/data/'
-        save_path = cfg.pre_output_path  # '/home/chenkai26/Paddle-AeroSimOpt/data/extracted_info/'
+        save_path = (
+            cfg.pre_output_path
+        )  # '/home/chenkai26/Paddle-AeroSimOpt/data/extracted_info/'
         bounds_dir = cfg.bounds_dir
 
         # refine meshing, extract & save elements from stl
@@ -161,12 +177,17 @@ def main(cfg: DictConfig):
         # stpIDs = stpIDs[2:]
         print("Chosen stlID:", stlIDs)
 
-        info = {"velocity": 65.0, "reference_area": 0.176, "density": 1.05}
+        # info = {"velocity": 65.0, "reference_area": 0.176, "density": 1.05}
 
         index = 200
         for stlID in stlIDs:
             print("StlID:", stlID)
-            stl_trans = STLConvert(geo_path, save_path, stlID, info, index)
+
+            json_file_path = os.path.join(geo_path, stlID[:-4] + ".json")
+            with open(json_file_path, "r", encoding="utf-8") as file:
+                info = json.load(file)
+
+            stl_trans = STLConvert(geo_path, save_path, stlID, index, info)
 
             stl_trans.extract_values_from_arrays()
             stl_trans.save_info()

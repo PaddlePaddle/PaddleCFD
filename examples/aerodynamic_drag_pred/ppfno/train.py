@@ -5,27 +5,44 @@ import logging
 import os
 import sys
 
-
-sys.path.append("./src")
-sys.path.append("./src/networks")
+# sys.path.append("./src")
+# sys.path.append("./src/networks")
 import random
 from timeit import default_timer
 from typing import Dict
+from typing import List
 from typing import Tuple
+from typing import Union
 
 import hydra
+import meshio
 import numpy as np
 import paddle
 import pyvista as pv
+import vtk
 from omegaconf import DictConfig
 from paddle import distributed as dist
 from paddle.distributed import ParallelEnv
 from paddle.distributed import fleet
-from src.data import instantiate_datamodule
-from src.losses import LpLoss
-from src.networks import instantiate_network
-from src.utils.average_meter import AverageMeterDict
+from paddle.io import DataLoader
+from paddle.io import DistributedBatchSampler
 
+# from src.data import instantiate_datamodule
+# from src.losses import LpLoss
+# from src.networks import instantiate_network
+# from src.optim.schedulers import instantiate_scheduler
+# from src.utils.average_meter import AverageMeter
+# from src.utils.average_meter import AverageMeterDict
+# from src.utils.dot_dict import DotDict
+# from src.utils.dot_dict import flatten_dict
+from ppcfd.models.ppfno.data import instantiate_datamodule
+from ppcfd.models.ppfno.losses import LpLoss
+from ppcfd.models.ppfno.networks import instantiate_network
+from ppcfd.models.ppfno.optim.schedulers import instantiate_scheduler
+from ppcfd.models.ppfno.utils.average_meter import AverageMeter
+from ppcfd.models.ppfno.utils.average_meter import AverageMeterDict
+from ppcfd.models.ppfno.utils.dot_dict import DotDict
+from ppcfd.models.ppfno.utils.dot_dict import flatten_dict
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 # os.environ["HYDRA_FULL_ERROR"] = "0"
@@ -53,30 +70,6 @@ def save_vtp_from_dict(
     value_keys: Tuple[str, ...],
     num_timestamps: int = 1,
 ):
-    """Save dict data to '*.vtp' file.
-
-    Args:
-        filename (str): Output filename.
-        data_dict (Dict[str, np.ndarray]): Data in dict.
-        coord_keys (Tuple[str, ...]): Tuple of coord key. such as ("x", "y").
-        value_keys (Tuple[str, ...]): Tuple of value key. such as ("u", "v").
-        num_timestamps (int, optional): Number of timestamp in data_dict. Defaults to 1.
-
-    Examples:
-        >>> import ppsci
-        >>> import numpy as np
-        >>> filename = "path/to/file.vtp"
-        >>> data_dict = {
-        ...     "x": np.array([[1], [2], [3],[4]]),
-        ...     "y": np.array([[2], [3], [4],[4]]),
-        ...     "z": np.array([[3], [4], [5],[4]]),
-        ...     "u": np.array([[4], [5], [6],[4]]),
-        ...     "v": np.array([[5], [6], [7],[4]]),
-        ... }
-        >>> coord_keys = ("x","y","z")
-        >>> value_keys = ("u","v")
-        >>> ppsci.visualize.save_vtp_from_dict(filename, data_dict, coord_keys, value_keys) # doctest: +SKIP
-    """
 
     if len(coord_keys) not in [3]:
         raise ValueError(f"ndim of coord ({len(coord_keys)}) should be 3 in vtp format")
@@ -89,7 +82,8 @@ def save_vtp_from_dict(
         raise ValueError(f"type of coord({type(coord)}) should be ndarray.")
     if len(coord) % num_timestamps != 0:
         raise ValueError(
-            f"coord length({len(coord)}) should be an integer multiple of " f"num_timestamps({num_timestamps})"
+            f"coord length({len(coord)}) should be an integer multiple of "
+            f"num_timestamps({num_timestamps})"
         )
     if coord.shape[1] not in [3]:
         raise ValueError(f"ndim of coord({coord.shape[1]}) should be 3 in vtp format.")
@@ -110,7 +104,9 @@ def save_vtp_from_dict(
             if value_ is not None and not isinstance(value_, np.ndarray):
                 raise ValueError(f"type of value({type(value_)}) should be ndarray.")
             if value_ is not None and len(coord_) != len(value_):
-                raise ValueError(f"coord length({len(coord_)}) should be equal to value length({len(value_)})")
+                raise ValueError(
+                    f"coord length({len(coord_)}) should be equal to value length({len(value_)})"
+                )
             point_cloud[k] = value_
 
         if num_timestamps > 1:
@@ -141,7 +137,9 @@ def train(cfg: DictConfig):
     # 创建流处理器（终端输出）
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(logging.INFO)
-    stream_handler.setFormatter(logging.Formatter("%(asctime)s:%(levelname)s: %(message)s"))
+    stream_handler.setFormatter(
+        logging.Formatter("%(asctime)s:%(levelname)s: %(message)s")
+    )
     logging.getLogger().addHandler(stream_handler)
 
     # train_json_file_path = os.path.join('/home/chenkai26/Paddle-AeroSimOpt/output/dataset1/json', "train.json")
@@ -150,7 +148,9 @@ def train(cfg: DictConfig):
     # output_dir = cfg.train_input_path.replace("refine_data", "output")
     os.makedirs(os.path.join(cfg.train_output_path, "json"), exist_ok=True)
     train_json_file_path = os.path.join(cfg.train_output_path, "json", "train.json")
-    coefficent_json_file_path = os.path.join(cfg.train_output_path, "json", "coefficent.json")
+    coefficent_json_file_path = os.path.join(
+        cfg.train_output_path, "json", "coefficent.json"
+    )
 
     def create_json(json_file_path):
         os.makedirs(os.path.dirname(json_file_path), exist_ok=True)
@@ -176,7 +176,9 @@ def train(cfg: DictConfig):
             json.dump(data, file, indent=4)
 
     model = instantiate_network(cfg)
-    optimizer = paddle.optimizer.AdamW(parameters=model.parameters(), learning_rate=cfg.lr, weight_decay=1e-06)
+    optimizer = paddle.optimizer.AdamW(
+        parameters=model.parameters(), learning_rate=cfg.lr, weight_decay=1e-06
+    )
     loss_fn = LpLoss(size_average=True)
     if cfg.enable_ddp:
         model = fleet.distributed_model(model)
@@ -192,7 +194,9 @@ def train(cfg: DictConfig):
 
     device = ParallelEnv().device_id
 
-    memory_allocated = paddle.device.cuda.memory_allocated(device=device) / (1024 * 1024 * 1024)
+    memory_allocated = paddle.device.cuda.memory_allocated(device=device) / (
+        1024 * 1024 * 1024
+    )
     logging.info(f"Memory usage with model loading: {memory_allocated:.2f} GB")
 
     datamodule = instantiate_datamodule(
@@ -204,9 +208,13 @@ def train(cfg: DictConfig):
         cfg.train_ratio,
         cfg.test_ratio,
     )
-    train_dataloader = datamodule.train_dataloader(enable_ddp=cfg.enable_ddp, batch_size=cfg.batch_size)
+    train_dataloader = datamodule.train_dataloader(
+        enable_ddp=cfg.enable_ddp, batch_size=cfg.batch_size
+    )
 
-    tmp_lr = paddle.optimizer.lr.CosineAnnealingDecay(T_max=cfg.num_epochs, learning_rate=optimizer.get_lr())
+    tmp_lr = paddle.optimizer.lr.CosineAnnealingDecay(
+        T_max=cfg.num_epochs, learning_rate=optimizer.get_lr()
+    )
     optimizer.set_lr_scheduler(tmp_lr)
     scheduler = tmp_lr
 
@@ -238,7 +246,9 @@ def train(cfg: DictConfig):
         "train_case_id": datamodule.train_full_caseids,
     }
     if paddle.distributed.get_rank() == 0:
-        with open(os.path.join(cfg.train_output_path, "json", "radius.json"), "w") as json_file:
+        with open(
+            os.path.join(cfg.train_output_path, "json", "radius.json"), "w"
+        ) as json_file:
             json.dump(data, json_file, indent=4, ensure_ascii=False)
     # indices = [item[5:9] for item in all_files if item.startswith(prefix) and item.endswith(".npy")]
 
@@ -264,7 +274,9 @@ def train(cfg: DictConfig):
         max_loss_case_id = None
         coefficent_json_dict = []
         if paddle.distributed.get_rank() == 0:
-            logging.info(f"Start evaluting {cfg.model} at epoch {epoch_id}, number of samples: {len(test_dataloader)}")
+            logging.info(
+                f"Start evaluting {cfg.model} at epoch {epoch_id}, number of samples: {len(test_dataloader)}"
+            )
 
         # all_files = os.listdir(os.path.join(cfg.train_input_path, "test"))
         # all_files = os.listdir(cfg.train_input_path)
@@ -295,7 +307,9 @@ def train(cfg: DictConfig):
                 )
 
                 if paddle.any(paddle.isnan(cd_dict["Cd_truth"])):
-                    logging.info(f"WARNING: nan detected on test sample {i}, skipping this sample.")
+                    logging.info(
+                        f"WARNING: nan detected on test sample {i}, skipping this sample."
+                    )
                     continue
 
                 if cfg.save_eval_results:
@@ -308,7 +322,7 @@ def train(cfg: DictConfig):
                         decode_fn=datamodule.decode,
                         caseid=datamodule.test_full_caseids[i],
                     )
-                paddle.device.cuda.empty_cache()
+                # paddle.device.cuda.empty_cache()
             except MemoryError as e:
                 if "Out of memory" in str(e):
                     logging.info(f"WARNING: OOM on sample {i}, skipping this sample.")
@@ -323,7 +337,7 @@ def train(cfg: DictConfig):
                 if k.split("_")[0] == "L2":
                     msg += f"{k}: {v.item():.4f}, "
                     eval_meter.update({k: v})
-            msg += "|| MRE and Value: "
+            msg += f"|| MRE and Value: "
             for k, v in out_dict.items():
                 if "Cd" and "pred" in k.split("_"):
                     k_truth = f"{k[:k.rfind('_')]}_truth"
@@ -338,23 +352,35 @@ def train(cfg: DictConfig):
             Cd_pred_modify = cd_dict["Cd_pred_modify"]
             Cd_truth = out_dict["Cd_truth"]
             Cd_pred = out_dict["Cd_pred"]
-            Cd_mre_modify = paddle.abs(x=Cd_pred_modify - Cd_truth) / paddle.abs(x=Cd_truth)
-            case_coefficent_json_dict["cal_total_drag_coefficient"] = Cd_pred_modify.item()
-            case_coefficent_json_dict["real_total_drag_coefficient"] = Cd_truth.item()
-            case_coefficent_json_dict["cal_pressure_drag_coefficient"] = out_dict["Cd_pressure_pred"].item()
-            case_coefficent_json_dict["real_pressure_drag_coefficient"] = out_dict["Cd_pressure_truth"].item()
-            case_coefficent_json_dict["cal_friction_resistance_coefficient"] = out_dict[
-                "Cd_wallshearstress_pred"
-            ].item()
-            case_coefficent_json_dict["real_friction_resistance_coefficient"] = out_dict[
-                "Cd_wallshearstress_truth"
-            ].item()
-            case_coefficent_json_dict["cal_error_total_drag_coefficient"] = Cd_truth.item() - Cd_pred_modify.item()
-            case_coefficent_json_dict["cal_err_pressure_drag_coefficient"] = (
-                out_dict["Cd_pressure_truth"].item() - out_dict["Cd_pressure_pred"].item()
+            Cd_mre_modify = paddle.abs(x=Cd_pred_modify - Cd_truth) / paddle.abs(
+                x=Cd_truth
             )
-            case_coefficent_json_dict["cal_err_friction_resistance_coefficient"] = (
-                out_dict["Cd_wallshearstress_truth"].item() - out_dict["Cd_wallshearstress_pred"].item()
+            case_coefficent_json_dict[
+                f"cal_total_drag_coefficient"
+            ] = Cd_pred_modify.item()
+            case_coefficent_json_dict[f"real_total_drag_coefficient"] = Cd_truth.item()
+            case_coefficent_json_dict[f"cal_pressure_drag_coefficient"] = out_dict[
+                "Cd_pressure_pred"
+            ].item() + (Cd_pred_modify.item() - Cd_pred.item())
+            case_coefficent_json_dict[f"real_pressure_drag_coefficient"] = out_dict[
+                "Cd_pressure_truth"
+            ].item()
+            case_coefficent_json_dict[
+                f"cal_friction_resistance_coefficient"
+            ] = out_dict["Cd_wallshearstress_pred"].item()
+            case_coefficent_json_dict[
+                f"real_friction_resistance_coefficient"
+            ] = out_dict["Cd_wallshearstress_truth"].item()
+            case_coefficent_json_dict[f"cal_error_total_drag_coefficient"] = (
+                Cd_truth.item() - Cd_pred_modify.item()
+            )
+            case_coefficent_json_dict[f"cal_err_pressure_drag_coefficient"] = (
+                out_dict["Cd_pressure_truth"].item()
+                - case_coefficent_json_dict[f"cal_pressure_drag_coefficient"]
+            )
+            case_coefficent_json_dict[f"cal_err_friction_resistance_coefficient"] = (
+                out_dict["Cd_wallshearstress_truth"].item()
+                - out_dict["Cd_wallshearstress_pred"].item()
             )
 
             case_coefficent_json_dict["case_id"] = full_indices[i]
@@ -382,9 +408,7 @@ def train(cfg: DictConfig):
         if max_loss_case_id is not None:
             msg += f"Maximum Cd Error Sample ID: {datamodule.test_full_caseids[max_loss_case_id]}(index={max_loss_case_id}), Maximum Cd Error: {max_cd_error:.4f}"
         else:
-            msg += (
-                "Wawrning: No maximum Cd Error, because all samples are not evaluated, might for OMM or other reason."
-            )
+            msg += "Wawrning: No maximum Cd Error, because all samples are not evaluated, might for OMM or other reason."
         logging.info(msg)
         # max_memory_allocated = paddle.device.cuda.max_memory_allocated(device=device) / (
         #     1024 * 1024 * 1024
@@ -411,7 +435,9 @@ def train(cfg: DictConfig):
         msg = "|| "
 
         if ep == cfg.num_epochs - cfg.finetuning_epochs + 1:
-            tmp_lr = paddle.optimizer.lr.CosineAnnealingDecay(T_max=cfg.finetuning_epochs, learning_rate=cfg.lr_cd)
+            tmp_lr = paddle.optimizer.lr.CosineAnnealingDecay(
+                T_max=cfg.finetuning_epochs, learning_rate=cfg.lr_cd
+            )
             optimizer.set_lr_scheduler(tmp_lr)
             scheduler = tmp_lr
 
@@ -437,21 +463,31 @@ def train(cfg: DictConfig):
             try:
                 if idx_batch == 0 and paddle.distributed.get_rank() == 0:
                     msg += f"Data Loading Time: {data_dict['Data_loading_time'][0]:.2f} seconds. || "
-                    memory_allocated = paddle.device.cuda.memory_allocated(device=device) / (1024 * 1024 * 1024)
+                    memory_allocated = paddle.device.cuda.memory_allocated(
+                        device=device
+                    ) / (1024 * 1024 * 1024)
                     msg += f"Memory Usage: {memory_allocated:.2f} GB (forward), "
 
                 optimizer.clear_gradients(set_to_zero=False)
-                pred, truth, cd_dict = model(data_dict, idx_batch, loss_fn=loss_fn, decode_fn=datamodule.decode)
+                pred, truth, cd_dict = model(
+                    data_dict, idx_batch, loss_fn=loss_fn, decode_fn=datamodule.decode
+                )
                 if "OOM" in cd_dict:
                     if cd_dict["OOM"] == True:
                         idx_batch += 1
                         continue
-                    elif cd_dict["OOM"] == False and paddle.any(paddle.isnan(cd_dict["Cd_truth"])):
-                        logging.info(f"WARNING: nan detected on sample {idx_batch}, skipping this sample.")
+                    elif cd_dict["OOM"] == False and paddle.any(
+                        paddle.isnan(cd_dict["Cd_truth"])
+                    ):
+                        logging.info(
+                            f"WARNING: nan detected on sample {idx_batch}, skipping this sample."
+                        )
                         idx_batch += 1
+
                         continue
 
             except MemoryError as e:
+                raise
                 if "Out of memory" in str(e):
                     num_OOM += 1
                     if hasattr(paddle.device.cuda, "empty_cache"):
@@ -469,31 +505,51 @@ def train(cfg: DictConfig):
                         sum(cfg.out_channels[:i]) + cfg.out_channels[i],
                     )
                     loss_key = loss_fn(pred[st:end], truth[st:end])
-                    train_l2_meter.update({key: loss_key})
+
+                    train_l2_meter.update({key: loss_key.detach().item()})
+
                     loss += cfg.weight_list[i] * loss_key
             else:
                 Cd_pred_modify = cd_dict["Cd_pred_modify"]
                 Cd_truth = cd_dict["Cd_truth"]
                 Cd_pred = cd_dict["Cd_pred"]
-                Cd_mre = paddle.abs(x=Cd_pred_modify - Cd_truth) / paddle.abs(x=Cd_truth)
+                Cd_mre = paddle.abs(x=Cd_pred_modify - Cd_truth) / paddle.abs(
+                    x=Cd_truth
+                )
                 loss += paddle.nn.functional.mse_loss(Cd_pred_modify, Cd_truth)
-                train_l2_meter.update({"pressure": cd_dict["L2_pressure"]})
-                train_l2_meter.update({"wallshearstress": cd_dict["L2_wallshearstress"]})
-                train_l2_meter.update({"MSE_loss": loss})
-                train_l2_meter.update({"Cd_mre": Cd_mre})
-                train_l2_meter.update({"Cd_pred": Cd_pred})
-                train_l2_meter.update({"Cd_pred_modify": Cd_pred_modify})
-                train_l2_meter.update({"Cd_truth": Cd_truth})
+
+                train_l2_meter.update(
+                    {"pressure": cd_dict["L2_pressure"].detach().item()}
+                )
+                train_l2_meter.update(
+                    {"wallshearstress": cd_dict["L2_wallshearstress"].detach().item()}
+                )
+                train_l2_meter.update({"MSE_loss": loss.detach().item()})
+                train_l2_meter.update({"Cd_mre": Cd_mre.detach().item()})
+                train_l2_meter.update({"Cd_pred": Cd_pred.detach().item()})
+                train_l2_meter.update(
+                    {"Cd_pred_modify": Cd_pred_modify.detach().item()}
+                )
+                train_l2_meter.update({"Cd_truth": Cd_truth.detach().item()})
 
             loss.backward(grad_tensor=loss)
+
             if idx_batch == 0 and paddle.distributed.get_rank() == 0:
-                memory_allocated = paddle.device.cuda.memory_allocated(device=device) / 1024**3
+                memory_allocated = (
+                    paddle.device.cuda.memory_allocated(device=device) / 1024**3
+                )
                 msg += f"{memory_allocated:.2f} GB (backward), "
-                max_memory_allocated = paddle.device.cuda.max_memory_allocated(device=device) / 1024**3
+                max_memory_allocated = (
+                    paddle.device.cuda.max_memory_allocated(device=device) / 1024**3
+                )
                 msg += f"{max_memory_allocated:.2f} GB (MAX), "
                 memory_researved = paddle.device.cuda.memory_reserved() / 1024**3
                 msg += f"{memory_researved:.2f} GB (Reserved)."
+
             optimizer.step()
+            optimizer.clear_gradients(set_to_zero=False)
+            paddle.device.cuda.empty_cache()
+            # logging.info(f'idx_batch:, {idx_batch}')
             idx_batch += 1
         scheduler.step()
         t2 = default_timer()
@@ -501,18 +557,18 @@ def train(cfg: DictConfig):
         if paddle.distributed.get_rank() == 0:
             train_json_dict["epoch"] = ep
             if "Cd_mre" in train_l2_meter.avg:
-                train_json_dict["mre"] = train_l2_meter.avg["Cd_mre"].item()
+                train_json_dict["mre"] = train_l2_meter.avg["Cd_mre"]
             else:
                 train_json_dict["mre"] = 0
-            train_json_dict["pressure_loss"] = train_l2_meter.avg["pressure"].item()
-            train_json_dict["shear_stress_loss"] = train_l2_meter.avg["wallshearstress"].item()
+            train_json_dict["pressure_loss"] = train_l2_meter.avg["pressure"]
+            train_json_dict["shear_stress_loss"] = train_l2_meter.avg["wallshearstress"]
 
         if num_OOM != 0:
             logging.info(f"WARNING: {num_OOM} samples OOM, skipping these samples.")
         msg_ep = f"Training epoch {ep} took {t2 - t1:.2f} seconds. L2_Loss: "
         train_dict = train_l2_meter.avg
         for k, v in train_dict.items():
-            msg_ep += f"{v.item():.4f}({k}), "
+            msg_ep += f"{v:.4f}({k}), "
         if paddle.distributed.get_rank() == 0 and "msg" in locals():
             logging.info(msg_ep + msg)
         max_loss_case_id = None
@@ -520,11 +576,17 @@ def train(cfg: DictConfig):
             # if (ep + 1) % cfg.save_per_epoch == 0 or ep == cfg.num_epochs - 1:
             state = {"model": model.state_dict(), "lr": optimizer.get_lr(), "epoch": ep}
             os.makedirs(
-                os.path.dirname(f"{cfg.train_output_path}/pd/{cfg.model_name}.pdparams"),
+                os.path.dirname(
+                    f"{cfg.train_output_path}/pd/{cfg.model_name}.pdparams"
+                ),
                 exist_ok=True,
             )
-            paddle.save(obj=state, path=f"{cfg.train_output_path}/pd/{cfg.model_name}.pdparams")
-            logging.info(f"Save checkpoint to: {cfg.train_output_path}/pd/{cfg.model_name}.pdparams")
+            paddle.save(
+                obj=state, path=f"{cfg.train_output_path}/pd/{cfg.model_name}.pdparams"
+            )
+            logging.info(
+                f"Save checkpoint to: {cfg.train_output_path}/pd/{cfg.model_name}.pdparams"
+            )
             max_loss_case_id, coefficent_json_dict = evaluate_on_fly(ep)
 
         if paddle.distributed.get_rank() == 0:
@@ -533,10 +595,16 @@ def train(cfg: DictConfig):
 
         if paddle.distributed.get_rank() == 0:
             if isinstance(coefficent_json_dict, dict):
-                append_dict_to_json_list(coefficent_json_file_path, coefficent_json_dict)
+                create_json(coefficent_json_file_path)
+                append_dict_to_json_list(
+                    coefficent_json_file_path, coefficent_json_dict
+                )
             if isinstance(coefficent_json_dict, list):
+                create_json(coefficent_json_file_path)
                 for coefficent_json_dict_ in coefficent_json_dict:
-                    append_dict_to_json_list(coefficent_json_file_path, coefficent_json_dict_)
+                    append_dict_to_json_list(
+                        coefficent_json_file_path, coefficent_json_dict_
+                    )
 
 
 def save_eval_results(

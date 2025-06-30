@@ -3,28 +3,37 @@ import logging
 import os
 import sys
 
-
-sys.path.append("./src")
-sys.path.append("./src/networks")
+# sys.path.append("./src")
+# sys.path.append("./src/networks")
 from timeit import default_timer
 from typing import Dict
+from typing import List
 from typing import Tuple
+from typing import Union
 
 import hydra
+import meshio
 import numpy as np
 import paddle
 import pyvista as pv
+import vtk
 from omegaconf import DictConfig
 from paddle import distributed as dist
 from paddle.distributed import ParallelEnv
 from paddle.distributed import fleet
-from src.data import instantiate_inferencedatamodule
-from src.losses import LpLoss
-from src.networks import instantiate_network
-from src.utils.average_meter import AverageMeterDict
+from paddle.io import DataLoader
+from paddle.io import DistributedBatchSampler
 
+from ppcfd.models.ppfno.data import instantiate_inferencedatamodule
+from ppcfd.models.ppfno.losses import LpLoss
+from ppcfd.models.ppfno.networks import instantiate_network
+from ppcfd.models.ppfno.optim.schedulers import instantiate_scheduler
+from ppcfd.models.ppfno.utils.average_meter import AverageMeter
+from ppcfd.models.ppfno.utils.average_meter import AverageMeterDict
+from ppcfd.models.ppfno.utils.dot_dict import DotDict
+from ppcfd.models.ppfno.utils.dot_dict import flatten_dict
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "4,"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "4,"
 # os.environ["HYDRA_FULL_ERROR"] = "0"
 
 
@@ -52,30 +61,6 @@ def save_vtp_from_dict(
     value_keys: Tuple[str, ...],
     num_timestamps: int = 1,
 ):
-    """Save dict data to '*.vtp' file.
-
-    Args:
-        filename (str): Output filename.
-        data_dict (Dict[str, np.ndarray]): Data in dict.
-        coord_keys (Tuple[str, ...]): Tuple of coord key. such as ("x", "y").
-        value_keys (Tuple[str, ...]): Tuple of value key. such as ("u", "v").
-        num_timestamps (int, optional): Number of timestamp in data_dict. Defaults to 1.
-
-    Examples:
-        >>> import ppsci
-        >>> import numpy as np
-        >>> filename = "path/to/file.vtp"
-        >>> data_dict = {
-        ...     "x": np.array([[1], [2], [3],[4]]),
-        ...     "y": np.array([[2], [3], [4],[4]]),
-        ...     "z": np.array([[3], [4], [5],[4]]),
-        ...     "u": np.array([[4], [5], [6],[4]]),
-        ...     "v": np.array([[5], [6], [7],[4]]),
-        ... }
-        >>> coord_keys = ("x","y","z")
-        >>> value_keys = ("u","v")
-        >>> ppsci.visualize.save_vtp_from_dict(filename, data_dict, coord_keys, value_keys) # doctest: +SKIP
-    """
 
     if len(coord_keys) not in [3]:
         raise ValueError(f"ndim of coord ({len(coord_keys)}) should be 3 in vtp format")
@@ -88,7 +73,8 @@ def save_vtp_from_dict(
         raise ValueError(f"type of coord({type(coord)}) should be ndarray.")
     if len(coord) % num_timestamps != 0:
         raise ValueError(
-            f"coord length({len(coord)}) should be an integer multiple of " f"num_timestamps({num_timestamps})"
+            f"coord length({len(coord)}) should be an integer multiple of "
+            f"num_timestamps({num_timestamps})"
         )
     if coord.shape[1] not in [3]:
         raise ValueError(f"ndim of coord({coord.shape[1]}) should be 3 in vtp format.")
@@ -109,7 +95,9 @@ def save_vtp_from_dict(
             if value_ is not None and not isinstance(value_, np.ndarray):
                 raise ValueError(f"type of value({type(value_)}) should be ndarray.")
             if value_ is not None and len(coord_) != len(value_):
-                raise ValueError(f"coord length({len(coord_)}) should be equal to value length({len(value_)})")
+                raise ValueError(
+                    f"coord length({len(coord_)}) should be equal to value length({len(value_)})"
+                )
             point_cloud[k] = value_
 
         if num_timestamps > 1:
@@ -129,18 +117,22 @@ def save_vtp_from_dict(
 
 @paddle.no_grad()
 def inference(cfg: DictConfig):
+
+    os.makedirs(cfg.reason_output_path, exist_ok=True)
+    os.makedirs(os.path.join(cfg.reason_output_path, "log"), exist_ok=True)
     if cfg.seed is not None:
         set_seed(cfg.seed)
 
     # init logger
     logging.basicConfig(
-        filename=os.path.join(cfg.output_dir, f"/{cfg.mode}.log"),
+        filename=os.path.join(cfg.reason_output_path, "log", f"{cfg.mode}.log"),
         level=logging.INFO,
         format="%(asctime)s:%(levelname)s: %(message)s",
+        force=True,
     )
 
     # inference_json_file_path = os.path.join('/home/chenkai26/Paddle-AeroSimOpt/output/dataset1/inference/case1', 'inference.json')
-    # "/home/chenkai26/Paddle-AeroSimOpt/refine_data/dataset1/inference/2014-f-6103"
+
     inference_json_file_path = os.path.join(
         cfg.reason_output_path,
         "json",
@@ -181,12 +173,18 @@ def inference(cfg: DictConfig):
     model.set_state_dict(state_dict=state["model"])
 
     device = ParallelEnv().device_id
-    memory_allocated = paddle.device.cuda.memory_allocated(device=device) / (1024 * 1024 * 1024)
+    memory_allocated = paddle.device.cuda.memory_allocated(device=device) / (
+        1024 * 1024 * 1024
+    )
     logging.info(f"Memory usage with model loading: {memory_allocated:.2f} GB")
 
     # run prediction
-    datamodule = instantiate_inferencedatamodule(cfg, cfg.reason_input_path, cfg.pre_output_path, cfg.n_inference_num)
-    inference_dataloader = datamodule.inference_dataloader(enable_ddp=cfg.enable_ddp, batch_size=cfg.batch_size)
+    datamodule = instantiate_inferencedatamodule(
+        cfg, cfg.reason_input_path, cfg.pre_output_path, cfg.n_inference_num
+    )
+    inference_dataloader = datamodule.inference_dataloader(
+        enable_ddp=cfg.enable_ddp, batch_size=cfg.batch_size
+    )
     # all_files = os.listdir(os.path.join(cfg.data_path, cfg.mode))
     # all_files = os.listdir(cfg.reason_input_path)
     # prefix = "area"
@@ -217,7 +215,7 @@ def inference(cfg: DictConfig):
                 device, data_dict, loss_fn=loss_fn, decode_fn=datamodule.decode
             )
             t2 = default_timer()
-            print(f"Inference {i} costs: {t2 - t1:.2f} seconds.")
+            logging.info(f"Inference {i} costs: {t2 - t1:.2f} seconds.")
             # print('cd_dict:', cd_dict)
             if cfg.save_eval_results:
                 save_eval_results(
@@ -227,7 +225,7 @@ def inference(cfg: DictConfig):
                     datamodule.inference_full_caseids[0],
                     decode_fn=datamodule.decode,
                 )
-            paddle.device.cuda.empty_cache()
+            # paddle.device.cuda.empty_cache()
         except MemoryError as e:
             if "Out of memory" in str(e):
                 logging.info(f"WARNING: OOM on sample {i}, skipping this sample.")
@@ -241,7 +239,7 @@ def inference(cfg: DictConfig):
             if k.split("_")[0] == "L2":
                 msg += f"{k}: {v.item():.4f}, "
                 eval_meter.update({k: v})
-        msg += "|| MRE and Value: "
+        msg += f"|| MRE and Value: "
         """
         for k, v in out_dict.items():
             if "Cd" and "pred" in k.split("_"):
@@ -253,7 +251,7 @@ def inference(cfg: DictConfig):
         """
         Cd_pred_modify = cd_dict["Cd_pred_modify"]
         # Cd_truth = out_dict["Cd_truth"]
-        Cd_pred = out_dict["Cd_pred"]
+        Cd_pred = out_dict["Cd_pred"].item()
         # Cd_mre_modify = paddle.abs(x=Cd_pred_modify - Cd_truth) / paddle.abs(x=Cd_truth)
         # eval_meter.update({"Cd_mre_modify": Cd_mre_modify})
         eval_meter.update({"Cd_pred_modify": Cd_pred_modify})
@@ -263,26 +261,42 @@ def inference(cfg: DictConfig):
         # msg += f"Cd_truth: {Cd_truth.item():.4f}], "
 
         inference_json_dict["Cd_pred"] = Cd_pred_modify.item()
-        inference_json_dict["Cd_pressure_pred"] = cd_dict["Cd_pressure_pred"].item()
-        inference_json_dict["Cd_wallshearstress_pred"] = cd_dict["Cd_wallshearstress_pred"].item()
-        inference_json_dict["total_drag_pred"] = cd_dict["total_drag_pred"].item()
-        inference_json_dict["pressure_drag_pred"] = cd_dict["pressure_drag_pred"].item()
-        inference_json_dict["wallshearstress_drag_pred"] = cd_dict["wallshearstress_drag_pred"].item()
+        inference_json_dict["Cd_pressure_pred"] = (
+            cd_dict["Cd_pressure_pred"]
+            + cd_dict["Cd_pred_modify"].item()
+            - out_dict["Cd_pred"].item()
+        )
+
+        inference_json_dict["Cd_wallshearstress_pred"] = cd_dict[
+            "Cd_wallshearstress_pred"
+        ]
+        inference_json_dict["total_drag_pred"] = cd_dict["total_drag_pred"]
+        inference_json_dict["pressure_drag_pred"] = cd_dict["pressure_drag_pred"]
+        inference_json_dict["wallshearstress_drag_pred"] = cd_dict[
+            "wallshearstress_drag_pred"
+        ]
+        # print('inference_json_dict', inference_json_dict)
         append_dict_to_json_list(inference_json_file_path, inference_json_dict)
 
         logging.info(msg)
 
     t3 = default_timer()
-    msg = f"Inference + vtp file saving took {t3 - t1:.2f} seconds. Everage eval values: "
+    msg = (
+        f"Inference + vtp file saving took {t3 - t1:.2f} seconds. Everage eval values: "
+    )
     eval_dict = eval_meter.avg
     for k, v in eval_dict.items():
         msg += f"{v.item():.4f}({k}), "
     logging.info(msg)
-    max_memory_allocated = paddle.device.cuda.max_memory_allocated(device=device) / (1024 * 1024 * 1024)
-    print(f"Memory Usage: {max_memory_allocated:.2f} GB (MAX).")
+    max_memory_allocated = paddle.device.cuda.max_memory_allocated(device=device) / (
+        1024 * 1024 * 1024
+    )
+    logging.info(f"Memory Usage: {max_memory_allocated:.2f} GB (MAX).")
 
 
-def save_eval_results(cfg: DictConfig, pred, centroid_idx, caseid, decode_fn=None) -> Tuple[str, str, str]:
+def save_eval_results(
+    cfg: DictConfig, pred, centroid_idx, caseid, decode_fn=None
+) -> Tuple[str, str, str]:
     pred_pressure = decode_fn(pred[0:1, :], 0).cpu().detach().numpy()
     pred_wallshearstress = decode_fn(pred[1:4, :], 1).cpu().detach().numpy()
     evals_results = {

@@ -10,17 +10,22 @@ Date:    2025/5/20
 
 import json
 import os
+import re
+import sys
+from typing import List
+from typing import Tuple
 
 import hydra
+import meshio
 import numpy as np
 import open3d as o3d
 import paddle
 import pandas as pd
 from omegaconf import DictConfig
+from stl import mesh
 
 
 class CSVConvert:
-
     def __init__(self, mesh_path, save_path, csvID, index, info):
         self.csv_data = pd.read_csv(os.path.join(mesh_path, csvID)).to_numpy()
         self.centroid = self.csv_data[:, -3:]
@@ -45,7 +50,9 @@ class CSVConvert:
 
     @property
     def normal(self):
-        self.inward_surface_normal = -1 * self.cell_area_ijk / self.cell_area[:, np.newaxis]
+        self.inward_surface_normal = (
+            -1 * self.cell_area_ijk / self.cell_area[:, np.newaxis]
+        )
         return self.inward_surface_normal
 
     def save_volume_mesh(self):
@@ -88,7 +95,9 @@ class CSVConvert:
             obj=self.info,
             path=f"{self.save_path}/info_{str(self.index).zfill(4)}.pdparams",
         )
-        print(f"info has been saved to : {os.path.join(self.save_path, f'info_{str(self.index).zfill(4)}.pdparams')}")
+        print(
+            f"info has been saved to : {os.path.join(self.save_path, f'info_{str(self.index).zfill(4)}.pdparams')}"
+        )
         return None
 
 
@@ -111,7 +120,9 @@ class Compute_df_stl:
         tx = np.linspace(min_bounds[0], max_bounds[0], sdf_spatial_resolution[0])
         ty = np.linspace(min_bounds[1], max_bounds[1], sdf_spatial_resolution[1])
         tz = np.linspace(min_bounds[2], max_bounds[2], sdf_spatial_resolution[2])
-        query_points = np.stack(np.meshgrid(tx, ty, tz, indexing="ij"), axis=-1).astype(np.float32)
+        query_points = np.stack(np.meshgrid(tx, ty, tz, indexing="ij"), axis=-1).astype(
+            np.float32
+        )
         return query_points
 
     def compute_df_from_mesh(self):
@@ -131,6 +142,16 @@ class Compute_df_stl:
         stl_mesh = o3d.io.read_triangle_mesh(os.path.join(self.mesh_path, self.stlID))
         num_triangles = len(stl_mesh.triangles)
         print(f"Mesh num in stl: {num_triangles}")
+
+        json_file_path = os.path.join(
+            self.save_path, self.stlID[:-4] + "_mesh_num.json"
+        )
+        os.makedirs(os.path.dirname(json_file_path), exist_ok=True)
+        if os.path.isfile(json_file_path):
+            os.remove(json_file_path)
+        with open(json_file_path, "w", encoding="utf-8") as file:
+            json.dump({"surface_mesh_num": num_triangles}, file)
+
         o3d_mesh = o3d.t.geometry.TriangleMesh.from_legacy(stl_mesh)
         scene = o3d.t.geometry.RaycastingScene()
         _ = scene.add_triangles(o3d_mesh)
@@ -142,7 +163,9 @@ class Compute_df_stl:
             "df": df,
         }
         np.save(f"{self.save_path}/df_{str(self.index).zfill(4)}.npy", df_dict["df"])
-        print(f"df has been saved to : {os.path.join(self.save_path, f'df_{str(self.index).zfill(4)}.npy')}")
+        print(
+            f"df has been saved to : {os.path.join(self.save_path, f'df_{str(self.index).zfill(4)}.npy')}"
+        )
         return None
 
 
@@ -150,7 +173,9 @@ class Compute_df_stl:
 def main(cfg: DictConfig):
     if cfg.process_mode == "infer":
         mesh_path = cfg.pre_input_path  # '/home/chenkai26/Paddle-AeroSimOpt/data/'
-        save_path = cfg.pre_output_path  # '/home/chenkai26/Paddle-AeroSimOpt/data/extracted_info/'
+        save_path = (
+            cfg.pre_output_path
+        )  # '/home/chenkai26/Paddle-AeroSimOpt/data/extracted_info/'
         bounds_dir = cfg.bounds_dir
 
         # rextract & save elements from csv & stl

@@ -13,9 +13,9 @@
 # limitations under the License.
 
 from ppcfd.models.ppfno import data
-from ppcfd.models.ppfno.losses import LpLoss
+from ppcfd.models.ppfno import losses
 from ppcfd.models.ppfno import networks
 from ppcfd.models.ppfno import optim
 from ppcfd.models.ppfno import utils
 
-__all__ = ["data", "LpLoss", "networks", "optim", "utils"]
+__all__ = ["data", "losses", "networks", "optim", "utils"]
