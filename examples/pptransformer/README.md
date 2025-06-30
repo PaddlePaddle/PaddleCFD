@@ -1,5 +1,6 @@
 This model can predict drag of the vehicle in different geometry
-# 1. Speed Up
+# Model Traits:
+## Speed Up
 
 DataSet  | torch  | paddle 
 -- | -- | -- 
@@ -10,7 +11,7 @@ DrivAerNet++ | TODO | TODO
 
 
 
-# 2. Percision
+# Percision
 - ShapeNet-Car
 
 physics  | l2 torch  | l2 paddle 
@@ -21,10 +22,11 @@ volume | 0.0211 | 0.0253
 - DrivAerNet++ (TODO)
 
 
-# 3. Train Now
+# 3. Enviroment
 ## datadownload
 - shapenet-car : https://dataset.bj.bcebos.com/PaddleScience/PaddleCFD/mlcfd_data.zip
 
+# 4. How to Run
 ## ShapeNet-Car
 ```
 cd examples/pptransformer/
@@ -43,5 +45,5 @@ python -m paddle.distributed.launch --gpus=0,1 main_v2.py \
     num_epochs=10
 ```
 
-reference 
+# 5. reference 
 [1] Wu H, Luo H, Wang H, et al. Transolver: A fast transformer solver for pdes on general geometries[J]. arXiv preprint arXiv:2402.02366, 2024.
