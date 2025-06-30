@@ -24,8 +24,7 @@ volume | 0.0211 | 0.0253
 
 # 3. Enviroment
 ## datadownload
-- shapenet-car : https://dataset.bj.bcebos.com/PaddleScience/PaddleCFD/mlcfd_data.zip
-
+- shapenet-car : https://paddle-org.bj.bcebos.com/paddlecfd/datasets/pptransformer/mlcfd_data.zip
 # 4. How to Run
 ## ShapeNet-Car
 ```
