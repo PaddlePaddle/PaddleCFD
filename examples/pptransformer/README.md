@@ -1,5 +1,5 @@
 This model can predict drag of the vehicle in different geometry
-# Model Traits:
+# 1. Model Traits:
 ## Speed Up
 
 DataSet  | torch  | paddle 
@@ -11,7 +11,7 @@ DrivAerNet++ | TODO | TODO
 
 
 
-# Percision
+# 2. Percision
 - ShapeNet-Car
 
 physics  | l2 torch  | l2 paddle 
