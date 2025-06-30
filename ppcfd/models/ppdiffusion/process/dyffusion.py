@@ -6,9 +6,9 @@ import paddle
 from omegaconf import DictConfig
 from tqdm import tqdm
 
-from .forecasting import Forecasting
-from .interpolation import Interpolation
-from .sampling import Sampling
+from ppcfd.models.ppdiffusion.process.forecasting import Forecasting
+from ppcfd.models.ppdiffusion.process.interpolation import Interpolation
+from ppcfd.models.ppdiffusion.process.sampling import Sampling
 
 
 class DYffusion:
