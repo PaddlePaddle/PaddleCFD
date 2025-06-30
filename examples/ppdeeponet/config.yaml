@@ -1,0 +1,45 @@
+random_seed: 1234
+device: "gpu:0"
+dtype: "float32"
+mode: "train"  # train or eval
+
+problem:
+  name: "DarcyFlow_cts2d"
+  tag: "fdm_TS_1"
+
+data:
+  train_path: "/workspace/workspace/paddle/DGNO/Problems/DarcyFlow_2d/smh_train.mat"
+  test_path: "/workspace/workspace/paddle/DGNO/Problems/DarcyFlow_2d/smh_test_in.mat"
+  n_train: 1000
+  n_test: 200
+  resolution: 29
+  N_mesh: 29
+
+model:
+  netType: "MultiONetBatch"
+  fun_a:
+    approximator: "RBF"
+    kernel: "gaussian"
+    eps: 25.0
+    smoothing: 0.0
+    degree: 6.0
+  encoder:
+    conv_arch: [1, 32, 64, 128]
+    fc_arch: [128, 128]
+  u_model:
+    hidden_list: [128, 128, 128, 128]
+    activation_x: "Tanh_Sin"
+    activation_a: "Tanh_Sin"
+
+train:
+  lr: 0.001
+  optimizer: "AdamW"
+  scheduler_type: "StepLR"
+  gamma: 0.6
+  step_size: 200
+  batch_size: 50
+  epochs: 2000
+  epoch_show: 50
+  w_data: 0.0
+  w_pde: 1.0
+  save_path: "saved_models/PIMultiONetBatch_fdm_TS/"

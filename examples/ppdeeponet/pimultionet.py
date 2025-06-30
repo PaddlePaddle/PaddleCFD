@@ -1,12 +1,18 @@
 import h5py
 import numpy as np
 import paddle
-from Networks.EncoderNet import EncoderCNNet2d
+import yaml
 from Solvers import PIMultiONet
 from Utils.GenPoints import Point2D
 from Utils.Grad import FDM_2d
 from Utils.PlotFigure import Plot
 from Utils.utils import np2tensor
+
+from ppcfd.models.ppdeeponet.EncoderNet import EncoderCNNet2d
+
+
+with open("config.yaml", "r") as f:
+    cfg = yaml.safe_load(f)
 
 
 def setup_seed(seed):
@@ -109,47 +115,60 @@ class Encoder(paddle.nn.Layer):
         return x
 
 
-random_seed = 1234
-setup_seed(random_seed)
-device = "gpu:0"
-dtype = "float32"
-problem_name = "DarcyFlow_cts2d"
-tag = "fdm_TS"
-mode = "eval"  # train/eval
-data_train = h5py.File("./Problems/DarcyFlow_2d/smh_train.mat", "r")
-data_test = h5py.File("./Problems/DarcyFlow_2d/smh_test_in.mat", "r")
-res = 29
+# Setup
+setup_seed(cfg["random_seed"])
+device = cfg["device"]
+dtype = cfg["dtype"]
+mode = cfg["mode"]
+tag = cfg["problem"]["tag"]
+netType = cfg["model"]["netType"]
+N_mesh = cfg["data"]["N_mesh"]
 
-n_train, n_test = 1000, 200
+# Load data
+data_train = h5py.File(cfg["data"]["train_path"], "r")
+data_test = h5py.File(cfg["data"]["test_path"], "r")
+n_train, n_test = cfg["data"]["n_train"], cfg["data"]["n_test"]
+res = cfg["data"]["resolution"]
 
+# Prepare data
 a_train, u_train, x_train, gridx_train, beta1_train, beta2_train = get_data(data_train, n_train, dtype)
 a_test, u_test, x_test, gridx_test, beta1_test, beta2_test = get_data(data_test, n_test, dtype)
 
-pointGen = Point2D(x_lb=[0.0, 0.0], x_ub=[1.0, 1.0], dataType=dtype, random_seed=random_seed)
-N_mesh = 29
-x_mesh = pointGen.inner_point(N_mesh, method="mesh")
+# Mesh points
+pointGen = Point2D(x_lb=[0.0, 0.0], x_ub=[1.0, 1.0], dataType=dtype, random_seed=cfg["random_seed"])
+x_mesh = pointGen.inner_point(cfg["data"]["N_mesh"], method="mesh")
 
+# Solver and model setup
 solver = PIMultiONet.Solver(device=device, dtype=dtype)
-netType = "MultiONetBatch"
 fun_a = solver.getModel_a(
     Exact_a=None,
-    approximator="RBF",
-    **{"x_mesh": gridx_train, "kernel": "gaussian", "eps": 25.0, "smoothing": 0.0, "degree": 6.0},
+    **{**cfg["model"]["fun_a"], "x_mesh": gridx_train},
 )
 
-
-conv_arch = [1, 32, 64, 128]
-fc_arch = [128 * 1 * 1, 128]
+conv_arch = cfg["model"]["encoder"]["conv_arch"]
+fc_arch = cfg["model"]["encoder"]["fc_arch"]
 model_enc = Encoder(conv_arch, fc_arch, nx_size=res, ny_size=res, dtype=dtype).to(device)
-hidden_list, act_x, act_a = [128] * 4, "Tanh_Sin", "Tanh_Sin"
+
 model_u = solver.getModel(
-    x_in_size=2, a_in_size=128, hidden_list=hidden_list, activation_x=act_x, activation_a=act_a, netType=netType
+    x_in_size=2,
+    a_in_size=128,
+    hidden_list=cfg["model"]["u_model"]["hidden_list"],
+    activation_x=cfg["model"]["u_model"]["activation_x"],
+    activation_a=cfg["model"]["u_model"]["activation_a"],
+    netType=netType,
 )
 
 model_dict = {"u": model_u, "enc": model_enc}
 
 if mode == "train":
-    solver.train_setup(model_dict, lr=0.001, optimizer="AdamW", scheduler_type="StepLR", gamma=0.6, step_size=200)
+    solver.train_setup(
+        model_dict,
+        lr=cfg["train"]["lr"],
+        optimizer=cfg["train"]["optimizer"],
+        scheduler_type=cfg["train"]["scheduler_type"],
+        gamma=cfg["train"]["gamma"],
+        step_size=cfg["train"]["step_size"],
+    )
     solver.train_index(
         LossClass,
         a_train,
@@ -158,47 +177,42 @@ if mode == "train":
         a_test,
         u_test,
         x_test,
-        w_data=0.0,
-        w_pde=1.0,
-        batch_size=50,
-        epochs=2000,
-        epoch_show=50,
-        **{"save_path": f"saved_models/PI{netType}_{tag}/"},
+        w_data=cfg["train"]["w_data"],
+        w_pde=cfg["train"]["w_pde"],
+        batch_size=cfg["train"]["batch_size"],
+        epochs=cfg["train"]["epochs"],
+        epoch_show=cfg["train"]["epoch_show"],
+        save_path=cfg["train"]["save_path"],
     )
 else:
-    model_u.load_dict(paddle.load("./saved_models/PIMultiONetBatch_fdm_TS/model_u.pdparams"))
-    model_enc.load_dict(paddle.load("./saved_models/PIMultiONetBatch_fdm_TS/model_enc.pdparams"))
+    model_u.load_dict(paddle.load(f"{cfg['train']['save_path']}/model_u.pdparams"))
+    model_enc.load_dict(paddle.load(f"{cfg['train']['save_path']}/model_enc.pdparams"))
 
     x_var = paddle.to_tensor(x_test, stop_gradient=False)
     a_var = a_test.to(device)
     u_pred = model_u(x_var, model_enc(a_var))
     u_pred = mollifer()(u_pred, x_var).detach().cpu()
-    #
+
     print("The shape of a_test:", a_test.shape)
     print("The shape of u_test:", u_test.shape, "u_pred shape", u_pred.shape)
     print("The test loss (avg):", solver.getLoss(u_pred, u_test))
     print("The test l2 error (avg):", solver.getError(u_pred, u_test))
+
     inx = 0
-    # # #######################################
     Plot.show_2d_list(
         [gridx_train] + [gridx_test] * 3,
         [a_test[inx], u_test[inx], u_pred[inx], paddle.abs(u_test[inx] - u_pred[inx])],
         ["a_test", "u_test", "u_pred", "abs u"],
         lb=0.0,
-        save_path="./saved_models/PIMultiONetBatch_fdm_TS/result",
+        save_path=f"{cfg['train']['save_path']}/result",
     )
-    #############################################
-    # show loss
-    loss_saved = solver.loadLoss(path=f"saved_models/PI{netType}_{tag}/", name="loss_pimultionet")
+
+    loss_saved = solver.loadLoss(path=cfg["train"]["save_path"], name="loss_pimultionet")
     Plot.show_loss(
         [loss_saved["loss_train"], loss_saved["loss_test"], loss_saved["loss_data"], loss_saved["loss_pde"]],
         ["loss_train", "loss_test", "loss_data", "loss_pde"],
-        save_path="./saved_models/PIMultiONetBatch_fdm_TS/loss",
+        save_path=f"{cfg['train']['save_path']}/loss",
     )
-    # show error
     Plot.show_error(
-        [loss_saved["time"]] * 1,
-        [loss_saved["error"]],
-        ["l2_test"],
-        save_path="./saved_models/PIMultiONetBatch_fdm_TS/error",
+        [loss_saved["time"]], [loss_saved["error"]], ["l2_test"], save_path=f"{cfg['train']['save_path']}/error"
     )

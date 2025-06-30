@@ -3,13 +3,14 @@ import time
 
 import paddle
 import scipy.io
-from Networks.MultiONets import MultiONetBatch
-from Networks.MultiONets import MultiONetBatch_X
 from Solvers import Module
 from tqdm import trange
 from Utils.Losses import MyError
 from Utils.Losses import MyLoss
 from Utils.RBFInterpolatorMesh import RBFInterpolator
+
+from ppcfd.models.ppdeeponet.MultiONets import MultiONetBatch
+from ppcfd.models.ppdeeponet.MultiONets import MultiONetBatch_X
 
 
 class Solver(Module.Solver):
