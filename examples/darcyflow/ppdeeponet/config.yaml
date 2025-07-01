@@ -8,8 +8,8 @@ problem:
   tag: "fdm_TS_1"
 
 data:
-  train_path: "/workspace/workspace/paddle/DGNO/Problems/DarcyFlow_2d/smh_train.mat"
-  test_path: "/workspace/workspace/paddle/DGNO/Problems/DarcyFlow_2d/smh_test_in.mat"
+  train_path: "./Problems/DarcyFlow_2d/smh_train.mat"
+  test_path: "./Problems/DarcyFlow_2d/smh_test_in.mat"
   n_train: 1000
   n_test: 200
   resolution: 29
