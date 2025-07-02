@@ -9,11 +9,25 @@ from Utils.PlotFigure import Plot
 from Utils.utils import np2tensor
 
 from ppcfd.models.ppdeeponet.EncoderNet import EncoderCNNet2d
+import argparse
 
+parser = argparse.ArgumentParser(description="Run PI-MultiONet for Darcy Flow")
+parser.add_argument(
+    "-c", "--config", type=str, default="config.yaml",
+    help="Path to the YAML config file"
+)
+parser.add_argument(
+    "-m", "--mode", type=str, choices=["train", "eval"], default=None,
+    help="Override the mode in config file (train/eval)"
+)
 
-with open("config.yaml", "r") as f:
+args = parser.parse_args()
+    
+with open(args.config, "r") as f:
     cfg = yaml.safe_load(f)
 
+if args.mode is not None:
+    cfg["mode"] = args.mode
 
 def setup_seed(seed):
     paddle.seed(seed=seed)
