@@ -15,6 +15,9 @@ scikit-optimize
 scipy
 seaborn
 sympy
+tabulate
 tqdm
 typing-extensions
 wget
+xarray
+xskillscore
