@@ -1,3 +1,18 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
 import logging
 import os
 import re
@@ -15,8 +30,6 @@ from paddle.io import BatchSampler
 
 import ppcfd.utils.op as op
 import ppcfd.utils.parallel as parallel
-from ppcfd.utils.loss import LpLoss
-from ppcfd.utils.metric import R2Score
 
 log = logging.getLogger(__name__)
 
@@ -387,10 +400,9 @@ class Structural_Loss:
             else:
                 raise NotImplementedError
 
-            # 保存为CSV
             output_df.to_csv(
                 output_dir / f"{others['file_name']}_test_train.csv",
-                index=False,  # 不保存行索引
+                index=False,
             )
         if cal_metric:
             return self.structural_metric
@@ -439,26 +451,9 @@ class Loss_logger:
         df = pd.DataFrame(m.csv_list[1:], columns=m.csv_list[0])
         df.to_csv(self.output_dir / f"test_epoch_{epoch}.csv", mode="w", index=False)
         if self.mode == "test":
-            outputs = {
-                # "Cp": op.to_tensor([cx.c_p_pred for cx in self.cx_test_list]),
-                # "cf": op.to_tensor([cx.c_f_pred for cx in self.cx_test_list]),
-                "Cd": op.to_tensor([cx.c_d_pred for cx in self.cx_test_list]),
-            }
-
-            targets = {
-                # "Cp": op.to_tensor([cx.c_p_true for cx in self.cx_test_list]),
-                # "cf": op.to_tensor([cx.c_f_true for cx in self.cx_test_list]),
-                "Cd": op.to_tensor([cx.c_d_true for cx in self.cx_test_list]),
-            }
-            r2_metric = R2Score()
-            r2_metric_dict = r2_metric(outputs, targets)
-            # m.cp_r2_score=r2_metric_dict["cp"]
-            # m.cf_r2_score=r2_metric_dict["cf"]
-            m.cd_r2_score = r2_metric_dict["Cd"]
-            # m.cp_r2_score=r2_metric_dict["Cp"]
             if isinstance(m, AeroDynamicMetrics):
                 log.info(
-                    f"MSE:{np.mean(m.mse_cd):.2e}, MRE:[Cp], {np.mean(m.mre_cp)*100:.2f}%, [Cf], {np.mean(m.mre_cf)*100:.2f}%, [Cd], {np.mean(m.mre_cd)*100:.2f}%, [Cl], {np.mean(m.mre_cl)*100:.2f}% \tL2:[P], {np.mean(m.l2_p):.4f}, [WSS], {np.mean(m.l2_wss):.4f}, [VEL], {np.mean(m.l2_vel):.4f}, R2 Score: [Cd], {m.cd_r2_score:.2f}"
+                    f"MSE:{np.mean(m.mse_cd):.2e}, MRE:[Cp], {np.mean(m.mre_cp)*100:.2f}%, [Cf], {np.mean(m.mre_cf)*100:.2f}%, [Cd], {np.mean(m.mre_cd)*100:.2f}%, [Cl], {np.mean(m.mre_cl)*100:.2f}% \tL2:[P], {np.mean(m.l2_p):.4f}, [WSS], {np.mean(m.l2_wss):.4f}, [VEL], {np.mean(m.l2_vel):.4f}"
                 )
             elif isinstance(m, StructuralMetrics):
                 log.info(f"Mean Relative L-2 Error [Stress]: {np.mean(m.l2):.2f}")
@@ -553,7 +548,6 @@ def test(config, model, test_dataloader, loss_logger, ep=None):
         )
     model.eval()
     loss_cd_fn = op.mse_fn()
-    # loss_fn = LpLoss(size_average=True)
     loss_fn = paddle.nn.MSELoss()
 
     if config.simulation_type == "AeroDynamic":
@@ -604,25 +598,21 @@ def train(config, model, datamodule, eval_dataloader, loss_logger):
     """
     model.train()
 
-    # 损失函数
-    # loss_fn = LpLoss(size_average=True)
     loss_fn = paddle.nn.MSELoss()
     loss_cd_fn = op.mse_fn()
     car_loss = Car_Loss(config)
     structural_loss = Structural_Loss(config)
 
-    # 创建优化器
     optimizer = op.adamw_fn(
         parameters=model.parameters(), learning_rate=config.lr, weight_decay=1e-6
     )
 
-    # 断点续训
     if config.checkpoint is not None:
         log.info(f"loading checkpoint from: {config.checkpoint}")
         ep_start = load_checkpoint(config, model, optimizer)
     else:
         ep_start = 0
-    # 学习率调度器
+
     optimizer, scheduler = op.lr_schedular_fn(
         scheduler_name=config.lr_schedular,
         learning_rate=optimizer.get_lr(),
@@ -650,11 +640,9 @@ def train(config, model, datamodule, eval_dataloader, loss_logger):
     t0 = time.time()
     for ep in range(ep_start, config.num_epochs):
         t1 = time.time()
-        # 训练循环
         for n_iter, data in enumerate(train_dataloader):
             outputs = model(data["inputs"])
             inputs, targets, others = data_to_dict(data)
-            # 模型前向传播
             if config.simulation_type == "AeroDynamic":
                 loss_list = car_loss(
                     inputs, outputs, targets, others, loss_fn, loss_cd_fn
@@ -682,26 +670,19 @@ def train(config, model, datamodule, eval_dataloader, loss_logger):
                 loss_logger.record_train_loss(loss_list)
                 l2_loss = loss_list[0]
                 train_loss = l2_loss
-            # 清除梯度
             optimizer.clear_grad()
-            # 反向传播
             train_loss.backward()
-            # 更新模型参数
             optimizer.step()
-        # 更新学习率
         if config.lr_schedular is not None:
             scheduler.step()
-        # 测试循环
         test(config, model, eval_dataloader, loss_logger, ep)
         model.train()
-        # 打印训练信息
         loss_logger.record_tensorboard(
             ep,
             (time.time() - t1),
             optimizer.get_lr(),
         )
 
-        # Save the weights
         if ((ep + 1) % 50 == 0) or ((ep + 1) == config.num_epochs):
             model_name = f"{config.output_dir}/{config.model_name}_{ep}"
             if config.enable_mp is True or config.enable_pp is True:
@@ -730,19 +711,10 @@ def main(config):
         None
     """
 
-    # 初始化损失记录器
     loss_logger = Loss_logger(config.output_dir, config.mode, config.simulation_type)
-
-    # 设置随机种子
     set_seed(config.seed)
-
-    # 数据生成
     datamodule = hydra.utils.instantiate(config.data_module)
-
-    # 模型构建
     model = hydra.utils.instantiate(config.model)
-
-    # 模型训练
     test_dataloader = datamodule.test_dataloader(
         batch_size=config.batch_size, num_workers=config.num_workers
     )
@@ -751,9 +723,7 @@ def main(config):
     # )
     if config.mode == "train":
         train(config, model, datamodule, test_dataloader, loss_logger)
-    # 模型测试
     elif config.mode == "test":
-        # 创建测试数据加载器
         model.eval()
         test(config, model, test_dataloader, loss_logger)
 
