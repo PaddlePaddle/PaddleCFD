@@ -19,6 +19,10 @@ cd ./examples/ppdiffusion
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
+## 介绍
+
+该案例用于解决流场预测问题，案例以圆柱绕流为例展开，具体介绍请参考原文[论文](https://arxiv.org/abs/2306.01984)。
+
 ## 数据
 
 我们使用了与原文相同的数据集，该数据集来源于另一篇[论文](https://arxiv.org/abs/2108.07799)中的 Navier-Stokes 数据集。如果您想按照该论文的说明自行获取数据集, 可以跳过此部分。
@@ -90,7 +94,7 @@ python train.py mode=train process=interpolation
 
 ```python
 python train.py mode=test process=interpolation INTERPOLATION.ckpt_no_suffix="your checkpoint path"
-# 或使用预训练模型: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp"
+# 或使用预训练模型: 下载后将参数设置为 INTERPOLATION.ckpt_no_suffix="/path/interp"
 ```
 
 ### Forecast 过程
@@ -99,14 +103,14 @@ python train.py mode=test process=interpolation INTERPOLATION.ckpt_no_suffix="yo
 
 ```python
 python train.py mode=train process=dyffusion INTERPOLATION.ckpt_no_suffix="your checkpoint path"
-# 或使用预训练模型: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp"
+# 或使用预训练模型: 下载后将参数设置为 INTERPOLATION.ckpt_no_suffix="/path/interp"
 ```
 
 #### 评估
 
 ```python
 python train.py mode=test process=dyffusion INTERPOLATION.ckpt_no_suffix="your checkpoint path" FORECASTING.ckpt_no_suffix="your forecast checkpoint path"
-# 或使用预训练模型: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp" FORECASTING.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/forecast"
+# 或使用预训练模型: 下载后将参数设置为 INTERPOLATION.ckpt_no_suffix="/path/interp" FORECASTING.ckpt_no_suffix="/path/forecast"
 ```
 
 ### 可视化
@@ -115,7 +119,7 @@ python train.py mode=test process=dyffusion INTERPOLATION.ckpt_no_suffix="your c
 
 ```python
 python train.py mode=test process=dyffusion INTERPOLATION.ckpt_no_suffix="your checkpoint path" FORECASTING.ckpt_no_suffix="your forecast checkpoint path"
-# 或使用预训练模型: INTERPOLATION.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/interp" FORECASTING.ckpt_no_suffix="https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusion/forecast"
+# 或使用预训练模型: 下载后将参数设置为 INTERPOLATION.ckpt_no_suffix="/path/interp"  FORECASTING.ckpt_no_suffix="/path/forecast"
 ```
 
 ## 参考文献与引用
