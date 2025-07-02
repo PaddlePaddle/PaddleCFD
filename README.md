@@ -13,6 +13,15 @@ PaddleCFD is a deep learning toolkit for surrogate modeling, equation discovery,
 - `ppcfd/model`: model source code
 - `ppcfd/utils`: util code
 
+## How to run
+
+### Installation
+
+```bash
+pip install paddlepaddle
+pip install paddlecfd
+```
+
 ## ppcfd/data
 
 ### basic functions
