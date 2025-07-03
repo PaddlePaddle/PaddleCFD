@@ -1,9 +1,14 @@
 import numpy as np
 import paddle
-from einops import rearrange
 from paddle.nn.initializer import Constant
 from paddle.nn.initializer import TruncatedNormal
-from ppcfd.networks.utils import paddle_aux
+
+
+def transpose_aux_func(dims, dim0, dim1):
+    perm = list(range(dims))
+    perm[dim0], perm[dim1] = perm[dim1], perm[dim0]
+    return perm
+
 
 ACTIVATION = {
     "gelu": paddle.nn.GELU,
@@ -31,21 +36,13 @@ class Physics_Attention_Irregular_Mesh(paddle.nn.Layer):
         )
         self.in_project_x = paddle.nn.Linear(in_features=dim, out_features=inner_dim)
         self.in_project_fx = paddle.nn.Linear(in_features=dim, out_features=inner_dim)
-        self.in_project_slice = paddle.nn.Linear(
-            in_features=dim_head, out_features=slice_num
-        )
-        for l in [self.in_project_slice]:
+        self.in_project_slice = paddle.nn.Linear(in_features=dim_head, out_features=slice_num)
+        for element in [self.in_project_slice]:
             init_Orthogonal = paddle.nn.initializer.Orthogonal()
-            init_Orthogonal(l.weight)
-        self.to_q = paddle.nn.Linear(
-            in_features=dim_head, out_features=dim_head, bias_attr=False
-        )
-        self.to_k = paddle.nn.Linear(
-            in_features=dim_head, out_features=dim_head, bias_attr=False
-        )
-        self.to_v = paddle.nn.Linear(
-            in_features=dim_head, out_features=dim_head, bias_attr=False
-        )
+            init_Orthogonal(element.weight)
+        self.to_q = paddle.nn.Linear(in_features=dim_head, out_features=dim_head, bias_attr=False)
+        self.to_k = paddle.nn.Linear(in_features=dim_head, out_features=dim_head, bias_attr=False)
+        self.to_v = paddle.nn.Linear(in_features=dim_head, out_features=dim_head, bias_attr=False)
         self.to_out = paddle.nn.Sequential(
             paddle.nn.Linear(in_features=inner_dim, out_features=dim),
             paddle.nn.Dropout(p=dropout),
@@ -53,48 +50,28 @@ class Physics_Attention_Irregular_Mesh(paddle.nn.Layer):
 
     def forward(self, x):
         B, N, C = tuple(x.shape)
-        fx_mid = (
-            self.in_project_fx(x)
-            .reshape([B, N, self.heads, self.dim_head])
-            .transpose(perm=[0, 2, 1, 3])
-        )
-        x_mid = (
-            self.in_project_x(x)
-            .reshape([B, N, self.heads, self.dim_head])
-            .transpose(perm=[0, 2, 1, 3])
-        )
+        fx_mid = self.in_project_fx(x).reshape([B, N, self.heads, self.dim_head]).transpose(perm=[0, 2, 1, 3])
+        x_mid = self.in_project_x(x).reshape([B, N, self.heads, self.dim_head]).transpose(perm=[0, 2, 1, 3])
         slice_weights = self.softmax(self.in_project_slice(x_mid) / self.temperature)
         slice_norm = slice_weights.sum(axis=2)
-        slice_token = paddle.matmul(
-            slice_weights, 
-            fx_mid, 
-            transpose_x=True, 
-            transpose_y=False
-        )
-        slice_token = slice_token / (slice_norm + 1e-05)[:, :, :, None].tile(
-            repeat_times=[1, 1, 1, self.dim_head]
-        )
+        slice_token = paddle.matmul(slice_weights, fx_mid, transpose_x=True, transpose_y=False)
+        slice_token = slice_token / (slice_norm + 1e-05)[:, :, :, None].tile(repeat_times=[1, 1, 1, self.dim_head])
         q_slice_token = self.to_q(slice_token)
         k_slice_token = self.to_k(slice_token)
         v_slice_token = self.to_v(slice_token)
         dots = (
             paddle.matmul(
                 x=q_slice_token,
-                y=k_slice_token.transpose(
-                    perm=paddle_aux.transpose_aux_func(k_slice_token.ndim, -1, -2)
-                ),
+                y=k_slice_token.transpose(perm=transpose_aux_func(k_slice_token.ndim, -1, -2)),
             )
             * self.scale
         )
         attn = self.softmax(dots)
         attn = self.dropout(attn)
         out_slice_token = paddle.matmul(x=attn, y=v_slice_token)
-        out_x = paddle.matmul(
-            out_slice_token,
-            slice_weights,
-            transpose_x=True,
-            transpose_y=True
-        ).transpose([0,1,3,2])
+        out_x = paddle.matmul(out_slice_token, slice_weights, transpose_x=True, transpose_y=True).transpose(
+            [0, 1, 3, 2]
+        )
         b, h, n, d = out_x.shape
         out_x_transposed = out_x.transpose([0, 2, 1, 3])
         out_x = out_x_transposed.reshape([b, n, h * d])
@@ -113,15 +90,11 @@ class MLP(paddle.nn.Layer):
         self.n_output = n_output
         self.n_layers = n_layers
         self.res = res
-        self.linear_pre = paddle.nn.Sequential(
-            paddle.nn.Linear(in_features=n_input, out_features=n_hidden), act()
-        )
+        self.linear_pre = paddle.nn.Sequential(paddle.nn.Linear(in_features=n_input, out_features=n_hidden), act())
         self.linear_post = paddle.nn.Linear(in_features=n_hidden, out_features=n_output)
         self.linears = paddle.nn.LayerList(
             sublayers=[
-                paddle.nn.Sequential(
-                    paddle.nn.Linear(in_features=n_hidden, out_features=n_hidden), act()
-                )
+                paddle.nn.Sequential(paddle.nn.Linear(in_features=n_hidden, out_features=n_hidden), act())
                 for _ in range(n_layers)
             ]
         )
@@ -260,35 +233,22 @@ class Model(paddle.nn.Layer):
     def get_grid(self, my_pos):
         batchsize = tuple(my_pos.shape)[0]
         gridx = paddle.to_tensor(data=np.linspace(-1.5, 1.5, self.ref), dtype="float32")
-        gridx = gridx.reshape([1, self.ref, 1, 1, 1]).tile(
-            repeat_times=[batchsize, 1, self.ref, self.ref, 1]
-        )
+        gridx = gridx.reshape([1, self.ref, 1, 1, 1]).tile(repeat_times=[batchsize, 1, self.ref, self.ref, 1])
         gridy = paddle.to_tensor(data=np.linspace(0, 2, self.ref), dtype="float32")
-        gridy = gridy.reshape([1, 1, self.ref, 1, 1]).tile(
-            repeat_times=[batchsize, self.ref, 1, self.ref, 1]
-        )
+        gridy = gridy.reshape([1, 1, self.ref, 1, 1]).tile(repeat_times=[batchsize, self.ref, 1, self.ref, 1])
         gridz = paddle.to_tensor(data=np.linspace(-4, 4, self.ref), dtype="float32")
-        gridz = gridz.reshape([1, 1, 1, self.ref, 1]).tile(
-            repeat_times=[batchsize, self.ref, self.ref, 1, 1]
-        )
+        gridz = gridz.reshape([1, 1, 1, self.ref, 1]).tile(repeat_times=[batchsize, self.ref, self.ref, 1, 1])
         grid_ref = (
-            paddle.concat(x=(gridx, gridy, gridz), axis=-1)
-            .cuda(blocking=True)
-            .reshape([batchsize, self.ref**3, 3])
+            paddle.concat(x=(gridx, gridy, gridz), axis=-1).cuda(blocking=True).reshape([batchsize, self.ref**3, 3])
         )
-        pos = (
-            paddle.sqrt(
-                x=paddle.sum(
-                    x=(my_pos[:, :, None, :] - grid_ref[:, None, :, :]) ** 2, axis=-1
-                )
-            )
-            .reshape([batchsize, tuple(my_pos.shape)[1], self.ref * self.ref * self.ref])
-            
+        pos = paddle.sqrt(x=paddle.sum(x=(my_pos[:, :, None, :] - grid_ref[:, None, :, :]) ** 2, axis=-1)).reshape(
+            [batchsize, tuple(my_pos.shape)[1], self.ref * self.ref * self.ref]
         )
         return pos
 
     def forward(self, x):
-        x, fx, T = x, None, None
+        x, fx = x, None
+        x = x[None, :, :]
         if fx is not None:
             fx = paddle.concat(x=(x, fx), axis=-1)
             fx = self.preprocess(fx)
