@@ -157,3 +157,8 @@ trainedModel/*
 *.nsys-rep
 *.sqlite
 *.pyc
+
+# log
+hybrid_parallel/
+hydraLog/
+log/
