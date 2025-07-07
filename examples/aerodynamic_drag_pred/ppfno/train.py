@@ -5,8 +5,6 @@ import logging
 import os
 import sys
 
-# sys.path.append("./src")
-# sys.path.append("./src/networks")
 import random
 from timeit import default_timer
 from typing import Dict
@@ -27,14 +25,6 @@ from paddle.distributed import fleet
 from paddle.io import DataLoader
 from paddle.io import DistributedBatchSampler
 
-# from src.data import instantiate_datamodule
-# from src.losses import LpLoss
-# from src.networks import instantiate_network
-# from src.optim.schedulers import instantiate_scheduler
-# from src.utils.average_meter import AverageMeter
-# from src.utils.average_meter import AverageMeterDict
-# from src.utils.dot_dict import DotDict
-# from src.utils.dot_dict import flatten_dict
 from ppcfd.models.ppfno.data import instantiate_datamodule
 from ppcfd.models.ppfno.losses import LpLoss
 from ppcfd.models.ppfno.networks import instantiate_network
@@ -43,9 +33,6 @@ from ppcfd.models.ppfno.utils.average_meter import AverageMeter
 from ppcfd.models.ppfno.utils.average_meter import AverageMeterDict
 from ppcfd.models.ppfno.utils.dot_dict import DotDict
 from ppcfd.models.ppfno.utils.dot_dict import flatten_dict
-
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
-# os.environ["HYDRA_FULL_ERROR"] = "0"
 
 
 def set_seed(seed: int = 0):
@@ -134,7 +121,6 @@ def train(cfg: DictConfig):
         force=True,
     )
 
-    # 创建流处理器（终端输出）
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(logging.INFO)
     stream_handler.setFormatter(
@@ -142,10 +128,6 @@ def train(cfg: DictConfig):
     )
     logging.getLogger().addHandler(stream_handler)
 
-    # train_json_file_path = os.path.join('/home/chenkai26/Paddle-AeroSimOpt/output/dataset1/json', "train.json")
-    # coefficent_json_file_path = os.path.join('/home/chenkai26/Paddle-AeroSimOpt/output/dataset1//json', 'coefficent.json')
-    # /home/chenkai26/Paddle-AeroSimOpt/refine_data/dataset1
-    # output_dir = cfg.train_input_path.replace("refine_data", "output")
     os.makedirs(os.path.join(cfg.train_output_path, "json"), exist_ok=True)
     train_json_file_path = os.path.join(cfg.train_output_path, "json", "train.json")
     coefficent_json_file_path = os.path.join(
@@ -250,14 +232,7 @@ def train(cfg: DictConfig):
             os.path.join(cfg.train_output_path, "json", "radius.json"), "w"
         ) as json_file:
             json.dump(data, json_file, indent=4, ensure_ascii=False)
-    # indices = [item[5:9] for item in all_files if item.startswith(prefix) and item.endswith(".npy")]
 
-    # def extract_number(s):
-    #     return int(s)
-
-    # indices.sort(key=extract_number)
-    # if isinstance(model, paddle.DataParallel):
-    #     eval_model = model._layers
     eval_meter = AverageMeterDict()
     visualize_data_dicts = []
 
@@ -278,17 +253,8 @@ def train(cfg: DictConfig):
                 f"Start evaluting {cfg.model} at epoch {epoch_id}, number of samples: {len(test_dataloader)}"
             )
 
-        # all_files = os.listdir(os.path.join(cfg.train_input_path, "test"))
-        # all_files = os.listdir(cfg.train_input_path)
-        # prefix = "area"
-        # indices = [item[5:9] for item in all_files if item.startswith(prefix) and item.endswith(".npy")]
         indices = datamodule.test_indices
         full_indices = datamodule.test_full_caseids
-
-        # def extract_number(s):
-        #     return int(s)
-
-        # indices.sort(key=extract_number)
 
         current_model = eval_model if "eval_model" in locals() else model
         is_train = current_model.training
@@ -384,11 +350,7 @@ def train(cfg: DictConfig):
             )
 
             case_coefficent_json_dict["case_id"] = full_indices[i]
-            # coefficent_json_dict.update(case_coefficent_json_dict)
             coefficent_json_dict.append(case_coefficent_json_dict)
-
-            # eval_meter.update({"Cd_mre_modify": Cd_mre_modify})
-            # eval_meter.update({"Cd_pred_modify": Cd_pred_modify})
 
             msg += f"MRE_Cd_modify: {Cd_mre_modify.item():.4f}, "
             msg += f"[Cd_pred_modify: {Cd_pred_modify.item():.4f}, "
@@ -410,10 +372,7 @@ def train(cfg: DictConfig):
         else:
             msg += "Wawrning: No maximum Cd Error, because all samples are not evaluated, might for OMM or other reason."
         logging.info(msg)
-        # max_memory_allocated = paddle.device.cuda.max_memory_allocated(device=device) / (
-        #     1024 * 1024 * 1024
-        # )
-        # print(f"Memory Usage: {max_memory_allocated:.2f} GB (MAX).")
+
         if max_loss_case_id is not None:
             return datamodule.test_full_caseids[max_loss_case_id], coefficent_json_dict
         else:
@@ -549,7 +508,6 @@ def train(cfg: DictConfig):
             optimizer.step()
             optimizer.clear_gradients(set_to_zero=False)
             paddle.device.cuda.empty_cache()
-            # logging.info(f'idx_batch:, {idx_batch}')
             idx_batch += 1
         scheduler.step()
         t2 = default_timer()
@@ -573,7 +531,6 @@ def train(cfg: DictConfig):
             logging.info(msg_ep + msg)
         max_loss_case_id = None
         if ep == 0 or (ep + 1) % cfg.save_per_epoch == 0 or ep == cfg.num_epochs - 1:
-            # if (ep + 1) % cfg.save_per_epoch == 0 or ep == cfg.num_epochs - 1:
             state = {"model": model.state_dict(), "lr": optimizer.get_lr(), "epoch": ep}
             os.makedirs(
                 os.path.dirname(
@@ -649,9 +606,6 @@ def save_eval_results(
         np.savetxt(csv_filename, array_hstack, delimiter=",", fmt="%f")
         logging.info(f"Save csv to: {csv_filename}")
 
-        # save 6 vtp output files
-        # mesh = meshio.Mesh(points=centroid, cells=cells)
-        # mesh.point_data.update({f"{k}": v.T})
         vtp_filename = os.path.join(
             output_dir,
             "vtp",
@@ -660,7 +614,6 @@ def save_eval_results(
             f"{k}.vtp",
         )
         os.makedirs(os.path.dirname(vtp_filename), exist_ok=True)
-        # mesh.write(vtp_filename, file_format="vtk", binary=False)
         if v.T.shape[1] == 1:
             save_vtp_from_dict(
                 vtp_filename,
@@ -697,24 +650,12 @@ def main(cfg: DictConfig):
     if cfg.seed is not None:
         set_seed(cfg.seed)
 
-    # dataset_merge()
-    # dataset_split(train_percent, val_percent)
-
     if cfg.mode == "train":
         print("################## training #####################")
         train(cfg)
-        # print("################## evaluating #####################")
-        # evaluate(cfg)
     else:
         raise ValueError(f"cfg.mode should in ['train'], but got '{cfg.mode}'")
 
 
-"""
-python train.py -cn train.yaml \
-    pre_output_path=/home/chenkai26/Paddle-AeroSimOpt/pre_output/dataset1 \
-    train_ratio=0.5 \
-    test_ratio=0.5 \
-    task_id=1
-"""
 if __name__ == "__main__":
     main()

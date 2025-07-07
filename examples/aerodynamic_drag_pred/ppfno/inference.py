@@ -2,9 +2,6 @@ import json
 import logging
 import os
 import sys
-
-# sys.path.append("./src")
-# sys.path.append("./src/networks")
 from timeit import default_timer
 from typing import Dict
 from typing import List
@@ -32,14 +29,6 @@ from ppcfd.models.ppfno.utils.average_meter import AverageMeter
 from ppcfd.models.ppfno.utils.average_meter import AverageMeterDict
 from ppcfd.models.ppfno.utils.dot_dict import DotDict
 from ppcfd.models.ppfno.utils.dot_dict import flatten_dict
-
-# os.environ["CUDA_VISIBLE_DEVICES"] = "4,"
-# os.environ["HYDRA_FULL_ERROR"] = "0"
-
-
-# strategy = fleet.DistributedStrategy()
-# strategy.find_unused_parameters = True
-# fleet.init(is_collective=True, strategy=strategy)
 
 
 def set_seed(seed: int = 0):
@@ -131,8 +120,6 @@ def inference(cfg: DictConfig):
         force=True,
     )
 
-    # inference_json_file_path = os.path.join('/home/chenkai26/Paddle-AeroSimOpt/output/dataset1/inference/case1', 'inference.json')
-
     inference_json_file_path = os.path.join(
         cfg.reason_output_path,
         "json",
@@ -185,15 +172,7 @@ def inference(cfg: DictConfig):
     inference_dataloader = datamodule.inference_dataloader(
         enable_ddp=cfg.enable_ddp, batch_size=cfg.batch_size
     )
-    # all_files = os.listdir(os.path.join(cfg.data_path, cfg.mode))
-    # all_files = os.listdir(cfg.reason_input_path)
-    # prefix = "area"
-    # indices = [item[5:9] for item in all_files if item.startswith(prefix)]
 
-    # def extract_number(s):
-    #     return int(s)
-
-    # indices.sort(key=extract_number)
     logging.info(f"Start evaluting {cfg.model} ...")
 
     if isinstance(model, paddle.DataParallel):
@@ -240,25 +219,11 @@ def inference(cfg: DictConfig):
                 msg += f"{k}: {v.item():.4f}, "
                 eval_meter.update({k: v})
         msg += f"|| MRE and Value: "
-        """
-        for k, v in out_dict.items():
-            if "Cd" and "pred" in k.split("_"):
-                k_truth = f"{k[:k.rfind('_')]}_truth"
-                mre = cal_mre(v, out_dict[k_truth])
-                eval_meter.update({f"MRE_{k[:k.rfind('_')]}": mre})
-                msg += f"MRE_{k[:k.rfind('_')]}: {mre.item():.4f}, "
-                msg += f"[{k}: {v:.4f}, {k_truth}: {out_dict[k_truth]:.4f}], "
-        """
-        Cd_pred_modify = cd_dict["Cd_pred_modify"]
-        # Cd_truth = out_dict["Cd_truth"]
-        Cd_pred = out_dict["Cd_pred"].item()
-        # Cd_mre_modify = paddle.abs(x=Cd_pred_modify - Cd_truth) / paddle.abs(x=Cd_truth)
-        # eval_meter.update({"Cd_mre_modify": Cd_mre_modify})
-        eval_meter.update({"Cd_pred_modify": Cd_pred_modify})
 
-        # msg += f"MRE_Cd_modify: {Cd_mre_modify.item():.4f}, "
+        Cd_pred_modify = cd_dict["Cd_pred_modify"]
+        Cd_pred = out_dict["Cd_pred"].item()
+        eval_meter.update({"Cd_pred_modify": Cd_pred_modify})
         msg += f"[Cd_pred_modify: {Cd_pred_modify.item():.4f}, "
-        # msg += f"Cd_truth: {Cd_truth.item():.4f}], "
 
         inference_json_dict["Cd_pred"] = Cd_pred_modify.item()
         inference_json_dict["Cd_pressure_pred"] = (
@@ -275,7 +240,6 @@ def inference(cfg: DictConfig):
         inference_json_dict["wallshearstress_drag_pred"] = cd_dict[
             "wallshearstress_drag_pred"
         ]
-        # print('inference_json_dict', inference_json_dict)
         append_dict_to_json_list(inference_json_file_path, inference_json_dict)
 
         logging.info(msg)
@@ -318,33 +282,18 @@ def save_eval_results(
 
     logging.info(evals_results.keys())
     for k, v in evals_results.items():
-        # print(k, v.shape)
-        # np.save(
-        # os.path.join(f"{cfg.reason_input_path}/evals_results", f"{k}_{centroid_idx}.npy"),
-        # v.T,
-        # )
-        # save 6 csv output files
         array_hstack = np.hstack((centroid, v.T))
         csv_filename = os.path.join(
-            # "/home/chenkai26/Paddle-AeroSimOpt/output/dataset1/inference/case1",
             cfg.reason_output_path,
             "vtp_csv",
             f"{caseid}_{k}.csv",
         )
         np.savetxt(csv_filename, array_hstack, delimiter=",", fmt="%f")
-
-        # save 6 vtp output files
-        # mesh = meshio.Mesh(points=centroid, cells=cells)
-        # mesh.point_data.update({f"{k}": v.T})
         vtp_filename = os.path.join(
-            # "/home/chenkai26/Paddle-AeroSimOpt/output/dataset1/inference/case1",
-            # "/home/chenkai26/Paddle-AeroSimOpt/output/dataset1/inference/case1",
             cfg.reason_output_path,
             "vtp_csv",
             f"{caseid}_{k}.vtp",
         )
-        # mesh.write(vtp_filename, file_format="vtk", binary=False)
-        # legacy_to_xml(vtp_filename)
         if v.T.shape[1] == 1:
             save_vtp_from_dict(
                 vtp_filename,
