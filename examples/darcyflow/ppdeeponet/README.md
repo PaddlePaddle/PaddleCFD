@@ -124,21 +124,21 @@ At each iteration $t$, SOAP updates the weight matrix $W_t$ as follows:
 
 * **Project the gradient into the eigen space**:
 
-  $$
-  \widetilde{G}_t = Q_L^T G_t Q_R.
-  $$
+$$
+\widetilde{G}_t = Q_L^T G_t Q_R.
+$$
 
 * **Apply the Adam update in the rotated space**:
 
-  $$
-  \widetilde{W}_{t+1} = \widetilde{W}_t - \eta \cdot Adam(\widetilde{G}_t).
-  $$
+$$
+\widetilde{W}_{t+1} = \widetilde{W}_t - \eta \cdot Adam(\widetilde{G}_t).
+$$
 
 * **Transform back to the original parameter space**:
 
-  $$
-  W_{t+1} = Q_L \widetilde{W}_{t+1} Q_R^T.
-  $$
+$$
+W_{t+1} = Q_L \widetilde{W}_{t+1} Q_R^T.
+$$
 
 To reduce computational overhead, the preconditioners $L_t$ and $R_t$ are updated every $f$ steps in practice.
 
