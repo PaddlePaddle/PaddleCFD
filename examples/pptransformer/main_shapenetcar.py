@@ -15,21 +15,19 @@
 
 import os
 import time
-import argparse
 from datetime import datetime
+from pathlib import Path
 
 import hydra
-import paddle
 import numpy as np
-
-from tqdm import tqdm
+import paddle
 from paddle.io import DataLoader
-from ppcfd.data import GraphDataset
-from pathlib import Path
-# from drag_coefficient import cal_coefficient
-from ppcfd.networks.Transolver_orig import Model
-from ppcfd.utils.profiler import init_profiler, update_profiler
+from tqdm import tqdm
+from transolver import Model
+
+from ppcfd.data.shapenetcar_datamodule import GraphDataset
 from ppcfd.data.shapenetcar_datamodule import load_train_val_fold
+
 
 paddle.seed(42)
 np.random.seed(42)
@@ -67,7 +65,6 @@ def train_epoch(model, train_loader, optimizer, scheduler, reg=1, epoch=0, prof=
         tuple: 包含平均压力损失和平均速度损失的元组
 
     """
-    enable_prof = True if prof is not None else False
     model.train()
     criterion_func = paddle.nn.MSELoss(reduction="none")
     losses_press = []
@@ -85,7 +82,6 @@ def train_epoch(model, train_loader, optimizer, scheduler, reg=1, epoch=0, prof=
         total_loss.backward()
         optimizer.step()
         scheduler.step()
-        prof = update_profiler(enable_prof, prof, epoch)
         losses_press.append(loss_press.item())
         losses_velo.append(loss_velo.item())
     return np.mean(losses_press), np.mean(losses_velo)
@@ -113,7 +109,7 @@ def test(model, test_loader, coef_norm, enable_test=False, eps=1e-8):
     """
     model.eval()
     criterion_func = paddle.nn.MSELoss(reduction="none")
-    loss_press_orig, loss_velo_orig = 0., 0.
+    loss_press_orig, loss_velo_orig = 0.0, 0.0
     losses_press, losses_velo, p_orig, v_orig = [], [], [], []
     for i, data in enumerate(test_loader):
         inputs, targets, surf, sample_name = data
@@ -127,20 +123,22 @@ def test(model, test_loader, coef_norm, enable_test=False, eps=1e-8):
         losses_velo.append(loss_velo.item())
 
         if enable_test is True:
-            out_orig = (out * (coef_norm[3] + eps) + coef_norm[2])
-            targets_orig = (targets *(coef_norm[3] + eps) + coef_norm[2])
+            out_orig = out * (coef_norm[3] + eps) + coef_norm[2]
+            targets_orig = targets * (coef_norm[3] + eps) + coef_norm[2]
             p_pred_orig = paddle.stack([out_orig[j][surf[j], -1:] for j in range(bs)], axis=0)
             p_true_orig = paddle.stack([targets_orig[j][surf[j], -1:] for j in range(bs)], axis=0)
             v_pred_orig = paddle.stack([out_orig[j][:, :-1] for j in range(bs)], axis=0)
             v_true_orig = paddle.stack([targets_orig[j][:, :-1] for j in range(bs)], axis=0)
             loss_press_orig = paddle.linalg.norm(p_pred_orig - p_true_orig) / paddle.linalg.norm(p_true_orig)
             loss_velo_orig = paddle.linalg.norm(v_true_orig - v_pred_orig) / paddle.linalg.norm(v_pred_orig)
-            print(f"Test Case {i}, {sample_name[0]}, loss_velo = {loss_velo_orig.item():.4f}, loss_press = {loss_press_orig.item():.4f}")
+            print(
+                f"Test Case {i}, {sample_name[0]}, loss_velo = {loss_velo_orig.item():.4f}, loss_press = {loss_press_orig.item():.4f}"
+            )
 
             # cd_pred = cal_coefficient(Path(args.data_dir) / Path(sample_name[0]), p_pred_orig[0], v_pred_orig[0])
             # cd_true = cal_coefficient(Path(args.data_dir) / Path(sample_name[0]), p_true_orig[0], v_true_orig[0])
             # loss_cd = abs(cd_pred - cd_true) / abs(cd_true)
-        
+
         p_orig.append(loss_press_orig)
         v_orig.append(loss_velo_orig)
     # spearman_corr = scipy.stats.spearmanr(cd_true_list, cd_pred_list)[0]
@@ -150,7 +148,7 @@ def test(model, test_loader, coef_norm, enable_test=False, eps=1e-8):
         np.mean(p_orig),
         np.mean(v_orig),
         0.0,  # spearman_corr
-        0.0   # cd_relative_error
+        0.0,  # cd_relative_error
     )
 
 
@@ -181,7 +179,7 @@ def train(
     val_iter=1,
     coef_norm=None,
     enable_test=False,
-    enable_prof=False
+    enable_prof=False,
 ):
     """
     训练深度学习模型。
@@ -204,18 +202,17 @@ def train(
     """
     if coef_norm is None:
         coef_norm = []
-    optimizer = paddle.optimizer.Adam(
-        parameters=model.parameters(), learning_rate=config.lr, weight_decay=0.0
-    )
+    optimizer = paddle.optimizer.Adam(parameters=model.parameters(), learning_rate=config.lr, weight_decay=0.0)
     lr_scheduler = paddle.optimizer.lr.OneCycleLR(
         max_learning_rate=config.lr,
         total_steps=(len(train_dataset) // config.batch_size + 1) * config.num_epochs,
-        end_learning_rate=config.lr/(25.*1000.))
+        end_learning_rate=config.lr / (25.0 * 1000.0),
+    )
     optimizer.set_lr_scheduler(lr_scheduler)
 
     start = time.time()
     train_loss, val_loss = 100000.0, 100000.0
-    prof = init_profiler(enable_prof)
+    prof = None
     train_loss_list, val_loss_list = [], []
     val_loader = DataLoader(val_dataset, batch_size=1)
     train_loader = DataLoader(
@@ -226,11 +223,15 @@ def train(
     )
 
     if enable_test:
-        config.checkpoint = Path(config.checkpoint).with_suffix('.pdparams')
+        config.checkpoint = Path(config.checkpoint).with_suffix(".pdparams")
         state_dict = paddle.load(config.checkpoint.as_posix())
         model.set_state_dict(state_dict)
-        loss_press, loss_velo, p_orig, v_orig, spearmanr, loss_cd = test(model, val_loader, coef_norm, enable_test=True)
-        print(f"val_loss = {(loss_press + reg*loss_velo):.4f}, Spearman's Rank Correlations = {spearmanr:.4f}, loss_velo = {v_orig.item():.4f}, loss_press = {p_orig.item():.4f}, loss_cd = {loss_cd:.4f}")
+        loss_press, loss_velo, p_orig, v_orig, spearmanr, loss_cd = test(
+            model, val_loader, coef_norm, enable_test=True
+        )
+        print(
+            f"val_loss = {(loss_press + reg*loss_velo):.4f}, Spearman's Rank Correlations = {spearmanr:.4f}, loss_velo = {v_orig.item():.4f}, loss_press = {p_orig.item():.4f}, loss_cd = {loss_cd:.4f}"
+        )
         return
 
     pbar_train = tqdm(range(config.num_epochs), position=0)
@@ -244,8 +245,12 @@ def train(
         print(f"time cost: {(time.time() - std):4f}")
         train_loss = loss_velo + reg * loss_press
         if epoch == config.num_epochs - 1 or epoch % val_iter == 0:
-            loss_press, loss_velo, p_orig, v_orig, spearmanr, loss_cd = test(model, val_loader, coef_norm, enable_test=enable_test)
-            print(f"val_loss = {(loss_press + reg*loss_velo):.4f}, Sp R = {spearmanr:.4f}, loss_velo = {v_orig.item():.4f}, loss_press = {p_orig.item():.4f}, loss_cd = {loss_cd:.4f}")
+            loss_press, loss_velo, p_orig, v_orig, spearmanr, loss_cd = test(
+                model, val_loader, coef_norm, enable_test=enable_test
+            )
+            print(
+                f"val_loss = {(loss_press + reg*loss_velo):.4f}, Sp R = {spearmanr:.4f}, loss_velo = {v_orig.item():.4f}, loss_press = {p_orig.item():.4f}, loss_cd = {loss_cd:.4f}"
+            )
             val_loss = loss_velo + reg * loss_press
             save_checkpoint(path, epoch, model)
         if epoch != 0:
@@ -283,11 +288,8 @@ def main(config):
 
         if config.enable_cinn:
             model = paddle.jit.to_static(
-                model,
-                full_graph=True,
-                input_spec = [
-                    paddle.static.InputSpec(shape=[32186, 7],
-                    dtype='float32')])
+                model, full_graph=True, input_spec=[paddle.static.InputSpec(shape=[32186, 7], dtype="float32")]
+            )
     else:
         raise NotImplementedError
 
@@ -304,8 +306,8 @@ def main(config):
         path=path,
         val_iter=config.val_freq,
         coef_norm=coef_norm,
-        enable_test=True if config.mode=="test" else False,
-        enable_prof=config.enable_profiler
+        enable_test=True if config.mode == "test" else False,
+        enable_prof=config.enable_profiler,
     )
 
 
