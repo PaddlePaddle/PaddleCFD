@@ -1,117 +1,177 @@
 # Darcy’s Flow
 
-## 1. 背景简介
+## 1. Background
 
-**Darcy’s Flow（达西流）**是描述流体在多孔介质中低速流动的经典模型，由法国工程师亨利·达西（Henry Darcy）在1856年通过实验研究第戎市（Dijon）的供水系统时首次提出。达西通过实验发现，水流通过砂层的流量与压力梯度成正比，与流体粘度成反比，这一规律后来被总结为**达西定律（Darcy’s Law）**，成为渗流力学和地下水文学的基石。达西流假设流体流动缓慢（低雷诺数），且惯性力远小于粘性力和压力梯度，因此流动呈线性关系，适用于土壤、岩石、生物组织等多孔介质中的流体运动。
+**Darcy’s Flow** is a classical model describing low-speed fluid flow in porous media. It was first proposed in 1856 by French engineer Henry Darcy during experimental studies of the water supply system in Dijon. Through experiments, Darcy discovered that the water flow rate through sand was proportional to the pressure gradient and inversely proportional to the fluid’s viscosity. This relationship was later summarized as **Darcy’s Law**, forming the foundation of seepage mechanics and groundwater hydrology. Darcy flow assumes slow fluid motion (low Reynolds number), where inertial forces are negligible compared to viscous forces and pressure gradients. Therefore, the flow is linear, applicable to porous media such as soil, rock, and biological tissues.
 
-达西流的应用范围极为广泛，涵盖地下水流动、石油开采、地热工程、生物组织渗透以及工业过滤等领域。在地下水研究中，达西定律用于模拟含水层中的水流动态，评估水资源分布和污染扩散；在石油工程中，它帮助预测油藏中的渗流特性，优化开采方案；而在生物医学领域，达西流模型被用于分析血液在毛细血管网络或药物在组织中的传输过程。尽管达西定律最初基于实验观察，但其数学形式简洁且物理意义明确，成为多孔介质流动理论的核心框架。
+Darcy flow finds extensive applications in groundwater hydrology, petroleum engineering, geothermal systems, biological tissue permeability, and industrial filtration. In groundwater studies, Darcy’s Law simulates aquifer dynamics and evaluates water resource distribution and contaminant transport. In petroleum engineering, it aids in predicting subsurface flow to optimize extraction strategies. In biomedical fields, Darcy flow models analyze blood transport in capillary networks or drug delivery in tissues. Although originally empirical, Darcy’s Law has a concise mathematical form and clear physical meaning, making it the core framework for flow in porous media.
 
-随着研究的深入，达西流的局限性也逐渐显现。例如，在高流速条件下，惯性效应不可忽略，流动可能偏离线性关系，此时需采用**非达西模型**，如Forchheimer方程或Brinkman方程加以修正。此外，对于非均质多孔介质、各向异性材料或复杂流体（如非牛顿流体），达西定律需结合更复杂的本构关系或数值方法（如有限元、格子玻尔兹曼方法）进行扩展。近年来，达西流的研究还与多物理场耦合问题紧密结合，例如热-流-固耦合（如地热系统）、化学反应-流动耦合（如污染物迁移）等，进一步推动了其在工程与科学领域的应用。达西流作为连接理论与实践的桥梁，至今仍是渗流力学和资源开发中不可或缺的工具。
+With further research, the limitations of Darcy flow have become evident. For instance, under high-speed flow, inertial effects become significant and the flow may deviate from linearity, necessitating **non-Darcy models** such as the Forchheimer or Brinkman equations. Additionally, for heterogeneous porous media, anisotropic materials, or complex fluids (e.g., non-Newtonian), Darcy’s Law must be extended with more complex constitutive relations or numerical methods such as finite elements or lattice Boltzmann methods. In recent years, Darcy flow research has been coupled with multi-physics problems—e.g., thermo-fluid-solid interactions (as in geothermal systems), or chemical transport processes (as in pollutant migration)—further promoting its application in engineering and science. As a bridge between theory and practice, Darcy flow remains a vital tool in subsurface mechanics and resource development.
 
-## 2. 问题定义
+## 2. Problem Definition
 
-考虑一个区域 $\Omega \subset \mathbb{R}^d$（通常是二维或三维空间），在这个区域中描述压力场 $u(x)$ 的分布，满足以下偏微分方程：
+Consider a domain $\Omega \subset \mathbb{R}^d$ (usually 2D or 3D), where the pressure field $u(x)$ satisfies the following PDE:
 
 $$
 \nabla \cdot (a(x) \nabla u(x)) = f(x), \quad x \in \Omega,
 $$
 
-其中：
+Where:
 
-* $u(x)$ ：标量压力场（待求解）
-* $a(x) > 0$ ：空间位置相关的渗透率（Permeability），也称导流系数或张量（可标量也可张量）
-* $f(x)$ ：源项，表示体积流入（正）或流出（负）
-* $\nabla \cdot$ ：散度算子
-* $\nabla u$ ：压力梯度
+* $u(x)$: scalar pressure field (unknown to solve for)
+* $a(x) > 0$: permeability (also known as conductivity coefficient or tensor), dependent on position
+* $f(x)$: source term (positive for inflow, negative for outflow)
+* $\nabla \cdot$: divergence operator
+* $\nabla u$: pressure gradient
 
-通常配合 **Dirichlet** 或 **Neumann** 边界条件：
+The equation is typically accompanied by **Dirichlet** or **Neumann** boundary conditions:
 
-* **Dirichlet 边界条件（压力已知）**：
+* **Dirichlet condition (known pressure)**:
 
 $$
 u(x) = g(x), \quad x \in \partial\Omega_D,
 $$
 
-* **Neumann 边界条件（流速已知）**：
+* **Neumann condition (known flux)**:
 
 $$
 (a(x) \nabla u(x)) \cdot \mathbf{n}(x) = h(x), \quad x \in \partial\Omega_N,
 $$
 
-其中 $\partial\Omega = \partial\Omega_D \cup \partial\Omega_N$ ，且 $\mathbf{n}(x)$ 是边界外法向量。
+where $\partial\Omega = \partial\Omega_D \cup \partial\Omega_N$ and $\mathbf{n}(x)$ is the outward normal vector at the boundary.
 
-在本案例中，我们考虑二维域上的达西流动问题。其控制方程可写为：
+In this case, we consider a 2D Darcy flow problem. The governing equation becomes:
 
 $$
 -\nabla \cdot (a(x_1,x_2) \nabla u(x_1,x_2)) = f(x_1,x_2), \quad(x_1,x_2) \in \Omega = [0,1]^2,
 $$
+
 $$
 u(x_1,x_2) = 0, \quad (x_1,x_2) \in \partial \Omega,
 $$
 
-这里设为常数 $f=10$ 。对于该正问题，我们关注的是从渗透率场 $a(x_1,x_2)$ 到压力场 $u(x_1,x_2)$ 的映射，即 $\mathcal{G}: a(x_1,x_2) \to u(x_1,x_2)$ 。
+where $f = 10$ is a constant. The forward problem is to determine the mapping from the permeability field $a(x_1,x_2)$ to the pressure field $u(x_1,x_2)$, i.e., $\mathcal{G}: a(x_1,x_2) \to u(x_1,x_2)$.
 
-## 3. 模型设计
+## 3. Model Design
 
-我们采用了一种新颖的神经算子架构，称为 MultiONet 架构。该架构的结构如图b所示。
+### 3.1 MultiONet
+
+We adopt a novel neural operator architecture called **MultiONet**. Its structure is shown in Figure b.
 
 ![WINO_vs_DeepONet](./image/WINO_vs_DeepONet.png)
 
-与DeepONet架构类似，MultiONet架构采用分离表示，由两个神经网络组成：一个被称为“主干网络”，用于编码输出解的空间坐标 ${x} \in \Omega$ ，另一个被称为“分支网络”，用于从输入向量 ${\beta}$ 中提取特征，该 ${\beta}$ 是通过编码器模型自动从输入系数 $a$ 中学习得到的。然而，不同于DeepONet架构，MultiONet架构通过多个主干和分支层的输出向量的平均值来计算最终输出，而不是仅依赖于主干和分支网络输出层的乘积。这一设计在不增加网络参数数量的情况下提升了性能。
+Similar to DeepONet, MultiONet employs a separated representation consisting of two neural networks: a **trunk network** that encodes the spatial coordinates ${x} \in \Omega$ of the solution, and a **branch network** that extracts features from an input vector ${\beta}$, which is learned from the input coefficient field $a$ via an encoder. Unlike DeepONet, MultiONet computes the final output by **averaging multiple inner products from various branch and trunk layers**, rather than relying solely on the final layer outputs. This improves performance without increasing the number of parameters.
 
-如图b所示，MultiONet中分支网络的输入是输入函数的（潜在）表示 ${\beta}$ 。这个表示可以通过学习编码器网络获得，也可以通过傅里叶、切比雪夫或小波变换等方法提取特征。相比之下，DeepONet中的分支网络直接接受离散化的有限维表示 $a(\Xi) = \{a(\xi_1), \cdots, a(\xi_m)\}$ ，这些值对应于预定义的传感器集 $\Xi = \{\xi_1, \cdots, \xi_m\}$ 在 $a$ 上的采样值。这一关键差异使得MultiONet架构在选择分支网络输入方面具有更大灵活性，并且在传感器集 $\Xi$ 较大时大大减少了计算时间。此外，虽然 $a(\Xi)$ 处于高维且不规则的空间（例如在多相介质中， $a$ 是具有不连续性和离散值的场），但潜在空间 ${\beta}$ 是低维的、连续值且规则的。这一转变在解决反问题时具有显著优势，因为在潜在空间中进行优化更高效、更稳健。
+As shown in the figure, the input to the branch network in MultiONet is the latent representation ${\beta}$ of the input function. This representation can be learned via an encoder network or extracted using Fourier, Chebyshev, or wavelet transforms. In contrast, DeepONet's branch network takes as input a finite-dimensional discretization $a(\Xi) = {a(\xi_1), \cdots, a(\xi_m)}$, sampled at predefined sensor points $\Xi = {\xi_1, \cdots, \xi_m}$. This gives MultiONet greater flexibility in input representation and significantly reduces computational costs when $\Xi$ is large. Furthermore, while $a(\Xi)$ lies in a high-dimensional, irregular space (especially in multiphase media with discontinuities), the latent space ${\beta}$ is low-dimensional, continuous, and regular—making optimization in inverse problems more efficient and robust.
 
-此外，MultiONet架构在逼近能力方面优于DeepONet，即使两者参数数量相同。这种改进主要源于MultiONet架构中的平均机制，如图所示，它类似于集成学习的效果，通过汇总多个函数基底的预测结果。在DeepONet架构中，输出是分支和主干网络输出的内积，表达式为：
+MultiONet also outperforms DeepONet in approximation capacity, even with the same number of parameters. This is primarily due to its averaging mechanism, akin to ensemble learning, which aggregates predictions from multiple functional bases. In DeepONet, the output is:
 
 $$
 \mathcal{G}(a(\Xi))({x}) = \sum^{p}_{k=1}b_k(a(\Xi))t_k({x}) + b_0,
 $$
 
-其中， $b_k(a(\Xi))$ 和 $t_k({x})$ 分别是分支和主干网络第 $k$ 个分量的输出， $b_0$ 为偏置项。而所提出的MultiONet架构则通过平均多个层的输出内积来计算，表达式为：
+where $b_k(a(\Xi))$ and $t_k({x})$ are the $k$-th outputs of the branch and trunk networks, and $b_0$ is a bias term. In contrast, MultiONet computes:
 
 $$
 \mathcal{G}({\beta})({x}) =\frac{1}{l} \sum^{l}_{k=1}\left(b^{(k)}({\beta})\odot t^{(k)}({x}) +b^{(k)}_0\right),
 $$
 
-其中， $b^{(k)}({\beta})$ 和 $t^{(k)}({x})$ 分别表示第 $k$ 层的分支和主干网络的输出， $l$ 为总层数， $b^{(k)}_0$ 为偏置项， $\odot$ 代表内积操作。很容易看出，当只使用分支和主干网络最后层的输出时，DeepONet可以视为MultiONet的一种特例。
+where $b^{(k)}({\beta})$ and $t^{(k)}({x})$ are outputs from the $k$-th branch and trunk layers, respectively, $l$ is the total number of layers, $b^{(k)}_0$ is a bias term, and $\odot$ denotes inner product. Clearly, DeepONet is a special case of MultiONet when using only the final layer outputs.
 
-为了处理分支网络和主干网络层数不同的情况，架构对输出计算方式进行了如下修改。设 $l_t$ 和 $l_b$ 分别表示主干网络和分支网络的层数，且假设 $l_t > l_b$ 。此时，最终输出通过平均以下形式的内积来计算：
+If the branch and trunk networks have different numbers of layers, the architecture adjusts the computation accordingly. Let $l_t$ and $l_b$ be the numbers of trunk and branch layers, respectively, with $l_t > l_b$. Then the output becomes:
 
 $$
 \mathcal{G}({\beta})({x}) =\frac{1}{l_b} \sum^{l_b}_{k=1}\left(b^{(k)}({\beta})\odot t^{(k+l_t-l_b)}({x}) +b^{(k)}_0\right).
 $$
 
-MultiONet架构通过提供比DeepONet更强的表达能力，这种增强的表示能力在作为算子逼近器时表现出更优的性能。
+Thus, MultiONet offers enhanced representational capacity and improved operator approximation performance over DeepONet.
 
-## 4.数据集
+### 3.2 Second-Order Optimization: SOAP (Shampoo with Adam in the Preconditioner)
 
-MultiONet所用的点集 $\Xi$ 取在区域 $\Omega$ 上的规则 $29\times 29$ 网格。输入系数场在相同位置的取值构成了训练数据集 $\{\hat{a}^{(i)}\}_{i=1}^N$ ，用于训练 MultiONet。
+Physics-Informed Neural Networks (PINNs) face fundamental challenges related to *conflicting gradients* during training, which manifest in two distinct ways:
 
-为了评估MultiONet方法的性能，我们采用了两个测试数据集：
+* **The first mode** involves significant differences in the magnitude of backpropagated gradients. When such magnitude imbalances occur, certain loss terms dominate the optimization process, often leading to model failure. While adaptive weighting schemes have partially addressed this issue, a more fundamental form of gradient conflict remains underexplored.
 
-- **内部分布（in-distribution）测试集**：从训练数据相同的分布中采样 200 个系数字段 $a$ ；
-- **分布外（out-of-distribution）测试集**：采样自零截断的高斯过程 $GP(0, (-\Delta + 16I)^{-2})$ 。虽然系数字段的取值范围相同，但其二阶及更高阶的相关函数不同。
+* **The second mode** arises when gradients from different loss components point in *opposite directions*, forcing the optimization to proceed along inefficient paths. Traditional scaling-based methods are insufficient for resolving such directional conflicts—especially in complex PDE systems where multiple physical constraints must be simultaneously satisfied.
 
-我们为每个测试集生成了 200 个样本，并使用有限元法（FEM）在规则 $29\times 29$ 网格上计算对应的 PDE 精确解  $u$。
+These gradient conflicts often indicate that improving one objective requires coordinated changes across multiple parameters—information that is encoded in the *off-diagonal elements of the Hessian matrix*.
 
-## 5. 模型训练与评估
+**SOAP** (Shampoo with Adam in the Preconditioner) approximates such second-order information in two complementary ways:
 
-- 加载数据集
+* Its **block-diagonal structure** naturally captures parameter interactions within each neural network layer;
+* Its **adaptive preconditioner** accumulates information about gradient correlations throughout training. This allows SOAP to implicitly identify and leverage coordinated update directions, improving multiple objectives simultaneously.
 
-``` sh
+SOAP doesn't merely follow the average gradient—it uses the local geometry of the loss landscape to find more direct paths to better solutions.
+
+By optimizing in a transformed space aligned with the preconditioner's principal directions, SOAP enhances the efficiency of Shampoo. For a given layer with weight matrix $W_t$ and gradient $G_t \in \mathbb{R}^{m \times n}$, SOAP maintains two covariance matrices using exponential moving averages:
+
+$$
+\begin{align}
+    L_t &= \beta_2 L_{t-1} + (1 - \beta_2) G_t G_t^T, \\
+    R_t &= \beta_2 R_{t-1} + (1 - \beta_2) G_t^T G_t.
+\end{align}
+$$
+
+These matrices are then decomposed via eigenvalue decomposition:
+
+$$
+L_t = Q_L \Lambda_L Q_L^T, \quad R_t = Q_R \Lambda_R Q_R^T,
+$$
+
+where $\Lambda_L$ and $\Lambda_R$ contain eigenvalues that capture the principal curvature directions of the loss landscape.
+
+At each iteration $t$, SOAP updates the weight matrix $W_t$ as follows:
+
+* **Project the gradient into the eigen space**:
+
+$$
+\widetilde{G}_t = Q_L^T G_t Q_R.
+$$
+
+* **Apply the Adam update in the rotated space**:
+
+$$
+\widetilde{W}_{t+1} = \widetilde{W}_t - \eta \cdot Adam(\widetilde{G}_t).
+$$
+
+* **Transform back to the original parameter space**:
+
+$$
+W_{t+1} = Q_L \widetilde{W}_{t+1} Q_R^T.
+$$
+
+To reduce computational overhead, the preconditioners $L_t$ and $R_t$ are updated every $f$ steps in practice.
+
+
+## 4. Dataset
+
+The point set $\Xi$ used by MultiONet forms a regular $29 \times 29$ grid over domain $\Omega$. The input permeability fields sampled at these grid points yield the training dataset ${\hat{a}^{(i)}}_{i=1}^N$.
+
+To evaluate MultiONet's performance, two test sets are used:
+
+* **In-distribution test set**: 200 samples drawn from the same distribution as training data.
+* **Out-of-distribution test set**: 200 samples drawn from a zero-truncated Gaussian process $GP(0, (-\Delta + 16I)^{-2})$. While the value range is similar, higher-order correlation functions differ.
+
+For each sample, the PDE ground truth solution $u$ is computed using the Finite Element Method (FEM) on a $29 \times 29$ grid.
+
+## 5. Model Training & Evaluation
+
+* Download datasets:
+
+```sh
 wget -nc -P ./Problems/DarcyFlow_2d/ https://paddle-org.bj.bcebos.com/paddlecfd/datasets/ppdeeponet/darcyflow/smh_train.mat
 wget -nc -P ./Problems/DarcyFlow_2d/ https://paddle-org.bj.bcebos.com/paddlecfd/datasets/ppdeeponet/darcyflow/smh_test_in.mat
 ```
 
-- 模型训练
+* Train the model:
 
-``` sh
+```sh
 python pimultionet.py
 ```
 
-- 模型评估
+* Evaluate the model:
 
-``` sh
+```sh
 wget -nc -P ./saved_models/PIMultiONetBatch_fdm_TS/ https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdeeponet/darcyflow/loss_pimultionet.mat
 wget -nc -P ./saved_models/PIMultiONetBatch_fdm_TS/ https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdeeponet/darcyflow/model_enc.pdparams
 wget -nc -P ./saved_models/PIMultiONetBatch_fdm_TS/ https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdeeponet/darcyflow/model_u.pdparams
@@ -119,13 +179,18 @@ wget -nc -P ./saved_models/PIMultiONetBatch_fdm_TS/ https://paddle-org.bj.bcebos
 python pimultionet.py --mode eval
 ```
 
-## 6. 模型结果
+## 6. Model Results
 
-如图展示了PI-MultiONet在测试集上预测的压力场与有限元解的对比。可以看出，PI-MultiONet在测试集上表现良好，能够准确预测压力场。
+The following figure compares the pressure field predicted by PI-MultiONet and the ground truth FEM solution on the test set. As shown, PI-MultiONet performs well and accurately predicts the pressure distribution.
 
 ![result](./image/result.png)
 
-## 7. 参考链接
+Optimizing with the second-order optimizer **SOAP** can improve model performance. Compared to **AdamW**, SOAP achieves better performance in fewer iterations. The L2 errors of models trained with SOAP and AdamW are **0.0054** and **0.0060**, respectively, representing a **10% improvement in accuracy**.
 
-- https://github.com/yaohua32/Deep-Neural-Operators-for-PDEs
-- [DGenNO: a novel physics-aware neural operator for solving forward and inverse PDE problems based on deep, generative probabilistic modeling](https://doi.org/10.1016/j.jcp.2025.114137)
+## 7. Reference Links
+
+* [https://github.com/yaohua32/Deep-Neural-Operators-for-PDEs](https://github.com/yaohua32/Deep-Neural-Operators-for-PDEs)
+* [https://github.com/PredictiveIntelligenceLab/jaxpi/tree/pirate](https://github.com/PredictiveIntelligenceLab/jaxpi/tree/pirate)
+* [DGenNO: a novel physics-aware neural operator for solving forward and inverse PDE problems based on deep, generative probabilistic modeling](https://doi.org/10.1016/j.jcp.2025.114137)
+* [Soap: Improving and stabilizing shampoo using adam](https://arxiv.org/abs/2409.11321)
+* [Gradient Alignment in Physics-informed Neural Networks: A Second-Order Optimization Perspective](https://arxiv.org/abs/2502.00604)

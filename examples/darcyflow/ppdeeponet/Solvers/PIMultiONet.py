@@ -4,6 +4,7 @@ import time
 import paddle
 import scipy.io
 from Solvers import Module
+from Solvers import soap
 from tqdm import trange
 from Utils.Losses import MyError
 from Utils.Losses import MyLoss
@@ -171,6 +172,8 @@ class Solver(Module.Solver):
             self.optimizer = paddle.optimizer.Adam(parameters=param_list, learning_rate=lr, weight_decay=0.0001)
         elif optimizer == "AdamW":
             self.optimizer = paddle.optimizer.AdamW(parameters=param_list, learning_rate=lr, weight_decay=0.0001)
+        elif optimizer == "SOAP":
+            self.optimizer = soap.SOAP(parameters=param_list, learning_rate=lr, weight_decay=0.0001)
         else:
             raise NotImplementedError
         if scheduler_type == "StepLR":
