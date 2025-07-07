@@ -17,7 +17,7 @@
 
 import numpy as np
 import paddle
-
+import my_op
 
 ACTIVATION = {
     "gelu": paddle.nn.GELU,
@@ -29,6 +29,18 @@ ACTIVATION = {
     "ELU": paddle.nn.ELU,
     "silu": paddle.nn.Silu,
 }
+
+
+class LayerNorm_Inplace(paddle.nn.Layer):
+    def __init__(self, ln, eps=1e-05, data_format="channels_last"):
+        super(LayerNorm_Inplace, self).__init__()
+        self.w = ln.weight
+        self.b = ln.bias
+    
+    def forward(self, x) -> Any:
+        my_op.layernorm_inplace(x, self.w, self.b)
+        return x
+
 
 
 class Physics_Attention_1D(paddle.nn.Layer):
