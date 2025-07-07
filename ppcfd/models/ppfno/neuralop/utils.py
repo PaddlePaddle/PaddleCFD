@@ -71,7 +71,7 @@ class UnitGaussianNormalizer:
 
 
 def count_model_params(model):
-    """Returns the total number of parameters of a PyTorch model
+    """Returns the total number of parameters of a Paddle model
     
     Notes
     -----
@@ -86,7 +86,7 @@ def count_tensor_params(tensor, dims=None):
 
     Parameters
     ----------
-    tensor : torch.tensor
+    tensor paddle.tensor
     dims : int list or None, default is None
         if not None, the dimensions to consider when counting the number of parameters (elements)
     

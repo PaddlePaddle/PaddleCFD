@@ -2,11 +2,6 @@ import os
 
 import paddle
 
-"""
-Authors: chenkai26(chenkai26@baidu.com)
-Date:    2024/8/27
-"""
-# ginoDataTrans_CSV_STL
 import logging
 import random
 import re
@@ -203,7 +198,6 @@ class ComputeDF:
         self.geo = geo
 
     def compute_query_points(self, eps=1e-6):
-        # with open(os.path.join(self.save_path, "../global_bounds.txt"), "r") as fp:
         with open(os.path.join(self.save_path, "global_bounds.txt"), "r") as fp:
             min_bounds = fp.readline().split(" ")
             max_bounds = fp.readline().split(" ")
@@ -283,8 +277,6 @@ def compute_save_bounds_all(dataset_path, save_path, info):
 
         csv_data = data_trans.csv_data
 
-        # max_col = np.max(csv_data, axis=0)
-        # min_col = np.min(csv_data, axis=0)
         max_value = np.amax(csv_data)
         min_value = np.amin(csv_data)
         if max_value > 1e10:
@@ -355,8 +347,6 @@ def auto_trans(case_path, save_path, caseID, info):
     data_trans = CFDDataTransiton(case_path, save_path, caseID, info)
     csv_data = data_trans.csv_data
 
-    # max_col = np.max(csv_data, axis=0)
-    # min_col = np.min(csv_data, axis=0)
     max_value = np.amax(csv_data)
     min_value = np.amin(csv_data)
     if max_value > 1e10:
@@ -380,7 +370,6 @@ def auto_trans(case_path, save_path, caseID, info):
     logging.info(f"cl_p\tcl_f\tcl")
     print_floats(cl_p, cl_f, cl_p + cl_f)
     logging.info("\n")
-    # data_trans.generate_visual_vtk()
     data_trans.save_values()
 
     mesh_trans = ComputeDF(case_path, save_path, caseID)
@@ -412,13 +401,7 @@ def main(cfg: DictConfig):
             if os.path.isdir(os.path.join(dataset_path, d))
         ]
         caseIDs.sort(key=extract_number)
-
-        # caseIDs = caseIDs[77:]
-        # split_index = int(len(caseIDs) * cfg.train_percent)
-        # random.shuffle(caseIDs)
-        # train_caseIDs, eval_caseIDs = caseIDs[:split_index], caseIDs[split_index:]
         logging.info(f"number of caseIDs: {len(caseIDs)}")
-        # logging.info('number of test caseIDs: ', len(eval_caseIDs))
 
         default_info = {
             "length": 0,
@@ -443,7 +426,6 @@ def main(cfg: DictConfig):
                 format="%(asctime)s:%(levelname)s: %(message)s",
                 force=True,
             )
-            # logging.info(caseID)
             logging.info(f"Preprocessing caseID: {caseID}")
             case_path = os.path.join(dataset_path, caseID)
 
@@ -451,25 +433,11 @@ def main(cfg: DictConfig):
             with open(json_file_path, 'r', encoding='utf-8') as file:
                 info = json.load(file)
 
-            # auto_trans(case_path, os.path.join(save_path, 'train'), caseID, params)
             auto_trans(case_path, save_path, caseID, info)
             logging.info(f"Finished caseID: {caseID} finished")
-
-        # for caseID in eval_caseIDs:
-        #     logging.info(caseID)
-        #     case_path = os.path.join(dataset_path, caseID)
-        #     # auto_trans(case_path, os.path.join(save_path, 'test'), caseID, params)
-        #     auto_trans(case_path, save_path, caseID, params)
-
     else:
         raise
 
 
-"""
-python trainDataPreprocess.py \
-    pre_input_path=/home/chenkai26/Paddle-AeroSimOpt/pre_input/train_original_dataset1/ \
-    pre_output_path=/home/chenkai26/Paddle-AeroSimOpt/pre_output/dataset1/ \
-    train_percent=1.0
-"""
 if __name__ == "__main__":
     main()

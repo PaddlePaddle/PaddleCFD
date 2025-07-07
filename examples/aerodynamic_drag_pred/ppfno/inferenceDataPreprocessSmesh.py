@@ -3,10 +3,6 @@
 #
 # Copyright (c) 2024 Baidu.com, Inc. All Rights Reserved
 #
-"""
-Authors: chenkai26(chenkai26@baidu.com)
-Date:    2025/4/18
-"""
 
 import json
 import os
@@ -82,19 +78,7 @@ class STLConvert:
         print("Mesh information extracted and saved as NumPy arrays.")
 
     def save_info(self):
-        # info_dict = {
-        #     "length": 0,
-        #     "width": 0,
-        #     "height": 0,
-        #     "clearance": 0,
-        #     "slant": 0,
-        #     "radius": 0,
-        #     "velocity": self.info["velocity"],
-        #     "re": 0,
-        #     "reference_area": self.info["reference_area"],
-        #     "density": self.info["density"],
-        #     "compute_normal": False,
-        # }
+
         paddle.save(
             obj=self.info,
             path=f"{self.save_path}/info_{str(self.index).zfill(4)}.pdparams",
@@ -148,9 +132,7 @@ class Compute_df_stl:
         scene = o3d.t.geometry.RaycastingScene()
         _ = scene.add_triangles(o3d_mesh)
         df = scene.compute_distance(o3d.core.Tensor(self.query_points)).numpy()
-        # closest_point = scene.compute_closest_points(
-        #     o3d.core.Tensor(self.query_points)
-        # )["points"].numpy()
+
         df_dict = {
             "df": df,
         }
@@ -164,20 +146,15 @@ class Compute_df_stl:
 @hydra.main(version_base=None, config_path="./configs", config_name="train")
 def main(cfg: DictConfig):
     if cfg.process_mode == "infer":
-        geo_path = cfg.pre_input_path  # '/home/chenkai26/Paddle-AeroSimOpt/data/'
+        geo_path = cfg.pre_input_path  
         save_path = (
             cfg.pre_output_path
-        )  # '/home/chenkai26/Paddle-AeroSimOpt/data/extracted_info/'
+        )  
         bounds_dir = cfg.bounds_dir
-
-        # refine meshing, extract & save elements from stl
 
         stlIDs = [d for d in os.listdir(geo_path) if d[-4:] == ".stl"]
         print("All stlID:", stlIDs)
-        # stpIDs = stpIDs[2:]
         print("Chosen stlID:", stlIDs)
-
-        # info = {"velocity": 65.0, "reference_area": 0.176, "density": 1.05}
 
         index = 200
         for stlID in stlIDs:
@@ -200,10 +177,5 @@ def main(cfg: DictConfig):
         raise
 
 
-"""
-python inferenceDataPreprocess.py -cn train.yaml process_mode=infer \
-    pre_input_path=/home/chenkai26/Paddle-AeroSimOpt/refine_data/2014-f-6103 \
-    pre_output_path=/home/chenkai26/Paddle-AeroSimOpt/pre_process/2014-f-6103
-"""
 if __name__ == "__main__":
     main()
