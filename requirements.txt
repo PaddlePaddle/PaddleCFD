@@ -1,6 +1,8 @@
 colorlog
 configmypy
 einops
+fastapi~=0.115.12
+gmsh
 h5py~=3.11.0
 hydra-core
 imageio
@@ -11,6 +13,7 @@ opt-einsum
 pandas~=2.2.1
 pydantic>=2.5.0
 pyevtk
+pymeshlab
 pynvml
 pyvista
 pyyaml
@@ -20,10 +23,12 @@ scikit-learn<1.5.0
 scikit-optimize
 scipy~=1.14.1
 seaborn
+numpy-stl
 sympy
 tabulate
 tqdm
 typing-extensions
+uvicorn~=0.34.2
 wget
 xarray
 xskillscore
