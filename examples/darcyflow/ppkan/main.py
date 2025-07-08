@@ -130,9 +130,17 @@ def train(cfg: DictConfig, with_val=False):
         for i in progress_bar:
             c_batch = c_train[i:i + batch_size]
             y_batch = y_train[i:i + batch_size]
+            
 
             optimizer.clear_grad()
-            y_pred = model(c_batch, x)
+            if cfg.model == 'KANONet':
+                y_pred = model(c_batch, x)
+            elif cfg.model == 'DeepONet':
+                y_pred = model({
+                    "branch1": c_batch,
+                    "trunk": x,
+                    })
+            
             loss = criterion(y_pred, y_batch)
             loss.backward(retain_graph=True)
             optimizer.step()
@@ -143,7 +151,7 @@ def train(cfg: DictConfig, with_val=False):
         avg_loss = total_loss / (len(c_train) // batch_size + 1)
         logging.info(f'Epoch {epoch+1}, Average Train Loss: {avg_loss:.4f}')
         train_losses.append(avg_loss)
-        test_loss = test_model(model=model, criterion=criterion, c_test=c_test, y_test=y_test, x=x, batch_size=batch_size)
+        test_loss = test_model(model=model, criterion=criterion, c_test=c_test, y_test=y_test, x=x, batch_size=batch_size, cfg_model=cfg.model)
         test_losses.append(test_loss)
         results.append([epoch+1, avg_loss, test_loss])
         if epoch % 100 == 0:
@@ -162,7 +170,13 @@ def train(cfg: DictConfig, with_val=False):
 
     model.eval()
     with paddle.no_grad():
-        y_pred = model(c_test[idx], x)
+        if cfg.model == 'KANONet':
+                y_pred = model(c_test[idx], x)
+        elif cfg.model == 'DeepONet':
+                y_pred = model({
+                    "branch1": c_test[idx],
+                    "trunk": x,
+                    })
         y_pred = y_pred.reshape(shape=[29, 29]).numpy()
         y_true = y_test[idx].reshape(shape=[29, 29]).numpy()
         fig, axs = plt.subplots(1, 2, figsize=(8, 4))
@@ -180,7 +194,7 @@ def train(cfg: DictConfig, with_val=False):
             
 
 @paddle.no_grad()
-def test_model(model, criterion, c_test, y_test, x, batch_size):
+def test_model(model, criterion, c_test, y_test, x, batch_size, cfg_model):
     model.eval()
     total_loss = 0
     num_batches = len(c_test) // batch_size + 1
@@ -188,7 +202,14 @@ def test_model(model, criterion, c_test, y_test, x, batch_size):
         for i in range(0, len(c_test), batch_size):
             c_batch = c_test[i:i+batch_size]
             y_batch = y_test[i:i+batch_size]
-            pred = model(c_batch, x)
+            if cfg_model == 'KANONet':
+                pred = model(c_batch, x)
+            elif cfg_model == 'DeepONet':
+                pred = model({
+                    "branch1": c_batch,
+                    "trunk": x,
+                    })
+            # pred = model(c_batch, x)
             loss = criterion(pred, y_batch)
             total_loss += loss.item()
     loss_avg = total_loss / num_batches
