@@ -3,10 +3,10 @@
 # from paddle_utils import *
 import paddle
 import math
-
+from typing import Optional, List
 """
 This is the paddle implementation of Korogonov-Arnold-Network (KAN) 
-which is based on the torch implementation [efficient-kan] by Blealtan and akkashdash 
+which is based on the [efficient-kan] by Blealtan and akkashdash 
 please refer to their work (https://github.com/Blealtan/efficient-kan)
 """
 class KANLinear(paddle.nn.Layer):
