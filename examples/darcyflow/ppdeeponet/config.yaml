@@ -5,7 +5,7 @@ mode: "train"  # train or eval
 
 problem:
   name: "DarcyFlow_cts2d"
-  tag: "fdm_TS_1"
+  tag: "fdm_TS"
 
 data:
   train_path: "./Problems/DarcyFlow_2d/smh_train.mat"
@@ -33,7 +33,7 @@ model:
 
 train:
   lr: 0.001
-  optimizer: "AdamW"
+  optimizer: "SOAP"  # AdamW or SOAP
   scheduler_type: "StepLR"
   gamma: 0.6
   step_size: 200

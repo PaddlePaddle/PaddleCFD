@@ -51,6 +51,10 @@ cd PaddleCFD/examples/xxx/xxx
 run the example according to the README.md
 ```
 
-## Modules
+## APIs
 
 [ppcfd/data](./doc/data.md)
+
+## License
+
+PaddleCFD is provided under the [Apache-2.0 license](./LICENSE)
