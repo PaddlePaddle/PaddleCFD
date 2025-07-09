@@ -37,7 +37,9 @@ DeepONet is a neural operator architecture designed to learn mappings between in
 **Trunk Net**: Evaluates the output function at query points in the domain. The trunk net serves as the base neural field to approximate the PDE solution function. Similarly, the trunk net can also be a KAN network or other archs.
 
 The output is a dot product of branch and trunk net features:
+
 $$ G(u)(y) = \sum_{k=1}^p \underbrace{b_k(u)}_{\text{Branch}} \cdot \underbrace{t_k(y)}_{\text{Trunk}} $$
+
 where 𝑢 is the input function, 𝑦 is the query point (typically is the coordinates of any domain points), and $𝑏_𝑘$, $𝑡_𝑘$ are the hidden outputs of branch and trunk nets, respectively.
 
 DeepONet excels in tasks like fluid dynamics, where the solution (e.g., velocity/pressure fields) depends on input parameters (e.g., Reynolds number, geometry). In the following chapter, we are going to ellaborate on an common task in aerodynamics, airfoil flow fields predcition, to illustrate the application of DeepOKAN.
