@@ -96,7 +96,7 @@ def train(cfg: DictConfig, with_val=False):
 
     # Load and process data
     t1 = default_timer()
-    c, x, y = get_data("./data/piececonst_r421_N1024_smooth1.mat", 1000)
+    c, x, y = get_data("cfg.data_dir", 1000)
     c_train = c[0:800]
     y_train = y[0:800]
     c_test = c[800:]

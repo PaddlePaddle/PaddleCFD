@@ -109,7 +109,7 @@ unzip AirFoilDataset.zip
 
 ### Prepocess scripts
 
-See `dataset_creation_sim.py`.
+See `dataset_creation_sim.py`. This file is invoked in `main.py` to generate the dataset and is not supposed to be run directly.
 Noted: the airfoil geometry is extracted using a specific intorpolating method, which is NURBS curve fitting algorithm.
 
 ## Run
