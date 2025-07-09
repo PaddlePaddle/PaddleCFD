@@ -126,7 +126,7 @@ AirfRANS dataset.
 
 ```sh
 env PYTHONPATH=$PYTHONPATH:$(pwd)
-python main.py mode=train
+python main.py model=KANONet
 ```
 
 #### Eval
