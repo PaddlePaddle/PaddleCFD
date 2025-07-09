@@ -38,7 +38,7 @@ DeepONet is a neural operator architecture designed to learn mappings between in
 
 The output is a dot product of branch and trunk net features:
 
-$$ G(u)(y) = \sum_{k=1}^p \underbrace{b_k(u)}_{\text{Branch}} \cdot \underbrace{t_k(y)}_{\text{Trunk}} $$
+$$ G(u)(y) = \sum_{k=1}^p {b_k(u)} \cdot {t_k(y)} $$
 
 where 𝑢 is the input function, 𝑦 is the query point (typically is the coordinates of any domain points), and $𝑏_𝑘$, $𝑡_𝑘$ are the hidden outputs of branch and trunk nets, respectively.
 
@@ -59,7 +59,9 @@ where 𝛼 is the angle of attack and $𝑈_\infty$ is the inlet velocity.
 **Trunk Network (KAN-based)**:
 
 Evaluates the solution at spatial coordinates (𝑥, 𝑦).
+
 $$t_k = KAN(x, y)$$
+
 **Arch Illustration**
 ```mermaid
 graph TD
@@ -134,7 +136,7 @@ python main.py model=KANONet
 #### Eval
 
 ```python
-python main.py mode=eval checkpoint="your checkpoint path"
+python main.py mode=test checkpoint="your checkpoint path"
 # or using our pretrained checkpoint: https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppkan/foil/1B-63-1T-2-KANONet_latest.pdparams
 ```
 
