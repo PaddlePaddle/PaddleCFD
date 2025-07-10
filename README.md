@@ -51,7 +51,7 @@ cd PaddleCFD/examples/xxx/xxx
 run the example according to the README.md
 ```
 
-## Modules
+## APIs
 
 [ppcfd/data](./doc/data.md)
 
