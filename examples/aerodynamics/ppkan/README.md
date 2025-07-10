@@ -138,7 +138,7 @@ python main.py model=KANONet
 ```python
 python main.py mode=test checkpoint="your checkpoint path"
 # or using our pretrained checkpoint: https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppkan/foil/KANONet_best.pdparams
-
+```
 # References and citations
 
 Reference paper: 10.1016/j.cma.2024.117699

@@ -1,6 +1,3 @@
-# import sys
-# sys.path.append('/shared/KAN/kan_paddle')
-# from paddle_utils import *
 import paddle
 import math
 from typing import Optional, List
@@ -124,7 +121,7 @@ class KANLinear(paddle.nn.Layer):
         solution = paddle.linalg.lstsq(x=A, y=B)[0] # [in_features, grid_size + spline_order, out_features]
         if A.shape[0] == 1:
             solution = solution.unsqueeze(axis=0)
-        #print("A shape: ", A.shape, "B shape: ", B.shape, "Solution shape: ", solution.shape)
+        
         result = solution.transpose([2, 0, 1])
         assert tuple(result.shape) == (
             self.out_features, 
@@ -148,13 +145,9 @@ class KANLinear(paddle.nn.Layer):
             weight=self.base_weight.T)
             
         spline_output = paddle.nn.functional.linear(
-            x=self.b_splines(x).reshape([x.shape[0],-1]).contiguous(), #.view(x.shape[0], -1), 
-            weight=self.scaled_spline_weight.reshape([self.out_features, -1]).T.contiguous())#.view(self.out_features, -1).T)
-        # 采用view似乎无法计算一阶微分
-        # spline_output = paddle.nn.functional.linear(
-        #     x=self.b_splines(x).view(x.shape[0], -1), 
-        #     weight=self.scaled_spline_weight.view(self.out_features, -1).T)
-
+            x=self.b_splines(x).reshape([x.shape[0],-1]).contiguous(), 
+            weight=self.scaled_spline_weight.reshape([self.out_features, -1]).T.contiguous())
+        
         return base_output + spline_output
 
     @paddle.no_grad()
@@ -315,8 +308,7 @@ class KANONet(paddle.nn.Layer):
             b3_out = self.branch_net3(inputs['branch3'])
 
         t_out = self.trunk_net(inputs['trunk'])    # [Ni, 64]
-        # y = paddle.mean(b1_out * t_out, axis=1, keepdim=True)
-        # return y
+        
         step = int(self.hidden_out/4)
         if not self.branch2:
             y1 = paddle.sum(b1_out[:,0:step] * t_out[:,0:step], axis=1, keepdim=True) # [Ni, 1])

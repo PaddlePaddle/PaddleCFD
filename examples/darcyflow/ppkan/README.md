@@ -151,7 +151,7 @@ The data preprocess follows the instructions that can be found in the mentinoed 
 
 ### Check config at first
 
-Check setting of `DATA.path` in ppkan/conf/main.yaml, pls make sure the
+Check setting of `data_dir` in ppkan/conf/main.yaml, pls make sure the
 path is correctly modified to the dataset directory where you download the 
 pde dataset.
 
