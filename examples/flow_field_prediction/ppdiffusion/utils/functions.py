@@ -106,9 +106,14 @@ def get_optimizer(cfg_opt: DictConfig, parameters, opt_path=None):
 
     optimizer = optim_class(parameters=parameters, **cfg_opt)
 
-    if opt_path and os.path.exists(f"{opt_path}.pdopt"):
-        optim_dict = paddle.load(f"{opt_path}.pdopt")
-        optimizer.set_state_dict(optim_dict)
+    if opt_path:
+        if opt_path.endswith(".pdparams"):
+            opt_path = opt_path.replace(".pdparams", ".pdopt")
+        elif not opt_path.endswith(".pdopt"):
+            opt_path = f"{opt_path}.pdopt"
+        if os.path.exists(f"{opt_path}.pdopt"):
+            optim_dict = paddle.load(f"{opt_path}.pdopt")
+            optimizer.set_state_dict(optim_dict)
     return optimizer
 
 
@@ -142,11 +147,12 @@ def initialize_models(cfg, models_lst=["interp"], interp_obj=None, forecast_obj=
         model_interp_cfg = interp_obj.model_cfg_transform(cfg.INTERPOLATION.MODEL)
         model_interp = interp_model(**model_interp_cfg)
         # load ckpt
-        ckpt = getattr(cfg.INTERPOLATION, "ckpt_no_suffix", None)
+        ckpt = getattr(cfg.INTERPOLATION, "checkpoint", None)
         if ckpt:
-            state_dict = paddle.load(f"{ckpt}.pdparams")
+            ckpt_path = ckpt if ckpt.endswith(".pdparams") else f"{ckpt}.pdparams"
+            state_dict = paddle.load(ckpt_path)
             model_interp.set_state_dict(state_dict)
-            logging.info(f"Finish loading checkpoint {ckpt}.pdparams")
+            logging.info(f"Finish loading checkpoint {ckpt_path}")
         init_models.append(model_interp)
 
     if "forecast" in models_lst:
@@ -156,11 +162,12 @@ def initialize_models(cfg, models_lst=["interp"], interp_obj=None, forecast_obj=
         model_forecast_cfg = forecast_obj.model_cfg_transform(cfg.FORECASTING.MODEL)
         model_forecast = forecast_model(**model_forecast_cfg)
         # load ckpt
-        ckpt = getattr(cfg.FORECASTING, "ckpt_no_suffix", None)
+        ckpt = getattr(cfg.FORECASTING, "checkpoint", None)
         if ckpt:
-            state_dict = paddle.load(f"{ckpt}.pdparams")
+            ckpt_path = ckpt if ckpt.endswith(".pdparams") else f"{ckpt}.pdparams"
+            state_dict = paddle.load(ckpt_path)
             model_forecast.set_state_dict(state_dict)
-            logging.info(f"Finish loading checkpoint {ckpt}.pdparams")
+            logging.info(f"Finish loading checkpoint {ckpt_path}")
         init_models.append(model_forecast)
 
     return init_models

@@ -54,7 +54,7 @@ INTERPOLATION:
     outer_sample_mode: bilinear
     with_time_emb: true
   loss_fn: "mse"
-  ckpt_no_suffix: null
+  checkpoint: null
 
 FORECASTING:
   lass_name: DYffusion
@@ -81,7 +81,7 @@ FORECASTING:
     outer_sample_mode: bilinear
     with_time_emb: true
   loss_fn: "l1"
-  ckpt_no_suffix: null
+  checkpoint: null
 
 SAMPLING:
   num_timesteps: 16
