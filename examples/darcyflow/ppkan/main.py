@@ -96,7 +96,7 @@ def train(cfg: DictConfig, with_val=False):
 
     # Load and process data
     t1 = default_timer()
-    c, x, y = get_data("cfg.data_dir", 1000)
+    c, x, y = get_data(cfg.data_dir, 1000)
     c_train = c[0:800]
     y_train = y[0:800]
     c_test = c[800:]
@@ -251,8 +251,8 @@ def test(cfg: DictConfig):
 
     logging.info(f"Start testing {cfg.model}...")
 
-    test_loss = test_model(model=model, criterion=nn.MSELoss(), c_test=c_test, y_test=y_test, x=x, batch_size=cfg.batch_size)
-    loggin.info(f"Testing finished, average test loss: {test_loss:.6f}")
+    test_loss = test_model(model=model, criterion=nn.MSELoss(), c_test=c_test, y_test=y_test, x=x, batch_size=cfg.batch_size, cfg_model=cfg.model)
+    logging.info(f"Testing finished, average test loss: {test_loss:.6f}")
     
 
 
