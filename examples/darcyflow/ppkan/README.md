@@ -107,7 +107,7 @@ $$ Pressure(x, y) = \sum_{k=1}^p b_k(x, y) \cdot t_k(x, y) $$
 The hyperparameters of model arch and training porcess can be found in the ./conf/main.yaml file. The training curve is shown in the following figure:
 ![Training Curve](./docs/figures/training_curve.png)
 **Results**:
-The pressure field prediction relative err on the test set is 4.3 %, MSE is 0.007.
+The pressure field prediction relative err on the test set is MSE is 0.007.
 ![Pressure Field Test](./docs/figures/output.png)
 
 ## Code

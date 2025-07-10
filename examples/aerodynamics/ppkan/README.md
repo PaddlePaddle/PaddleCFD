@@ -80,7 +80,7 @@ $$Velocity(x, y) = \sum_{k=1}^p b_k(x, y) \cdot t_k(x, y), Pressure(x, y) = \sum
 
 **Results**:
 ![Pressure prediction results of a NACA foil](./docs/figures/foil_pressure.png)
-The pressure field prediction MRE on the test set is 9.8%, the major contribution of error comes from the far field region.
+The pressure field prediction metric on the test set is MSE 2e-2, the major contribution of error comes from the far field region.
 ## Code
 
 ```sh
@@ -137,8 +137,7 @@ python main.py model=KANONet
 
 ```python
 python main.py mode=test checkpoint="your checkpoint path"
-# or using our pretrained checkpoint: https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppkan/foil/1B-63-1T-2-KANONet_latest.pdparams
-```
+# or using our pretrained checkpoint: https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppkan/foil/KANONet_best.pdparams
 
 # References and citations
 
