@@ -253,9 +253,6 @@ def test(cfg: DictConfig):
 
     test_loss = test_model(model=model, criterion=paddle.nn.MSELoss(), c_test=c_test, y_test=y_test, x=x, batch_size=cfg.TRAIN.batch_size, cfg_model=cfg.model)
     logging.info(f"Testing finished, average test loss: {test_loss:.6f}")
-    
-
-
 
 @hydra.main(
     version_base=None, config_path="./conf", config_name="main.yaml"
