@@ -10,4 +10,4 @@ PaddleCFD是一个基于飞桨深度学习框架（PaddlePaddle）、围绕计�
 
 
 ## 贡献者名单
-[guhaohao0991](https://github.com/guhaohao0991), [KaiCHEN-HT](https://github.com/KaiCHEN-HT), [liaoxin2](https://github.com/liaoxin2), [lijialin03](https://github.com/lijialin03), [wangguan1995](https://github.com/wangguan1995), [XiaoguangHu01](https://github.com/XiaoguangHu01)
+[guhaohao0991](https://github.com/guhaohao0991), [HydrogenSulfate](https://github.com/HydrogenSulfate), [KaiCHEN-HT](https://github.com/KaiCHEN-HT), [liaoxin2](https://github.com/liaoxin2), [lijialin03](https://github.com/lijialin03), [wangguan1995](https://github.com/wangguan1995), [XiaoguangHu01](https://github.com/XiaoguangHu01)
