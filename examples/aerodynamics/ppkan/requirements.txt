@@ -5,6 +5,7 @@ tabulate
 tqdm
 xarray
 xskillscore
+airfrans
 pandas
 vtk
 geomdl

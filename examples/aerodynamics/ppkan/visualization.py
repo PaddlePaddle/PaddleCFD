@@ -76,11 +76,12 @@ def plot_predictions(model, X, y, labels_mean, labels_std, output_dir):
         })
     print(y_pred.shape)
 
+    epsilon = 1e-4
+    relative_error = np.abs(y_pred.numpy() - y) / (np.abs(y) + epsilon)
+
     y_pred = y_pred.numpy() * labels_std + labels_mean
     y = y * labels_std + labels_mean
     
-    epsilon = 1e-6
-    relative_error = np.abs(y_pred - y) / (np.abs(y) + epsilon)
     coords = trunk_x.numpy()
 
     plt.figure(figsize=(18, 36))
@@ -108,7 +109,7 @@ def plot_predictions(model, X, y, labels_mean, labels_std, output_dir):
 
 
     plt.tight_layout()
-    plt.title(f'Pressure Prediction, Mean Relative Error: {np.mean(relative_error):.4f}, Max Relative Error: {np.max(relative_error):.4f}')
+    plt.title(f'Pressure Prediction')
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
         plt.savefig(os.path.join(output_dir, 'pressure_pred.png'), dpi=300, bbox_inches='tight')

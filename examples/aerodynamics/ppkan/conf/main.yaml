@@ -11,7 +11,7 @@ hydra:
     subdir: ./
 
 # Setting
-mode: "train"
+mode: "train" # "train" or "test"
 seed: 0
 output_dir: ${hydra:run.dir}
 device: gpu
@@ -32,20 +32,20 @@ DATA:
 
 
 # Model
-model: "DeepONet" # "KANONet"
+model: "KANONet" # "KANONet"
 MLPMODEL:
   branch1_in: 63
-  branch1_hidden: [512, 256, 256, 128, 128]
+  branch1_hidden: [512, 256, 128]
   trunk_in: 2
-  trunk_hidden: [128, 256, 256, 128, 128]
+  trunk_hidden: [128, 256, 128]
 KANMODEL:
-  width_branch1: [63, 128, 128, 64]
-  grid_range_b1: [-3.0, 3.0]
-  grid_size_b1: 50
+  width_branch1: [63, 128, 128, 128]
+  grid_range_b1: [-1.0, 1.0]
+  grid_size_b1: 10
 
-  width_trunk: [2, 128, 128, 64]
-  grid_range_t: [-1.5, 4.0]
-  grid_size_t: 50
+  width_trunk: [2, 64, 128, 128]
+  grid_range_t: [-1.5, 3.0]
+  grid_size_t: 10
   
 
 # Hyper-parameters
