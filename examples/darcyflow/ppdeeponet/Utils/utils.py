@@ -3,7 +3,7 @@ import paddle
 
 
 def np2tensor(x: np.array, dtype="float32"):
-    """From numpy.array to torch.tensor"""
+    """From numpy.array to paddle.to_tensor"""
     return paddle.to_tensor(data=x, dtype=dtype)
 
 

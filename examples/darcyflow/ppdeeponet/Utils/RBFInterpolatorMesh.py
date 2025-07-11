@@ -58,7 +58,7 @@ class RBFInterpolator(paddle.nn.Layer):
         dtype="float32",
     ) -> None:
         super(RBFInterpolator, self).__init__()
-        """Radial basis function interpolator in Pytorch.
+        """Radial basis function interpolator in PaddlePaddle.
         Input:
             x_mesh: size(n_mesh, d)
             kernel: str, The kernel type.

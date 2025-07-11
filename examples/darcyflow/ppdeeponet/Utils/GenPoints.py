@@ -130,9 +130,9 @@ class Point2D:
         elif 2.0 * R_max > np.min(np.array(self.ub) - np.array(self.lb)):
             raise ValueError("R_max is too large.")
         elif R_min < 0.0001 and self.dtype == "float32":
-            raise ValueError("R_min<1e-4 when data_type is torch.float32!")
+            raise ValueError("R_min<1e-4 when data_type is paddle.float32!")
         elif R_min < 1e-10 and self.dtype == "float64":
-            raise ValueError("R_min<1e-10 when data_type is torch.float64!")
+            raise ValueError("R_min<1e-10 when data_type is paddle.float64!")
         R = np.random.uniform(R_min, R_max, [n_center, 1])
         lb, ub = np.array(self.lb) + R, np.array(self.ub) - R
         xc = self.lhs_x.random(n_center) * (ub - lb) + lb
