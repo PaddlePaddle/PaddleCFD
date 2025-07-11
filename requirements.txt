@@ -19,6 +19,7 @@ pyvista
 pyyaml
 requests
 ruamel.yaml
+scienceplots
 scikit-learn<1.5.0
 scikit-optimize
 scipy~=1.14.1
