@@ -120,3 +120,7 @@ conda activate paddle-open3d
 
     # Online inference
     curl -X POST "http://0.0.0.0:8087/api/v1/inference" -H "Content-Type: application/json" -d '{"reason_output_path":"/inference_output", "reason_input_path":"/inference_dataset_processed", "pre_output_path":"/train_dataset_processed"}'
+  
+## Reference
+- Li, Z., Kovachki, N., Azizzadenesheli, K., Liu, B., Bhattacharya, K., Stuart, A. and Anandkumar, A., 2020. Fourier neural operator for parametric partial differential equations. arXiv preprint arXiv:2010.08895.
+- Li, Z., Kovachki, N., Choy, C., Li, B., Kossaifi, J., Otta, S., Nabian, M.A., Stadler, M., Hundt, C., Azizzadenesheli, K. and Anandkumar, A., 2023. Geometry-informed neural operator for large-scale 3d pdes. Advances in Neural Information Processing Systems, 36, pp.35836-35854.
