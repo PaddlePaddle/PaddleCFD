@@ -239,7 +239,7 @@ def test(cfg: DictConfig):
     # Load and process data
     
     t1 = default_timer()
-    c, x, y = get_data("./data/piececonst_r421_N1024_smooth1.mat", 1000)
+    c, x, y = get_data(cfg.data_dir, 1000)
     c_test = c[800:]
     y_test = y[800:]
     c_test = paddle.to_tensor(c_test, dtype=cfg.dtype)
@@ -251,11 +251,8 @@ def test(cfg: DictConfig):
 
     logging.info(f"Start testing {cfg.model}...")
 
-    test_loss = test_model(model=model, criterion=nn.MSELoss(), c_test=c_test, y_test=y_test, x=x, batch_size=cfg.batch_size, cfg_model=cfg.model)
+    test_loss = test_model(model=model, criterion=paddle.nn.MSELoss(), c_test=c_test, y_test=y_test, x=x, batch_size=cfg.TRAIN.batch_size, cfg_model=cfg.model)
     logging.info(f"Testing finished, average test loss: {test_loss:.6f}")
-    
-
-
 
 @hydra.main(
     version_base=None, config_path="./conf", config_name="main.yaml"
