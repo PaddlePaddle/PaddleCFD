@@ -48,7 +48,7 @@ python -m pip install -e . -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```bash
 # Run examples
 cd PaddleCFD/examples/xxx/xxx
-run the example according to the README.md
+run the example according to the example README.md
 ```
 
 ## APIs
