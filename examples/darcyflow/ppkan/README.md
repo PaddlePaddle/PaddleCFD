@@ -10,7 +10,7 @@ single variable and the binary operation of addition. More specifically, for a s
 
 $$f(x) = f(x_1,...,x_n)=\sum_{q=1}^{2n+1}\Phi_q(\sum_{p=1}^n \phi_{q,p}(x_p))$$
 
-where $\phi_{q,p}:[0,1]\to\mathbb{R}$ and $\Phi_q:\mathbb{R}\to\mathbb{R}$. In a sense, they showed that the only true multivariate function is addition, since every other function can be written using univariate functions and sum. However, this 2-Layer width-$(2n+1)$ Kolmogorov-Arnold representation may not be smooth due to its limited expressive power. We augment its expressive power by generalizing it to arbitrary depths and widths.
+where $\phi_{q,p}:[0,1]\to\mathbb{R}$ and $\Phi_q:\mathbb{R}\to\mathbb{R}$. In a sense, they showed that the only true multivariate function is addition, since every other function can be written using univariate functions and sum. However, this 2-Layer width-(2n+1) Kolmogorov-Arnold representation may not be smooth due to its limited expressive power. We augment its expressive power by generalizing it to arbitrary depths and widths.
 
 ### II. Kolmogorov-Arnold Networks (KAN)
 KANs are neural networks inspired by the Kolmogorov-Arnold theorem, where:
@@ -37,7 +37,9 @@ DeepONet is a neural operator architecture designed to learn mappings between in
 **Trunk Net**: Evaluates the output function at query points in the domain. The trunk net serves as the base neural field to approximate the PDE solution function. Similarly, the trunk net can also be a KAN network or other archs.
 
 The output is a dot product of branch and trunk net features:
-$$G(u)(y) = \sum_{k=1}^p \underbrace{b_k(u)}_{\text{Branch}} \cdot \underbrace{t_k(y)}_{\text{Trunk}}$$
+
+$$ G(u)(y) = \sum_{k=1}^p {b_k(u)} \cdot {t_k(y)} $$
+
 where 𝑢 is the input function, 𝑦 is the query point (typically is the coordinates of any domain points), and $𝑏_𝑘$, $𝑡_𝑘$ are the hidden outputs of branch and trunk nets, respectively.
 
 DeepONet excels in tasks like fluid dynamics, where the solution (e.g., velocity/pressure fields) depends on input parameters (e.g., Reynolds number, geometry). In the following chapter, we are going to ellaborate on an common task in geophysics and biofluidics, the surrogate modeling of 2D Darcy Flow, to illustrate the application of DeepOKAN.
@@ -47,9 +49,7 @@ DeepONet excels in tasks like fluid dynamics, where the solution (e.g., velocity
 **1. Problem Background**
 Darcy flow describes how fluids flow through porous media, governed by the Darcy's Law:
 
-$$
-∇·(c(x,y)∇p(x,y)) = f(x,y), \quad (x,y) ∈ Ω  
-$$
+$$ ∇·(c(x,y)∇p(x,y)) = f(x,y), \quad (x,y) ∈ Ω $$
 where:
 
 c(x,y): Permeability field (input, heterogeneous material property)
@@ -102,12 +102,12 @@ graph TD
 ```
 
 The final output is a generalized superposition of branch and trunk features:
-$$ Pressure(x, y) = \sum_{k=1}^p b_k(x, y) \cdot t_k(x, y)$$
+$$ Pressure(x, y) = \sum_{k=1}^p b_k(x, y) \cdot t_k(x, y) $$
 
 The hyperparameters of model arch and training porcess can be found in the ./conf/main.yaml file. The training curve is shown in the following figure:
 ![Training Curve](./docs/figures/training_curve.png)
 **Results**:
-The pressure field prediction relative err on the test set is 4.3 %, MSE is 0.007.
+The pressure field prediction relative err on the test set is MSE is 0.007.
 ![Pressure Field Test](./docs/figures/output.png)
 
 ## Code
@@ -151,7 +151,7 @@ The data preprocess follows the instructions that can be found in the mentinoed 
 
 ### Check config at first
 
-Check setting of `DATA.path` in ppkan/conf/main.yaml, pls make sure the
+Check setting of `data_dir` in ppkan/conf/main.yaml, pls make sure the
 path is correctly modified to the dataset directory where you download the 
 pde dataset.
 

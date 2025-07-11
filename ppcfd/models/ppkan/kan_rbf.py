@@ -1,9 +1,7 @@
 import sys
-sys.path.append('/shared/KAN_paddle/KANOnet')
-from paddle_utils import *
 import paddle
 from typing import List
-from kan_efficiency import *
+from .kan import *
 
 class RadialBasisFunctionLayer(paddle.nn.Layer):
 
@@ -45,7 +43,6 @@ class RadialBasisFunctionLayer(paddle.nn.Layer):
         self.base_activation = paddle.nn.Silu() if apply_base_update else None
 
     def forward(self, x: paddle.Tensor) ->paddle.Tensor:
-        x = x.to(self.rbf_weight.dtype)
         x_unsqueezed = x.unsqueeze(axis=-1)
         rbf_basis = paddle.exp(x=-((x_unsqueezed - self.grid) / ((self.
             max_grid - self.min_grid) / (self.grid_count - 1))) ** 2) # Shape: [batch_size, in_features， grid_count]
@@ -99,7 +96,6 @@ class RBF_KAN(paddle.nn.Layer):
         self.dtype = dtype
 
     def forward(self, x: paddle.Tensor) ->paddle.Tensor:
-        x = x.to(self.dtype)
         for layer in self.layers[:-1]:
             x = paddle.nn.functional.tanh(x=layer(x))
         x = self.layers[-1](x)
@@ -168,3 +164,26 @@ class RMSLoss(paddle.nn.Layer):
             raise ValueError("The shape of Y_pred and Y_true must be the same.")
         RMSloss = paddle.sqrt(paddle.mean(paddle.square(Y_pred - Y_true)))
         return RMSloss
+
+def view(self, *args, **kwargs):
+    if args:
+        if len(args)==1 and isinstance(args[0], (tuple, list, str)):
+            return paddle.view(self, args[0])
+        else:
+            return paddle.view(self, list(args))
+    elif kwargs:
+        return paddle.view(self, shape_or_dtype = list(kwargs.values())[0])
+
+setattr(paddle.Tensor, 'view', view)
+
+def reshape(self, *args, **kwargs):
+    if args:
+        if len(args) == 1 and isinstance(args[0], (tuple, list)):
+            return paddle.reshape(self, args[0])
+        else:
+            return paddle.reshape(self, list(args))
+    elif kwargs:
+        assert "shape" in kwargs
+        return paddle.reshape(self, shape=kwargs["shape"])
+
+setattr(paddle.Tensor, "reshape", reshape)
