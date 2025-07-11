@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 
 import hydra
+import logging
 import numpy as np
 import paddle
 from paddle.io import DataLoader
@@ -29,6 +30,7 @@ from ppcfd.data.shapenetcar_datamodule import GraphDataset
 from ppcfd.data.shapenetcar_datamodule import load_train_val_fold
 
 
+log = logging.getLogger(__name__)
 paddle.seed(42)
 np.random.seed(42)
 
@@ -131,7 +133,7 @@ def test(model, test_loader, coef_norm, enable_test=False, eps=1e-8):
             v_true_orig = paddle.stack([targets_orig[j][:, :-1] for j in range(bs)], axis=0)
             loss_press_orig = paddle.linalg.norm(p_pred_orig - p_true_orig) / paddle.linalg.norm(p_true_orig)
             loss_velo_orig = paddle.linalg.norm(v_true_orig - v_pred_orig) / paddle.linalg.norm(v_pred_orig)
-            print(
+            log.info(
                 f"Test Case {i}, {sample_name[0]}, loss_velo = {loss_velo_orig.item():.4f}, loss_press = {loss_press_orig.item():.4f}"
             )
 
@@ -229,7 +231,7 @@ def train(
         loss_press, loss_velo, p_orig, v_orig, spearmanr, loss_cd = test(
             model, val_loader, coef_norm, enable_test=True
         )
-        print(
+        log.info(
             f"val_loss = {(loss_press + reg*loss_velo):.4f}, Spearman's Rank Correlations = {spearmanr:.4f}, loss_velo = {v_orig.item():.4f}, loss_press = {p_orig.item():.4f}, loss_cd = {loss_cd:.4f}"
         )
         return
@@ -242,13 +244,13 @@ def train(
         loss_velo, loss_press = train_epoch(
             model, train_loader, optimizer, lr_scheduler, reg=reg, epoch=epoch, prof=prof
         )
-        print(f"time cost: {(time.time() - std):4f}")
+        log.info(f"time cost: {(time.time() - std):4f}")
         train_loss = loss_velo + reg * loss_press
         if epoch == config.num_epochs - 1 or epoch % val_iter == 0:
             loss_press, loss_velo, p_orig, v_orig, spearmanr, loss_cd = test(
                 model, val_loader, coef_norm, enable_test=enable_test
             )
-            print(
+            log.info(
                 f"val_loss = {(loss_press + reg*loss_velo):.4f}, Sp R = {spearmanr:.4f}, loss_velo = {v_orig.item():.4f}, loss_press = {p_orig.item():.4f}, loss_cd = {loss_cd:.4f}"
             )
             val_loss = loss_velo + reg * loss_press
@@ -262,8 +264,8 @@ def train(
     np.savetxt(f"{path}/val_loss_{config.num_epochs}.txt", val_loss_list)
     end = time.time()
     time_elapsed = end - start
-    print("Number of parameters:", get_nb_trainable_params(model))
-    print("Time elapsed: {0:.2f} seconds".format(time_elapsed))
+    log.info("Number of parameters:", get_nb_trainable_params(model))
+    log.info("Time elapsed: {0:.2f} seconds".format(time_elapsed))
     return model
 
 

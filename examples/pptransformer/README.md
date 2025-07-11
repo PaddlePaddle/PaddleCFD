@@ -10,7 +10,6 @@ DrivAerNet++ | TODO | TODO
 - The parallel efficiency achieved 90.2% in the data parallel computing experiment.
 
 
-
 # 2. Percision
 - ShapeNet-Car
 
@@ -24,13 +23,32 @@ volume | 0.0211 | 0.0253
 
 # 3. Enviroment
 ## datadownload
-- shapenet-car : https://paddle-org.bj.bcebos.com/paddlecfd/datasets/pptransformer/mlcfd_data.zip
+``` Data
+cd examples/pptransformer/
+mkdir -p ./data && cd ./data
+wget https://paddle-org.bj.bcebos.com/paddlecfd/datasets/pptransformer/mlcfd_data.zip
+unzip mlcfd_data.zip
+cd ..
+```
+
+``` Checkpoint
+mkdir -p ./checkpoint/shapenet_car && cd ./checkpoint/shapenet_car
+wget https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/pptransformer/model_131.pdparams
+cd .. && cd ..
+```
+
 
 # 4. How to Run
 ## ShapeNet-Car
+``` Train
+python main_shapenetcar.py
 ```
-cd examples/pptransformer/
-python main.py
+
+``` Test
+export PYTHONPATH=../../:${PYTHONPATH}
+python main_shapenetcar.py \
+    mode=test \
+    checkpoint=./checkpoint/shapenet_car/model_131.pdparams
 ```
 
 ## DrivAerNet++ (TODO)
