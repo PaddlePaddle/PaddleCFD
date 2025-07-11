@@ -44,7 +44,7 @@ set `root_data_dir` in configs/config.yaml to `https://paddle-org.bj.bcebos.com/
 
 ### Our processing scripts
 
-See `dataset_script.ipynb`.
+See `dataset_script.ipynb`. Attention, the dataset provided above has already been processed and there is no need to run the code in this file.
 
 ## Run
 
@@ -58,13 +58,13 @@ forecast ckpt: https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppdiffusio
 
 Check setting of `root_data_dir` in configs/config.yaml.
 
-#### Automatic Mixed Precision
+### Automatic Mixed Precision
 
 If you need to reduce the training memory usage and increase the training speed, you can set `TRAIN.enable_amp` to true in the `configs/config.yaml` file to enable Automatic Mixed Precision (AMP).
 
 After enabling it, under the default configuration, the training time of each epoch of the Interpolation process is shortened by about 45%, the memory usage is reduced by about 15%, and the training time of each epoch of the Forecast process is shortened by about 37%, and the memory usage is reduced by about 25%.
 
-#### Distributed training (data parallelism)
+### Distributed training (data parallelism)
 
 To further accelerate training speed, you can enable distributed training.
 
@@ -76,7 +76,7 @@ To activate distributed training, modify the running command as follows:
 python -m paddle.distributed.launch --gpus=0,1,2,3 python_file.py --args
 ```
 
-For example, the training command for the Interpolation process becomes:
+For example, the training command for the Interpolation process under four parallel cards becomes:
 
 ```python
 python -m paddle.distributed.launch --gpus=0,1,2,3 train.py mode=train process=interpolation
@@ -93,8 +93,8 @@ python train.py mode=train process=interpolation
 #### Eval
 
 ```python
-python train.py mode=test process=interpolation INTERPOLATION.ckpt_no_suffix="your checkpoint path"
-# or using our pretrained checkpoint, download it and set the parameters to INTERPOLATION.ckpt_no_suffix="/path/interp"
+python train.py mode=test process=interpolation INTERPOLATION.checkpoint="your checkpoint path"
+# or using our pretrained checkpoint, download it and set the parameters to INTERPOLATION.checkpoint="/path/interp.pdparams"
 ```
 
 ### Forecast process
@@ -102,15 +102,15 @@ python train.py mode=test process=interpolation INTERPOLATION.ckpt_no_suffix="yo
 #### Train
 
 ```python
-python train.py mode=train process=dyffusion INTERPOLATION.ckpt_no_suffix="your checkpoint path"
-# or using our pretrained checkpoint, download it and set the parameters to INTERPOLATION.ckpt_no_suffix="/path/interp"
+python train.py mode=train process=dyffusion INTERPOLATION.checkpoint="your checkpoint path"
+# or using our pretrained checkpoint, download it and set the parameters to INTERPOLATION.checkpoint="/path/interp.pdparams"
 ```
 
 #### Eval
 
 ```python
-python train.py mode=test process=dyffusion INTERPOLATION.ckpt_no_suffix="your checkpoint path" FORECASTING.ckpt_no_suffix="your forecast checkpoint path"
-# or using our pretrained checkpoint, download it and set the parameters to INTERPOLATION.ckpt_no_suffix="/path/interp" FORECASTING.ckpt_no_suffix="/path/forecast"
+python train.py mode=test process=dyffusion INTERPOLATION.checkpoint="your checkpoint path" FORECASTING.checkpoint="your forecast checkpoint path"
+# or using our pretrained checkpoint, download it and set the parameters to INTERPOLATION.checkpoint="/path/interp.pdparams" FORECASTING.checkpoint="/path/forecast.pdparams"
 ```
 
 ### Visulization
@@ -118,8 +118,8 @@ python train.py mode=test process=dyffusion INTERPOLATION.ckpt_no_suffix="your c
 Run the following command and results will be found in `./outputs/the lasted date directory/the lasted time directory/visual/`.
 
 ```python
-python train.py mode=test process=dyffusion INTERPOLATION.ckpt_no_suffix="your checkpoint path" FORECASTING.ckpt_no_suffix="your forecast checkpoint path"
-# or using our pretrained checkpoint, download it and set the parameters to INTERPOLATION.ckpt_no_suffix="/path/interp" FORECASTING.ckpt_no_suffix="/path/forecast"
+python train.py mode=test process=dyffusion INTERPOLATION.checkpoint="your checkpoint path" FORECASTING.checkpoint="your forecast checkpoint path"
+# or using our pretrained checkpoint, download it and set the parameters to INTERPOLATION.checkpoint="/path/interp.pdparams" FORECASTING.checkpoint="/path/forecast.pdparams"
 ```
 
 # References and citations
