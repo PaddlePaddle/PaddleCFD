@@ -59,7 +59,7 @@ val_freq: 50
 # DataSet
 data_module:
   _target_: ppcfd.data.PointCloudDataModule
-  data_dir: "../data/shapenetcar/training_data"
+  data_dir: "./data/preprocessed_data"
   n_train_num: 798
   n_val_num: 100
   n_test_num: 100
