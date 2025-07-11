@@ -26,8 +26,8 @@ from paddle.io import DataLoader
 from tqdm import tqdm
 from transolver import Model
 
-from ppcfd.data.ppcfd.data.shapenetcar_datamodule import GraphDataset
-from ppcfd.data.ppcfd.data.shapenetcar_datamodule import load_train_val_fold
+from ppcfd.data.shapenetcar_datamodule import GraphDataset
+from ppcfd.data.shapenetcar_datamodule import load_train_val_fold
 
 
 log = logging.getLogger(__name__)
