@@ -2,7 +2,7 @@ This model can predict drag of the vehicle in different geometry
 # 1. Model Traits:
 ## Speed Up
 
-DataSet  | torch  | paddle 
+DataSet  | transolver original repo  | paddle 
 -- | -- | -- 
 ShapeNet-Car | 12 hours | 2 hours
 DrivAerNet++ | TODO | TODO
@@ -13,7 +13,7 @@ DrivAerNet++ | TODO | TODO
 # 2. Percision
 - ShapeNet-Car
 
-physics  | l2 torch  | l2 paddle 
+physics  | l2 transolver original repo  | l2 paddle 
 -- | -- | -- 
 surf | 0.0769  | 0.768
 volume | 0.0211 | 0.0253
