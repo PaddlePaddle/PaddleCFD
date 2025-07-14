@@ -71,9 +71,9 @@ class Point1D:
         elif 2.0 * Rmax > np.min(np.array(self.ub) - np.array(self.lb)):
             raise ValueError("R_max is too large.")
         elif Rmin < 0.0001 and self.dtype == "float32":
-            raise ValueError("R_min<1e-4 when data_type is torch.float32!")
+            raise ValueError("R_min<1e-4 when data_type is paddle.float32!")
         elif Rmin < 1e-10 and self.dtype == "float64":
-            raise ValueError("R_min<1e-10 when data_type is torch.float64!")
+            raise ValueError("R_min<1e-10 when data_type is paddle.float64!")
         R = np.random.uniform(Rmin, Rmax, [n_center * nt, 1])
         lb, ub = np.array(self.lb) + R, np.array(self.ub) - R
         if method == "mesh":
@@ -185,9 +185,9 @@ class Point2D:
         elif 2.0 * Rmax > np.min(np.array(self.ub) - np.array(self.lb)):
             raise ValueError("R_max is too large.")
         elif Rmin < 0.0001 and self.dtype == "float32":
-            raise ValueError("R_min<1e-4 when data_type is torch.float32!")
+            raise ValueError("R_min<1e-4 when data_type is paddle.float32!")
         elif Rmin < 1e-10 and self.dtype == "float64":
-            raise ValueError("R_min<1e-10 when data_type is torch.float64!")
+            raise ValueError("R_min<1e-10 when data_type is paddle.float64!")
         R = np.random.uniform(Rmin, Rmax, [n_center * nt, 1])
         lb, ub = np.array(self.lb) + R, np.array(self.ub) - R
         T = np.linspace(t0, tT, nt).repeat(n_center, axis=0)
