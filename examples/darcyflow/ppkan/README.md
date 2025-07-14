@@ -49,7 +49,7 @@ DeepONet excels in tasks like fluid dynamics, where the solution (e.g., velocity
 **1. Problem Background**
 Darcy flow describes how fluids flow through porous media, governed by the Darcy's Law:
 
-$$ ∇·(c(x,y)∇p(x,y)) = f(x,y), \quad (x,y) ∈ Ω $$
+∇·(c(x,y)∇p(x,y)) = f(x,y), (x,y) ∈ Ω
 where:
 
 c(x,y): Permeability field (input, heterogeneous material property)
@@ -102,7 +102,7 @@ graph TD
 ```
 
 The final output is a generalized superposition of branch and trunk features:
-$$ Pressure(x, y) = \sum_{k=1}^p b_k(x, y) \cdot t_k(x, y) $$
+$$Pressure(x, y) = \sum_{k=1}^p b_k(x, y) \cdot t_k(x, y)$$
 
 The hyperparameters of model arch and training porcess can be found in the ./conf/main.yaml file. The training curve is shown in the following figure:
 ![Training Curve](./docs/figures/training_curve.png)
