@@ -24,7 +24,7 @@ volume | 0.0211 | 0.0253
 # 3. Enviroment
 ## datadownload
 ``` Data
-cd examples/pptransformer/
+cd examples/aerodynamic_car_design/
 mkdir -p ./data && cd ./data
 wget https://paddle-org.bj.bcebos.com/paddlecfd/datasets/pptransformer/mlcfd_data.zip
 unzip mlcfd_data.zip
