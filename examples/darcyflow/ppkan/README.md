@@ -49,7 +49,7 @@ DeepONet excels in tasks like fluid dynamics, where the solution (e.g., velocity
 **1. Problem Background**
 Darcy flow describes how fluids flow through porous media, governed by the Darcy's Law:
 
-$ \nabla\cdot(c(x,y)\nabla p(x,y)) = f(x,y), \quad (x,y) \in \Omega $
+∇·(c(x,y)∇p(x,y)) = f(x,y), (x,y) ∈ Ω
 where:
 
 c(x,y): Permeability field (input, heterogeneous material property)
