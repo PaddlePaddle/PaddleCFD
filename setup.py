@@ -1,4 +1,5 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages
+from setuptools import setup
 
 
 def get_requirements() -> list:
@@ -11,30 +12,29 @@ def get_requirements() -> list:
 
 if __name__ == "__main__":
     setup(
-        name='ppcfd',
-        version='0.1.0.2',
+        name="ppcfd",
+        version="0.2.0",
         packages=find_packages(
             exclude=(
-                "config",
                 "doc",
                 "examples",
             )
         ),
-        include_package_data=True,   
-        description='PaddleCFD is a deep learning toolkit for surrogate modeling, equation discovery, shape optimization and flow-control strategy discovery in the field of fluid mechanics.',
-        long_description=open('README.md', encoding="utf-8").read(),
-        long_description_content_type='text/markdown',
-        author='AI4S@PaddlePaddle',
-        author_email='paddlescience@baidu.com',
-        url='https://github.com/PaddlePaddle/PaddleCFD',
+        include_package_data=True,
+        description="PaddleCFD is a deep learning toolkit for surrogate modeling, equation discovery, shape optimization and flow-control strategy discovery in the field of fluid mechanics.",
+        long_description=open("README.md", encoding="utf-8").read(),
+        long_description_content_type="text/markdown",
+        author="AI4S@PaddlePaddle",
+        author_email="paddlescience@baidu.com",
+        url="https://github.com/PaddlePaddle/PaddleCFD",
         install_requires=get_requirements(),
         classifiers=[
-            'Programming Language :: Python :: 3',
-            'License :: OSI Approved :: Apache Software License',
-            'Operating System :: OS Independent',
+            "Programming Language :: Python :: 3",
+            "License :: OSI Approved :: Apache Software License",
+            "Operating System :: OS Independent",
         ],
         license_file="LICENSE",
-        python_requires='>=3.10',
+        python_requires=">=3.10",
     )
     print("PaddleCFD has been installed successfully.")
     print("Please check https://github.com/PaddlePaddle/PaddleCFD for more information.")
