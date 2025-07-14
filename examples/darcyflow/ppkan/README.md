@@ -102,7 +102,7 @@ graph TD
 ```
 
 The final output is a generalized superposition of branch and trunk features:
-$$ Pressure(x, y) = \sum_{k=1}^p b_k(x, y) \cdot t_k(x, y) $$
+$$Pressure(x, y) = \sum_{k=1}^p b_k(x, y) \cdot t_k(x, y)$$
 
 The hyperparameters of model arch and training porcess can be found in the ./conf/main.yaml file. The training curve is shown in the following figure:
 ![Training Curve](./docs/figures/training_curve.png)
