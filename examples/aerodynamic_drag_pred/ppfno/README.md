@@ -124,3 +124,4 @@ conda activate paddle-open3d
 ## Reference
 - Li, Z., Kovachki, N., Azizzadenesheli, K., Liu, B., Bhattacharya, K., Stuart, A. and Anandkumar, A., 2020. Fourier neural operator for parametric partial differential equations. arXiv preprint arXiv:2010.08895.
 - Li, Z., Kovachki, N., Choy, C., Li, B., Kossaifi, J., Otta, S., Nabian, M.A., Stadler, M., Hundt, C., Azizzadenesheli, K. and Anandkumar, A., 2023. Geometry-informed neural operator for large-scale 3d pdes. Advances in Neural Information Processing Systems, 36, pp.35836-35854.
+- 陈凯, 李佳琳, 王朋波, 张和明, 胡晓光, 高铁柱 & 马艳军.(2024).基于几何信息神经算子的参数化汽车几何风阻预测模型. 2024中国汽车工程学会汽车空气动力学分会学术年会论文集(pp.2-11).百度公司;北京汽车研究总院;清华大学自动化系;doi:10.26914/c.cnkihy.2024.023235.
