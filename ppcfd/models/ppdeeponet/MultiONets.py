@@ -1,11 +1,147 @@
+from typing import Dict
+from typing import Optional
+from typing import Union
+
 import numpy as np
 import paddle
 
 
 try:
     from FunActivation import FunActivation
+    from piratenet import FourierEmbedding
+    from piratenet import PirateNetBlock
 except ImportError:
     from .FunActivation import FunActivation
+    from .piratenet import FourierEmbedding
+    from .piratenet import PirateNetBlock
+
+
+class MultiONetBatch_piratenet(paddle.nn.Layer):
+
+    def __init__(
+        self,
+        in_size_x: int,
+        in_size_a: int,
+        hidden_list: list[int],
+        activation_x="ReLU",
+        activation_a="Tanh",
+        fourier: Optional[Dict[str, Union[float, int]]] = None,
+        dtype=None,
+    ):
+        super(MultiONetBatch_piratenet, self).__init__()
+        self.hidden_list = hidden_list
+        if isinstance(activation_x, str):
+            self.activation_x = FunActivation()(activation_x)
+        else:
+            self.activation_x = activation_x
+        if isinstance(activation_a, str):
+            self.activation_a = FunActivation()(activation_a)
+        else:
+            self.activation_a = activation_a
+
+        weight_attr_x = paddle.framework.ParamAttr(
+            initializer=paddle.nn.initializer.Uniform(low=-np.sqrt(1 / in_size_x), high=np.sqrt(1 / in_size_x))
+        )
+        bias_attr_x = paddle.ParamAttr(
+            initializer=paddle.nn.initializer.Uniform(low=-np.sqrt(1 / in_size_x), high=np.sqrt(1 / in_size_x))
+        )
+        weight_attr_a = paddle.ParamAttr(
+            initializer=paddle.nn.initializer.Uniform(low=-np.sqrt(1 / in_size_a), high=np.sqrt(1 / in_size_a))
+        )
+        bias_attr_a = paddle.ParamAttr(
+            initializer=paddle.nn.initializer.Uniform(low=-np.sqrt(1 / in_size_a), high=np.sqrt(1 / in_size_a))
+        )
+
+        if fourier:
+            self.fc_x_in = FourierEmbedding(in_features=in_size_x, out_features=hidden_list[0], scale=fourier["scale"])
+            self.fc_a_in = FourierEmbedding(in_features=in_size_a, out_features=hidden_list[0], scale=fourier["scale"])
+        else:
+            # self.fc_x_in = FourierEmbedding(in_features=in_size_x, out_features=hidden_list[0], scale=15)
+            self.fc_x_in = paddle.nn.Linear(
+                in_features=in_size_x, out_features=hidden_list[0], weight_attr=weight_attr_x, bias_attr=bias_attr_x
+            )
+            self.fc_a_in = paddle.nn.Linear(
+                in_features=in_size_a, out_features=hidden_list[0], weight_attr=weight_attr_a, bias_attr=bias_attr_a
+            )
+
+        self.hidden_in = hidden_list[0]
+        weight_attr = paddle.ParamAttr(
+            initializer=paddle.nn.initializer.Uniform(
+                low=-np.sqrt(1 / self.hidden_in), high=np.sqrt(1 / self.hidden_in)
+            )
+        )
+        bias_attr = paddle.ParamAttr(
+            initializer=paddle.nn.initializer.Uniform(
+                low=-np.sqrt(1 / self.hidden_in), high=np.sqrt(1 / self.hidden_in)
+            )
+        )
+        self.embed_a_u = paddle.nn.Linear(hidden_list[0], hidden_list[0], weight_attr=weight_attr, bias_attr=bias_attr)
+        self.embed_a_v = paddle.nn.Linear(hidden_list[0], hidden_list[0], weight_attr=weight_attr, bias_attr=bias_attr)
+        self.embed_x_u = paddle.nn.Linear(hidden_list[0], hidden_list[0], weight_attr=weight_attr, bias_attr=bias_attr)
+        self.embed_x_v = paddle.nn.Linear(hidden_list[0], hidden_list[0], weight_attr=weight_attr, bias_attr=bias_attr)
+
+        net_x, net_a = [], []
+
+        for hidden in hidden_list:
+            net_x.append(
+                PirateNetBlock(
+                    input_dim=self.hidden_in,
+                    embed_dim=hidden,
+                    activation=self.activation_x,
+                )
+            )
+            net_a.append(
+                PirateNetBlock(
+                    input_dim=self.hidden_in,
+                    embed_dim=hidden,
+                    activation=self.activation_a,
+                )
+            )
+            self.hidden_in = hidden
+        self.net_x = paddle.nn.Sequential(*net_x)
+        self.net_a = paddle.nn.Sequential(*net_a)
+        self.w = paddle.nn.ParameterList(
+            [
+                paddle.create_parameter(
+                    shape=[], dtype="float32", default_initializer=paddle.nn.initializer.Constant(1.0)
+                )
+                for _ in range(len(hidden_list))
+            ]
+        )
+        self.b = paddle.nn.ParameterList(
+            [
+                paddle.create_parameter(
+                    shape=[], dtype="float32", default_initializer=paddle.nn.initializer.Constant(0.0)
+                )
+                for _ in range(len(hidden_list))
+            ]
+        )
+
+        # self.last_a_fc = paddle.nn.Linear(hidden_list[-1], hidden_list[-1])
+        # self.last_x_fc = paddle.nn.Linear(hidden_list[-1], hidden_list[-1])
+
+    def forward(self, x, a_mesh):
+        """
+        Input:
+            x: size(n_batch, n_mesh, dx)
+            a_mesh: size(n_batch, latent_size)
+        """
+        assert tuple(x.shape)[0] == tuple(a_mesh.shape)[0]
+        x = self.fc_x_in(x)
+        a_mesh = self.activation_a(self.fc_a_in(a_mesh))
+
+        x_u = self.embed_x_u(x)
+        x_v = self.embed_x_v(x)
+        a_u = self.embed_a_u(a_mesh)
+        a_v = self.embed_a_v(a_mesh)
+
+        out = 0.0
+        for net_x, net_a, w, b in zip(self.net_x, self.net_a, self.w, self.b):
+            a_mesh = net_a(a_mesh, a_u, a_v)
+            x = net_x(x, x_u, x_v)
+            out += (x * a_mesh.unsqueeze(1)).sum(axis=2) * w + b
+        out = out / len(self.net_x)
+        return out.unsqueeze(axis=-1)
 
 
 class MultiONetBatch(paddle.nn.Layer):
@@ -29,7 +165,6 @@ class MultiONetBatch(paddle.nn.Layer):
             self.activation_a = FunActivation()(activation_a)
         else:
             self.activation_a = activation_a
-            1 / in_size_x
         weight_attr_x = paddle.framework.ParamAttr(
             initializer=paddle.nn.initializer.Uniform(low=-np.sqrt(1 / in_size_x), high=np.sqrt(1 / in_size_x))
         )
