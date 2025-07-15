@@ -208,7 +208,7 @@ class FoilDataset(Dataset):
 
 def main():
 
-  train_set, train_loader, invel_mean, invel_std, y_mean, y_std = preprocess_data_airfrans(root_dir="./Dataset/", task="scarce", train=False, download_data=False, sample_points=10000, batch_size=1024)
+  train_set, train_loader, invel_mean, invel_std, y_mean, y_std, _, _ = preprocess_data_airfrans(root_dir="./Dataset/", task="scarce", train=False, download_data=False, sample_points=10000, batch_size=1024)
   print(invel_mean, invel_std, y_mean, y_std)
   
 if __name__ == '__main__':

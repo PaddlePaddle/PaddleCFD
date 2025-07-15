@@ -73,8 +73,7 @@ class LitEma(paddle.nn.Layer):
         """
         Save the current parameters for restoring later.
         Args:
-          parameters: Iterable of `torch.nn.Parameter`; the parameters to be
-            temporarily stored.
+          parameters: Iterable of paddle parameters; the parameters to be temporarily stored.
         """
         self.collected_params = [param.clone() for param in parameters]
 
@@ -86,8 +85,7 @@ class LitEma(paddle.nn.Layer):
         `copy_to` method. After validation (or model saving), use this to
         restore the former parameters.
         Args:
-          parameters: Iterable of `torch.nn.Parameter`; the parameters to be
-            updated with the stored parameters.
+          parameters: Iterable of paddle parameters; the parameters to be updated with the stored parameters.
         """
         for c_param, param in zip(self.collected_params, parameters):
             param.data.copy_(c_param.data)

@@ -1,0 +1,11 @@
+h5py
+omegaconf
+paddlepaddle_gpu
+tabulate
+tqdm
+xarray
+xskillscore
+airfrans
+pandas
+vtk
+geomdl

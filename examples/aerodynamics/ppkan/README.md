@@ -10,7 +10,7 @@ single variable and the binary operation of addition. More specifically, for a s
 
 $$f(x) = f(x_1,...,x_n)=\sum_{q=1}^{2n+1}\Phi_q(\sum_{p=1}^n \phi_{q,p}(x_p))$$
 
-where $\phi_{q,p}:[0,1]\to\mathbb{R}$ and $\Phi_q:\mathbb{R}\to\mathbb{R}$. In a sense, they showed that the only true multivariate function is addition, since every other function can be written using univariate functions and sum. However, this 2-Layer width-$(2n+1)$ Kolmogorov-Arnold representation may not be smooth due to its limited expressive power. We augment its expressive power by generalizing it to arbitrary depths and widths.
+where $\phi_{q,p}:[0,1]\to\mathbb{R}$ and $\Phi_q:\mathbb{R}\to\mathbb{R}$. In a sense, they showed that the only true multivariate function is addition, since every other function can be written using univariate functions and sum. However, this 2-Layer width-(2n+1) Kolmogorov-Arnold representation may not be smooth due to its limited expressive power. We augment its expressive power by generalizing it to arbitrary depths and widths.
 
 ### II. Kolmogorov-Arnold Networks (KAN)
 KANs are neural networks inspired by the Kolmogorov-Arnold theorem, where:
@@ -37,7 +37,9 @@ DeepONet is a neural operator architecture designed to learn mappings between in
 **Trunk Net**: Evaluates the output function at query points in the domain. The trunk net serves as the base neural field to approximate the PDE solution function. Similarly, the trunk net can also be a KAN network or other archs.
 
 The output is a dot product of branch and trunk net features:
-$$G(u)(y) = \sum_{k=1}^p \underbrace{b_k(u)}_{\text{Branch}} \cdot \underbrace{t_k(y)}_{\text{Trunk}}$$
+
+$$ G(u)(y) = \sum_{k=1}^p {b_k(u)} \cdot {t_k(y)} $$
+
 where 𝑢 is the input function, 𝑦 is the query point (typically is the coordinates of any domain points), and $𝑏_𝑘$, $𝑡_𝑘$ are the hidden outputs of branch and trunk nets, respectively.
 
 DeepONet excels in tasks like fluid dynamics, where the solution (e.g., velocity/pressure fields) depends on input parameters (e.g., Reynolds number, geometry). In the following chapter, we are going to ellaborate on an common task in aerodynamics, airfoil flow fields predcition, to illustrate the application of DeepOKAN.
@@ -57,7 +59,9 @@ where 𝛼 is the angle of attack and $𝑈_\infty$ is the inlet velocity.
 **Trunk Network (KAN-based)**:
 
 Evaluates the solution at spatial coordinates (𝑥, 𝑦).
+
 $$t_k = KAN(x, y)$$
+
 **Arch Illustration**
 ```mermaid
 graph TD
@@ -76,7 +80,7 @@ $$Velocity(x, y) = \sum_{k=1}^p b_k(x, y) \cdot t_k(x, y), Pressure(x, y) = \sum
 
 **Results**:
 ![Pressure prediction results of a NACA foil](./docs/figures/foil_pressure.png)
-The pressure field prediction MRE on the test set is 9.8%, the major contribution of error comes from the far field region.
+The pressure field prediction metric on the test set is MSE 2e-2, the major contribution of error comes from the far field region.
 ## Code
 
 ```sh
@@ -109,7 +113,7 @@ unzip AirFoilDataset.zip
 
 ### Prepocess scripts
 
-See `dataset_creation_sim.py`.
+See `dataset_creation_sim.py`. This file is invoked in `main.py` to generate the dataset and is not supposed to be run directly.
 Noted: the airfoil geometry is extracted using a specific intorpolating method, which is NURBS curve fitting algorithm.
 
 ## Run
@@ -126,16 +130,15 @@ AirfRANS dataset.
 
 ```sh
 env PYTHONPATH=$PYTHONPATH:$(pwd)
-python main.py mode=train
+python main.py model=KANONet
 ```
 
 #### Eval
 
 ```python
-python main.py mode=eval checkpoint="your checkpoint path"
-# or using our pretrained checkpoint: https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppkan/foil/1B-63-1T-2-KANONet_latest.pdparams
+python main.py mode=test checkpoint="your checkpoint path"
+# or using our pretrained checkpoint: https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/ppkan/foil/KANONet_best.pdparams
 ```
-
 # References and citations
 
 Reference paper: 10.1016/j.cma.2024.117699

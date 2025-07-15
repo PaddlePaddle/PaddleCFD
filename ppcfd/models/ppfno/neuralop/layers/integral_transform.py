@@ -26,14 +26,14 @@ class IntegralTransform(paddle.nn.Layer):
 
     Parameters
     ----------
-    mlp : torch.nn.Module, default None
+    mlp : paddle.nn.Module, default None
         MLP parametrizing the kernel k. Input dimension
         should be dim x + dim y or dim x + dim y + dim f
     mlp_layers : list, default None
         List of layers sizes speficing a MLP which
         parametrizes the kernel k. The MLP will be
         instansiated by the MLPLinear class
-    mlp_non_linearity : callable, default torch.nn.functional.gelu
+    mlp_non_linearity : callable, default paddle.nn.functional.gelu
         Non-linear function used to be used by the
         MLPLinear class. Only used if mlp_layers is
         given and mlp is None
@@ -78,7 +78,7 @@ class IntegralTransform(paddle.nn.Layer):
 
         Parameters
         ----------
-        y : torch.Tensor of shape [n, d1]
+        y : paddle.Tensor of shape [n, d1]
             n points of dimension d1 specifying
             the space to integrate over.
         neighbors : dict
@@ -86,16 +86,16 @@ class IntegralTransform(paddle.nn.Layer):
             dict must contain the keys "neighbors_index"
             and "neighbors_row_splits." For descriptions
             of the two, see NeighborSearch.
-        x : torch.Tensor of shape [m, d2], default None
+        x : paddle.Tensor of shape [m, d2], default None
             m points of dimension d2 over which the
             output function is defined. If None,
             x = y.
-        f_y : torch.Tensor of shape [n, d3], default None
+        f_y : paddle.Tensor of shape [n, d3], default None
             Function to integrate the kernel against defined
             on the points y. The kernel is assumed diagonal
             hence its output shape must be d3 for the transforms
             (b) or (d). If None, (a) is computed.
-        weights : torch.Tensor of shape [n,], default None
+        weights : paddle.Tensor of shape [n,], default None
             Weights for each point y proprtional to the
             volume around f(y) being integrated. For example,
             suppose d1=1 and let y_1 < y_2 < ... < y_{n+1}
@@ -105,7 +105,7 @@ class IntegralTransform(paddle.nn.Layer):
 
         Output
         ----------
-        out_features : torch.Tensor of shape [m, d4]
+        out_features : paddle.Tensor of shape [m, d4]
             Output function given on the points x.
             d4 is the output size of the kernel k.
         """

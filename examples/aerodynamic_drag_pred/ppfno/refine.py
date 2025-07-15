@@ -3,10 +3,6 @@
 #
 # Copyright (c) 2024 Baidu.com, Inc. All Rights Reserved
 #
-"""
-Authors: chenkai26(chenkai26@baidu.com)
-Date:    2025/4/18
-"""
 
 import logging
 import os
@@ -69,16 +65,11 @@ class STPRefine:
         gmsh.initialize()
         gmsh.option.setNumber("General.Terminal", 0)  # 控制台信息输出 0:不输出 1:输出
         gmsh.clear()
-
-        # 创建新的模型
         gmsh.model.add("step_mesh")
 
-        # 导入 STEP 文件
-        # step_path = self.geo_path + self.stpID  # 替换为你的 STEP 文件路径
         step_path = osp.join(self.geo_path, self.stpID)  # 替换为你的 STEP 文件路径
         gmsh.model.occ.importShapes(step_path)
 
-        # 同步 CAD 模型以便进行网格生成
         gmsh.model.occ.synchronize()
 
         logging.info("stp loaded.")
@@ -97,10 +88,8 @@ class STPRefine:
             }
             logging.info(refine_box)
 
-            # 全局网格尺寸（非加密区域）
             global_size = 5.0
 
-            # 创建尺寸场
             gmsh.model.mesh.field.add("Box", i)
             gmsh.model.mesh.field.setNumber(i, "XMin", refine_box["xmin"])
             gmsh.model.mesh.field.setNumber(i, "XMax", refine_box["xmax"])
@@ -112,37 +101,18 @@ class STPRefine:
             gmsh.model.mesh.field.setNumber(i, "VOut", refine_box["size_max"])
 
             gmsh.model.mesh.field.setAsBackgroundMesh(i)
-
-            # 设置全局网格尺寸（作为最大限制）
             gmsh.option.setNumber("Mesh.MeshSizeMax", global_size)
-
-            # 2D 网格划分算法 (1: MeshAdapt, 2: Automatic, 3: Initial mesh only, 5: Delaunay, 6: Frontal-Delaunay,
-            # 7: BAMG, 8: Frontal-Delaunay for Quads, 9: Packing of Parallelograms, 11: Quasi-structured Quad)
             gmsh.option.setNumber("Mesh.Algorithm", 2)
-            # 生成二维表面网格
             gmsh.model.mesh.generate(2)
-
-            # 优化网格
             gmsh.model.mesh.optimize("Laplace2D")
             logging.info(f"geom at index {i} re-meshing has been completed.")
 
-            # 获取网格统计信息
-            # s = gmsh.model.mesh.getStatistics()
-            # print('Mesh Statistics:', s)
-
-        # 保存为新的STL文件
         os.makedirs(self.save_path, exist_ok=True)
         gmsh.write(osp.join(self.save_path, f"{self.stpID[:-4]}.stl"))
 
         logging.info(
             f"The new stl file is saved to {osp.join(self.save_path, f'{self.stpID[:-4]}.stl')}"
         )
-
-        # 可视化（可选）
-        # if '-nopopup' not in sys.argv:
-        #     gmsh.fltk.run()
-
-        # 结束Gmsh
         gmsh.finalize()
 
 
@@ -150,7 +120,6 @@ def get_refine_params(stp_path):
     excel = pd.ExcelFile(stp_path)
     sheet_names = excel.sheet_names
     table = pd.read_excel(excel, sheet_names[0])
-    # .format(min_x, max_x, min_y, max_y, min_z, max_z)
     boxes, maxsizes, minsizes = [], [], []
 
     for i in range(int(len(table["顶点1/mm"]) / 3)):
@@ -173,11 +142,10 @@ def get_refine_params(stp_path):
 
 @hydra.main(version_base=None, config_path="./configs", config_name="train.yaml")
 def main(cfg: DictConfig):
-    geo_path = cfg.refine_input_path  # '/home/chenkai26/Paddle-AeroSimOpt/data/'
+    geo_path = cfg.refine_input_path  
     save_path = (
         cfg.refine_output_path
-    )  # '/home/chenkai26/Paddle-AeroSimOpt/data/extracted_info/'
-    # refine meshing, extract & save elements from stl
+    )  
     os.makedirs(os.path.join(save_path, "log"), exist_ok=True)
     logging.basicConfig(
         filename=os.path.join(save_path, "log", "encrypt.txt"),
@@ -188,9 +156,7 @@ def main(cfg: DictConfig):
 
     stpIDs = [d for d in os.listdir(geo_path) if d[-4:] == ".stp"]
     logging.info(f"All stpID: {stpIDs}")
-    # stpIDs = stpIDs[2:]
     logging.info(f"Chosen stpID: {stpIDs}")
-    # boxes, maxsizes, minsizes = get_refine_params(f'{geo_path}/网格加密参数-中车补充.xlsx')
     boxes = [[[-5500.0, -300.0, -20.0], [5500.0, 300.0, 4800.0]]]
     maxsizes = [5.0]
     minsizes = [0.625]
@@ -205,10 +171,5 @@ def main(cfg: DictConfig):
         index += 1
 
 
-"""
-python refine.py \
-    pre_input=/home/chenkai26/Paddle-AeroSimOpt/data/ \
-    pre_output=/home/chenkai26/Paddle-AeroSimOpt/data/extracted_info/
-"""
 if __name__ == "__main__":
     main()

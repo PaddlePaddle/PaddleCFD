@@ -9,7 +9,7 @@ def resample(x, res_scale, axis, output_shape=None):
 
     Parameters
     ----------
-    x : torch.Tensor
+    x : paddle.Tensor
             input activation of size (batch_size, channels, d1, ..., dN)
     res_scale: int or tuple
             Scaling factor along each of the dimensions in 'axis' parameter. If res_scale is scaler, then isotropic 

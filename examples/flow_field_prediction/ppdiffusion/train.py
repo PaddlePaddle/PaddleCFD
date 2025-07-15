@@ -45,10 +45,10 @@ class Trainer:
         self.init_model()
         if self.process == "interpolation":
             self.concat_fn = self.process_obj.concat_results
-            self.ckpt = getattr(cfg.INTERPOLATION, "ckpt_no_suffix", None)
+            self.ckpt = getattr(cfg.INTERPOLATION, "checkpoint", None)
         elif self.process == "dyffusion":
             self.concat_fn = self.process_obj.interp_obj.concat_results
-            self.ckpt = getattr(cfg.FORECASTING, "ckpt_no_suffix", None)
+            self.ckpt = getattr(cfg.FORECASTING, "checkpoint", None)
 
         self.init_opt_sched()
         self.init_loss_fn()
@@ -239,6 +239,11 @@ class Trainer:
                 if self.calc_batch_metrics:
                     metric_dict, preds_batch, targets_batch = self.get_batch_metrics(return_dict)
                 if i == 0:
+                    logging.info(
+                        "Only save the visualization of the 0th sample. "
+                        "The validation process is still in progress after printing. "
+                        "Please wait patiently."
+                    )
                     if self.visual_metrics:
                         preds_mean = paddle.mean(preds_batch, axis=0)
                         self.visualize(metric_dict, preds_mean, targets_batch, extra_info=f"_{i}")

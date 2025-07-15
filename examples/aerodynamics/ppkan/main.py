@@ -226,7 +226,7 @@ def main(cfg: DictConfig):
         test(cfg)
     else:
         raise ValueError(
-            f"cfg.mode should in ['train', 'valid', 'test'], but got '{cfg.mode}'"
+            f"cfg.mode should in ['train', 'test'], but got '{cfg.mode}'"
         )
 
 

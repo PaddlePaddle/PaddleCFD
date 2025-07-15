@@ -3,10 +3,6 @@
 #
 # Copyright (c) 2024 Baidu.com, Inc. All Rights Reserved
 #
-"""
-Authors: chenkai26(chenkai26@baidu.com)
-Date:    2025/5/20
-"""
 
 import json
 import os
@@ -78,19 +74,7 @@ class CSVConvert:
         return None
 
     def save_info(self):
-        # info_dict = {
-        #     "length": 0,
-        #     "width": 0,
-        #     "height": 0,
-        #     "clearance": 0,
-        #     "slant": 0,
-        #     "radius": 0,
-        #     "velocity": self.info["velocity"],
-        #     "re": 0,
-        #     "reference_area": self.info["reference_area"],
-        #     "density": self.info["density"],
-        #     "compute_normal": False,
-        # }
+
         paddle.save(
             obj=self.info,
             path=f"{self.save_path}/info_{str(self.index).zfill(4)}.pdparams",
@@ -126,19 +110,7 @@ class Compute_df_stl:
         return query_points
 
     def compute_df_from_mesh(self):
-        # 读取CATIA导出的二进制STL文件
-        # stl_mesh = mesh.Mesh.from_file(os.path.join(self.mesh_path, self.stlID))
-        # print('stl mesh loaded.')
-        # vertices = stl_mesh.vectors.reshape(-1, 3) * 1e-3
-        # # print("vertices:", vertices)
-        # faces = np.arange(vertices.shape[0]).reshape(-1, 3)
 
-        # # 构建Open3D网格
-        # o3d_mesh = o3d.geometry.TriangleMesh()
-        # o3d_mesh.vertices = o3d.utility.Vector3dVector(vertices)
-        # o3d_mesh.triangles = o3d.utility.Vector3iVector(faces)
-
-        # 读取starccm导出的stl文件
         stl_mesh = o3d.io.read_triangle_mesh(os.path.join(self.mesh_path, self.stlID))
         num_triangles = len(stl_mesh.triangles)
         print(f"Mesh num in stl: {num_triangles}")
@@ -156,9 +128,7 @@ class Compute_df_stl:
         scene = o3d.t.geometry.RaycastingScene()
         _ = scene.add_triangles(o3d_mesh)
         df = scene.compute_distance(o3d.core.Tensor(self.query_points)).numpy()
-        # closest_point = scene.compute_closest_points(
-        #     o3d.core.Tensor(self.query_points)
-        # )["points"].numpy()
+
         df_dict = {
             "df": df,
         }
@@ -172,20 +142,15 @@ class Compute_df_stl:
 @hydra.main(version_base=None, config_path="./configs", config_name="train")
 def main(cfg: DictConfig):
     if cfg.process_mode == "infer":
-        mesh_path = cfg.pre_input_path  # '/home/chenkai26/Paddle-AeroSimOpt/data/'
+        mesh_path = cfg.pre_input_path  
         save_path = (
             cfg.pre_output_path
-        )  # '/home/chenkai26/Paddle-AeroSimOpt/data/extracted_info/'
+        )  
         bounds_dir = cfg.bounds_dir
-
-        # rextract & save elements from csv & stl
 
         csvIDs = [d for d in os.listdir(mesh_path) if d[-4:] == ".csv"]
         print("All csvID:", csvIDs)
-        # stpIDs = stpIDs[2:]
         print("Chosen csvID:", csvIDs)
-
-        # info = {"velocity": 65.0, "reference_area": 0.176, "density": 1.05}
 
         index = 200
         for csvID in csvIDs:
@@ -210,10 +175,5 @@ def main(cfg: DictConfig):
         raise
 
 
-"""
-python inferenceDataPreprocess.py -cn train.yaml process_mode=infer \
-    pre_input_path=/home/chenkai26/Paddle-AeroSimOpt/refine_data/2014-f-6103 \
-    pre_output_path=/home/chenkai26/Paddle-AeroSimOpt/pre_process/2014-f-6103
-"""
 if __name__ == "__main__":
     main()

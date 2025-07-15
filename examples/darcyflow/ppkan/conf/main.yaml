@@ -14,6 +14,7 @@ hydra:
 mode: "train"
 seed: 0
 output_dir: ${hydra:run.dir}
+data_dir: ./data/piececonst_r421_N1024_smooth1.mat
 device: gpu
 dtype: float32
 

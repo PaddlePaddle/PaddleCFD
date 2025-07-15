@@ -1,12 +1,8 @@
-# #!/usr/bin/env python
-# # -*- coding: UTF-8 -*-
-# #
-# # Copyright (c) 2025 Baidu.com, Inc. All Rights Reserved
-# #
-# """
-# Authors: hesensen(hesensen@baidu.com)
-# Date:    2025/4/25
-# """
+#!/usr/bin/env python
+# -*- coding: UTF-8 -*-
+#
+# Copyright (c) 2025 Baidu.com, Inc. All Rights Reserved
+
 
 from __future__ import annotations
 
@@ -16,8 +12,6 @@ import logging
 import os
 import sys
 
-# sys.path.append("./src")
-# sys.path.append("./src/networks")
 from contextlib import asynccontextmanager
 from timeit import default_timer
 from typing import Dict

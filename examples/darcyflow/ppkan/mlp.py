@@ -50,17 +50,6 @@ class DeepONet(nn.Layer):
         #b2_out = self.branch_net2(inputs['branch2'])
        
         t_out = self.trunk_net(inputs['trunk'])    # [Ni, 64]
-        # y = paddle.mean(b1_out * t_out, axis=1, keepdim=True)
-        # return y
-        step = int(self.hidden_out/4)
-        y1 = paddle.sum(b1_out[:,0:step] * t_out[:,0:step], axis=1, keepdim=True) # [Ni, 1])
-        y2 = paddle.sum(b1_out[:,step:2*step] * t_out[:,step:2*step], axis=1, keepdim=True) # [Ni, 1])
-        y3 = paddle.sum(b1_out[:,2*step:3*step] * t_out[:,2*step:3*step], axis=1, keepdim=True) # [Ni, 1]
-        y4 = paddle.sum(b1_out[:,3*step:] * t_out[:,3*step:], axis=1, keepdim=True) # [Ni, 1]
-        return paddle.concat([y1, y2, y3, y4], axis=1)  # [Ni, 4]
-        # step = int(self.hidden_out/4)
-        # y1 = paddle.sum(b1_out[:,0:step] * b2_out[:, 0:step] * t_out[:,0:step], axis=1, keepdim=True) # [Ni, 1])
-        # y2 = paddle.sum(b1_out[:,step:2*step] * b2_out[:, step:2*step] * t_out[:,step:2*step], axis=1, keepdim=True) # [Ni, 1])
-        # y3 = paddle.sum(b1_out[:,2*step:3*step] * b2_out[:, 2*step:3*step] * t_out[:,2*step:3*step], axis=1, keepdim=True) # [Ni, 1]
-        # y4 = paddle.sum(b1_out[:,3*step:] * b2_out[:, 3*step:] * t_out[:,3*step:], axis=1, keepdim=True) # [Ni, 1]
-        # return paddle.concat([y1, y2, y3, y4], axis=1)  # [Ni, 4]
+        y = paddle.einsum('bi,ni->bn', b1_out, t_out)  # 或 paddle.matmul(y_branch, y_trunk.T)
+    
+        return y  

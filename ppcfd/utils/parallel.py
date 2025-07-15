@@ -7,7 +7,6 @@ from paddle.io import DistributedBatchSampler
 
 def init_dist_env(config):
     if config.enable_mp:
-        print("using mp")
         dist.init_parallel_env()
         mesh = dist.ProcessMesh(
             np.arange(0, paddle.distributed.get_world_size()), dim_names=["mp"]
@@ -63,15 +62,8 @@ def parallelize(model, optimizer, config):
         )
     
     if config.enable_cinn is True:
-        # os.environ["TRANSLATOR_VERBOSITY"] = '3'
         paddle.framework.core._set_prim_all_enabled(True)
         model = paddle.jit.to_static(model, full_graph=True, backend='CINN', input_spec = paddle.static.InputSpec(shape=[1, 32186, 7], dtype='float32'))
-        # build_strategy = paddle.static.BuildStrategy()
-        # build_strategy.build_cinn_pass = True
-        # build_strategy.debug_graphviz_path = "./cinn_graph/"
-        # program = paddle.static.default_main_program()
-        # program = paddle.static.CompiledProgram(program, build_strategy=build_strategy)
-    
     return model, optimizer
 
 
@@ -96,7 +88,7 @@ def setup_dataloaders(config, dataloader, datamodule=None):
             meshes=meshes,
             shard_dims=shard_dims,
         )
-    elif config.enable_dp:  # TODO: fix for other model
+    elif config.enable_dp:
         train_sampler = DistributedBatchSampler(
             datamodule.train_data,
             batch_size=config.batch_size,
@@ -107,4 +99,5 @@ def setup_dataloaders(config, dataloader, datamodule=None):
             num_workers=config.num_workers,
             batch_sampler=train_sampler,
         )
+
     return dataloader
