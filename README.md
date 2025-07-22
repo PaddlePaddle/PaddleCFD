@@ -77,6 +77,11 @@ run the example according to the example README.md
 
 [ppcfd/data](./doc/data.md)
 
+## Conmmunity
+Join PaddleCFD WeChat group to discuss with us!
+
+<img src="./doc/飞桨AI4S%20&%20PaddleCFD技术交流群-1.jpg" alt="This is an image" title="PaddleCFD Weichat">
+
 ## License
 
 PaddleCFD is provided under the [Apache-2.0 license](./LICENSE)
