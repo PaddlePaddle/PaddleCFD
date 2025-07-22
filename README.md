@@ -19,9 +19,24 @@ PaddleCFD is a deep learning toolkit for surrogate modeling, equation discovery,
 
 ### Installation
 
+##### Image pulling & container running
+
+```bash 
+# Pull docker image
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddle:3.0.0-gpu-cuda11.8-cudnn8.9-trt8.6
+
+# Run docker container
+nvidia-docker run --name ppcfd-container -v /home/:/home --network=host -it  --shm-size 64g ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddle:3.0.0-gpu-cuda11.8-cudnn8.9-trt8.6 /bin/bash
+```
+
 ##### Conda environment installation
 
 ```bash
+# Clone PaddleCFD
+git clone https://github.com/PaddlePaddle/PaddleCFD.git
+cd PaddleCFD
+
+# Create conda environment
 conda create --name ppcfd python=3.10
 conda activate ppcfd
 
@@ -44,7 +59,7 @@ export LD_LIBRARY_PATH=/root/miniconda3/envs/ppcfd/lib:$LD_LIBRARY_PATH
 
 ##### PaddleCFD package installation
 ```bash
-# Install PaddleCFD from sourcecode
+# Install PaddleCFD from sourcecode at PaddleCFD root directory
 python -m pip install -e . -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # Install PaddleCFD from pypi
