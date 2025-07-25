@@ -410,9 +410,9 @@ def main(cfg: DictConfig):
             "clearance": 0,
             "slant": 0,
             "radius": 0,
-            "velocity": 65.0,
+            "velocity": 30.0,
             "re": 0,
-            "reference_area": 0.176,
+            "reference_area": 0.1,
             "density": 1.05,
             "compute_normal": False,
         }
