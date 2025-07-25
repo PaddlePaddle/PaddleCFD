@@ -46,9 +46,9 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 
 
 class InputData(BaseModel):
-    pre_output_path: str  # /pre_output/{dataset_id}
-    reason_input_path: str  # /pre_process/{case_id}
-    reason_output_path: str  # /reason_output/reason_{taskId}
+    pre_output_path: str  
+    reason_input_path: str 
+    reason_output_path: str 
 
 
 class OutputData(BaseModel):
