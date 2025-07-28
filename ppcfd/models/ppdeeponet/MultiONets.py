@@ -56,7 +56,6 @@ class MultiONetBatch_piratenet(paddle.nn.Layer):
             self.fc_x_in = FourierEmbedding(in_features=in_size_x, out_features=hidden_list[0], scale=fourier["scale"])
             self.fc_a_in = FourierEmbedding(in_features=in_size_a, out_features=hidden_list[0], scale=fourier["scale"])
         else:
-            # self.fc_x_in = FourierEmbedding(in_features=in_size_x, out_features=hidden_list[0], scale=15)
             self.fc_x_in = paddle.nn.Linear(
                 in_features=in_size_x, out_features=hidden_list[0], weight_attr=weight_attr_x, bias_attr=bias_attr_x
             )
@@ -116,9 +115,6 @@ class MultiONetBatch_piratenet(paddle.nn.Layer):
                 for _ in range(len(hidden_list))
             ]
         )
-
-        # self.last_a_fc = paddle.nn.Linear(hidden_list[-1], hidden_list[-1])
-        # self.last_x_fc = paddle.nn.Linear(hidden_list[-1], hidden_list[-1])
 
     def forward(self, x, a_mesh):
         """

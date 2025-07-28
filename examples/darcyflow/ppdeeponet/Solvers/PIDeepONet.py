@@ -10,13 +10,9 @@ from Utils.Losses import MyLoss
 from Utils.RBFInterpolatorMesh import RBFInterpolator
 
 from ppcfd.models.ppdeeponet.DeepONets import DeepONetBatch
-from ppcfd.models.ppdeeponet.FCNet import FCNet
-from ppcfd.models.ppdeeponet.MultiONets import MultiONetBatch
-from ppcfd.models.ppdeeponet.MultiONets import MultiONetBatch_X
 
 
 class Solver(Module.Solver):
-
     def __init__(self, device="gpu:0", dtype="float32"):
         self.device = device
         self.dtype = dtype
@@ -32,15 +28,13 @@ class Solver(Module.Solver):
 
     def loadModel(self, path: str, name: str):
         """Load trained model"""
-        return paddle.load(path=str(path + f"{name}.pdparams"))
+        return paddle.load(path=str(path + f"{name}.pth"))
 
     def saveModel(self, path: str, name: str, model_dict: dict):
         """Save trained model (the whole model)"""
         if not os.path.exists(path):
             os.makedirs(path)
         paddle.save(obj=model_dict["u"].state_dict(), path=path + "model_u.pdparams")
-        paddle.save(obj=model_dict["a"].state_dict(), path=path + "model_a.pdparams")
-        paddle.save(obj=model_dict["enc"].state_dict(), path=path + "model_enc.pdparams")
 
     def loadLoss(self, path: str, name: str):
         """Load saved losses"""
@@ -71,7 +65,14 @@ class Solver(Module.Solver):
         else:
             self.error_list.append(error_test.item())
 
-    def error_setup(self, err_type: str = "lp_rel", d: int = 2, p: int = 2, size_average=True, reduction=True):
+    def error_setup(
+        self,
+        err_type: str = "lp_rel",
+        d: int = 2,
+        p: int = 2,
+        size_average=True,
+        reduction=True,
+    ):
         """setups of error
         Input:
             err_type: from {'lp_rel', 'lp_abs'}
@@ -100,10 +101,8 @@ class Solver(Module.Solver):
     def getModel_a(self, Exact_a: object = None, approximator: str = "RBF", **kwrds):
         """The model for coefficient a"""
         if Exact_a is not None:
-            print("Using the exact definition of a.")
             model_a = Exact_a
         elif approximator == "RBF":
-            print("self.device", self.device)
             x_mesh = kwrds["x_mesh"].to(self.device)
             model_a = RBFInterpolator(
                 x_mesh=x_mesh,
@@ -119,43 +118,26 @@ class Solver(Module.Solver):
 
     def getModel(
         self,
-        x_in_size: int,
-        a_in_size: int,
-        hidden_list: list,
-        latent_size: int = None,
-        out_size: int = 1,
-        activation_x="ReLU",
-        activation_a="Tanh",
-        netType: str = "MultiONetBatch",
+        layers_branch: list = None,
+        layers_trunk: list = None,
+        activation_branch: str = None,
+        activation_trunk: str = None,
+        multi_ouput_strategy: str = None,
+        num_output: int = 1,
+        netType: str = "DeepONetBatch",
         **kwrds,
     ):
         """Get the neural network model"""
-        if netType == "MultiONetBatch":
-            model = MultiONetBatch(
-                in_size_x=x_in_size,
-                in_size_a=a_in_size,
-                hidden_list=hidden_list,
-                activation_x=activation_x,
-                activation_a=activation_a,
-                dtype=self.dtype,
-                **kwrds,
+        if netType == "DeepONetBatch":
+            model = DeepONetBatch(
+                num_output=num_output,
+                layers_branch=layers_branch,
+                layers_trunk=layers_trunk,
+                activation_branch=activation_branch,
+                activation_trunk=activation_trunk,
+                multi_output_strategy=multi_ouput_strategy,
+                device=self.device,
             )
-        elif netType == "MultiONetBatch_X":
-            model = MultiONetBatch_X(
-                in_size_x=x_in_size,
-                in_size_a=a_in_size,
-                latent_size=latent_size,
-                out_size=out_size,
-                hidden_list=hidden_list,
-                activation_x=activation_x,
-                activation_a=activation_a,
-                dtype=self.dtype,
-                **kwrds,
-            )
-        elif netType == "DeepONetBatch":
-            model = DeepONetBatch(dtype=self.dtype, **kwrds)
-        elif netType == "FCNet":
-            model = FCNet(dtype=self.dtype, **kwrds)
         else:
             raise NotImplementedError
         return model.to(self.device)
@@ -180,21 +162,23 @@ class Solver(Module.Solver):
             self.optimizer = paddle.optimizer.Adam(parameters=param_list, learning_rate=lr, weight_decay=0.0001)
         elif optimizer == "AdamW":
             self.optimizer = paddle.optimizer.AdamW(parameters=param_list, learning_rate=lr, weight_decay=0.0001)
-        elif optimizer == "RMSprop":
-            self.optimizer = paddle.optimizer.RMSProp(
-                parameters=param_list, learning_rate=lr, weight_decay=0.0001, epsilon=1e-08, rho=0.99
-            )
         else:
             raise NotImplementedError
         if scheduler_type == "StepLR":
             tmp_lr = paddle.optimizer.lr.StepDecay(
-                step_size=step_size, gamma=gamma, last_epoch=-1, learning_rate=self.optimizer.get_lr()
+                step_size=step_size,
+                gamma=gamma,
+                last_epoch=-1,
+                learning_rate=self.optimizer.get_lr(),
             )
             self.optimizer.set_lr_scheduler(tmp_lr)
             self.scheduler = tmp_lr
         elif scheduler_type == "Plateau":
             tmp_lr = paddle.optimizer.lr.ReduceOnPlateau(
-                mode="min", factor=factor, patience=patience, learning_rate=self.optimizer.get_lr()
+                mode="min",
+                factor=factor,
+                patience=patience,
+                learning_rate=self.optimizer.get_lr(),
             )
             self.optimizer.set_lr_scheduler(tmp_lr)
             self.scheduler = tmp_lr
@@ -235,7 +219,11 @@ class Solver(Module.Solver):
                 loss_train_sum += loss_train
                 loss_data_sum += loss_data
                 loss_pde_sum += loss_pde
-            a, u, x = a_test.to(self.device), u_test.to(self.device), x_test.to(self.device)
+            a, u, x = (
+                a_test.to(self.device),
+                u_test.to(self.device),
+                x_test.to(self.device),
+            )
             lossClass = LossClass(self)
             try:
                 with paddle.no_grad():
@@ -256,7 +244,7 @@ class Solver(Module.Solver):
                 error_test = sum(error_test) / len(error_test)
             if error_test.item() < self.best_err_test:
                 self.best_err_test = error_test.item()
-                self.saveModel(kwrds["save_path"], "model_dgno_besterror", self.model_dict)
+                self.saveModel(kwrds["save_path"], "model_pideeponet_besterror", self.model_dict)
             if self.scheduler_type is None:
                 pass
             elif self.scheduler_type == "Plateau":
@@ -268,48 +256,96 @@ class Solver(Module.Solver):
                     f"Epoch:{epoch + 1} Time:{time.time() - self.t_start:.4f}, loss:{loss_train_sum.item() / len(train_loader):.4f}, loss_pde:{loss_pde_sum.item() / len(train_loader):.4f}, loss_data:{loss_data_sum.item() / len(train_loader):.4f}"
                 )
                 print(f"                l2_test:{error_test.item():.4f}, lr:{self.optimizer.get_lr()}")
-        self.saveModel(kwrds["save_path"], name="model_dgno_final", model_dict=self.model_dict)
-        self.saveLoss(kwrds["save_path"], name="loss_dgno")
+        self.saveModel(
+            kwrds["save_path"],
+            name="model_pideeponet_final",
+            model_dict=self.model_dict,
+        )
+        self.saveLoss(kwrds["save_path"], name="loss_pideeponet")
         print(f"The total training time is {time.time() - self.t_start:.4f}")
 
-    def train_finetune(
+    def train_index(
         self,
         LossClass: Module.LossClass,
-        model_dict: dict,
-        a: paddle.to_tensor,
+        a_train,
+        u_train,
+        x_train,
+        a_test,
+        u_test,
+        x_test,
+        w_data: float = 1.0,
+        w_pde: float = 1.0,
+        batch_size: int = 100,
         epochs: int = 1,
-        lr=1.0,
-        step_size=250,
-        gamma=1 / 2,
-        epoch_show: int = 100,
+        epoch_show: int = 10,
         **kwrds,
     ):
-        """Fine Tunning"""
-        self.model_dict = model_dict
-        print("****************** The Fine-tune process ***********")
-        param_list = []
-        for name, param in model_dict["u"].named_parameters():
-            if name.split(".")[0] == "net_a":
-                param_list.append(param)
-            elif name.split(".")[0] == "trunk":
-                param_list.append(param)
-        print("The length of param_list:", len(param_list))
-        optimizer = paddle.optimizer.Adam(parameters=param_list, learning_rate=lr, weight_decay=0.0001)
-        tmp_lr = paddle.optimizer.lr.StepDecay(
-            step_size=step_size, gamma=gamma, last_epoch=-1, learning_rate=optimizer.get_lr()
-        )
-        optimizer.set_lr_scheduler(tmp_lr)
-        scheduler = tmp_lr
-        t_start = time.time()
+        """Train the model"""
+        assert tuple(u_train.shape)[0] == tuple(a_train.shape)[0]
+        assert tuple(x_train.shape)[0] == tuple(a_train.shape)[0]
+        index_loader = self.indexloader(tuple(a_train.shape)[0], batch_size=batch_size, shuffle=False)
         for epoch in trange(epochs):
+            loss_train_sum, loss_data_sum, loss_pde_sum = 0.0, 0.0, 0.0
+            for index in index_loader:
+                lossClass = LossClass(self)
+                loss_pde = lossClass.Loss_pde(index, w_pde)
+                loss_data = lossClass.Loss_data(index, w_data)
+                loss_train = w_data * loss_data + w_pde * loss_pde
+                self.optimizer.clear_gradients(set_to_zero=False)
+                loss_train.backward()
+                self.optimizer.step()
+                self.iter += 1
+                loss_train_sum += loss_train
+                loss_data_sum += loss_data
+                loss_pde_sum += loss_pde
+            a, u, x = (
+                a_test.to(self.device),
+                u_test.to(self.device),
+                x_test.to(self.device),
+            )
             lossClass = LossClass(self)
-            loss_train = lossClass.Loss_pde(a.to(self.device), w_pde=1.0)
-            optimizer.clear_gradients(set_to_zero=False)
-            loss_train.backward()
-            optimizer.step()
-            scheduler.step(loss_train.item())
+            try:
+                with paddle.no_grad():
+                    loss_test = lossClass.Loss_data(
+                        paddle.concat(x=[index for index in index_loader], axis=0),
+                        w_data=1.0,
+                    )
+                    error_test = lossClass.Error(x, a, u)
+            except ValueError:
+                loss_test = lossClass.Loss_data(
+                    paddle.concat(x=[index for index in index_loader], axis=0),
+                    w_data=1.0,
+                )
+                error_test = lossClass.Error(x, a, u)
+            self.callBack(
+                loss_train_sum / len(index_loader),
+                loss_data_sum / len(index_loader),
+                loss_pde_sum / len(index_loader),
+                loss_test,
+                error_test,
+                self.t_start,
+            )
+            if isinstance(error_test, list):
+                error_test = sum(error_test) / len(error_test)
+            if error_test.item() < self.best_err_test:
+                self.best_err_test = error_test.item()
+                self.saveModel(kwrds["save_path"], "model_pideeponet_besterror", self.model_dict)
+            if self.scheduler_type is None:
+                pass
+            elif self.scheduler_type == "Plateau":
+                self.scheduler.step(error_test.item())
+            else:
+                self.scheduler.step()
             if (epoch + 1) % epoch_show == 0:
-                print(f"The epoch:{epoch + 1}, time:{time.time() - t_start:.4f}, loss_pde:{loss_train.item()}")
-        self.saveModel(kwrds["save_path"], name="model_dgno_finetune", model_dict=self.model_dict)
-
-        print(f"The total time is {time.time() - t_start:.4f}")
+                print(
+                    f"Epoch:{epoch + 1} Time:{time.time() - self.t_start:.4f}, loss:{loss_train_sum.item() / len(index_loader):.4f}, loss_pde:{loss_pde_sum.item() / len(index_loader):.4f}, loss_data:{loss_data_sum.item() / len(index_loader):.4f}"
+                )
+                for para in self.optimizer.param_groups:
+                    print(f"                l2_test:{error_test.item():.4f}, lr:{para['lr']}")
+        self.saveModel(
+            kwrds["save_path"],
+            name="model_pideeponet_final",
+            model_dict=self.model_dict,
+        )
+        self.saveLoss(kwrds["save_path"], name="loss_pideeponet")
+        print(f"The total training time is {time.time() - self.t_start:.4f}")
