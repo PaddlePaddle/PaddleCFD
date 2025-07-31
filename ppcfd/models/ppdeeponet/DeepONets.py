@@ -6,11 +6,11 @@ try:
 except ImportError:
     from .FunActivation import FunActivation
 try:
-    from Networks.DeepONets_strategy import IndependentStrategy
-    from Networks.DeepONets_strategy import SingleOutputStrategy
-    from Networks.DeepONets_strategy import SplitBothStrategy
-    from Networks.DeepONets_strategy import SplitBranchStrategy
-    from Networks.DeepONets_strategy import SplitTrunkStrategy
+    from ppcfd.models.ppdeeponet.DeepONets_strategy import IndependentStrategy
+    from ppcfd.models.ppdeeponet.DeepONets_strategy import SingleOutputStrategy
+    from ppcfd.models.ppdeeponet.DeepONets_strategy import SplitBothStrategy
+    from ppcfd.models.ppdeeponet.DeepONets_strategy import SplitBranchStrategy
+    from ppcfd.models.ppdeeponet.DeepONets_strategy import SplitTrunkStrategy
 except ImportError:
     from DeepONets_strategy import IndependentStrategy
     from DeepONets_strategy import SingleOutputStrategy
@@ -18,7 +18,7 @@ except ImportError:
     from DeepONets_strategy import SplitBranchStrategy
     from DeepONets_strategy import SplitTrunkStrategy
 try:
-    from Networks.FCNet import FCNet
+    from ppcfd.models.ppdeeponet.FCNet import FCNet
 except ImportError:
     from FCNet import FCNet
 

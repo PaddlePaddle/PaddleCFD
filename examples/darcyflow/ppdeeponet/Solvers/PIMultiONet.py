@@ -11,6 +11,7 @@ from Utils.Losses import MyLoss
 from Utils.RBFInterpolatorMesh import RBFInterpolator
 
 from ppcfd.models.ppdeeponet.MultiONets import MultiONetBatch
+from ppcfd.models.ppdeeponet.MultiONets import MultiONetBatch_piratenet
 from ppcfd.models.ppdeeponet.MultiONets import MultiONetBatch_X
 
 
@@ -128,6 +129,16 @@ class Solver(Module.Solver):
         """Get the neural network model"""
         if netType == "MultiONetBatch":
             model = MultiONetBatch(
+                in_size_x=x_in_size,
+                in_size_a=a_in_size,
+                hidden_list=hidden_list,
+                activation_x=activation_x,
+                activation_a=activation_a,
+                dtype=self.dtype,
+                **kwrds,
+            )
+        elif netType == "MultiONetBatch_piratenet":
+            model = MultiONetBatch_piratenet(
                 in_size_x=x_in_size,
                 in_size_a=a_in_size,
                 hidden_list=hidden_list,

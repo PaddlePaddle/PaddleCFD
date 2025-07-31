@@ -50,16 +50,35 @@ def setup_seed(seed):
 
 def get_data(data, ndata, dtype, n0=0):
     a = np2tensor(np.array(data["coeff"][..., n0 : n0 + ndata]).T, dtype)
-    u = np2tensor(np.array(data["sol"][..., n0 : n0 + ndata]).T, dtype)
-    beta1 = np2tensor(np.array(data["beta1"][n0 : n0 + ndata]), dtype)
-    beta2 = np2tensor(np.array(data["beta2"][n0 : n0 + ndata]), dtype)
+    try:
+        u = np2tensor(np.array(data["sol_fem"][..., n0 : n0 + ndata]).T, dtype)
+    except KeyError:
+        u = np2tensor(np.array(data["sol"][..., n0 : n0 + ndata]).T, dtype)
+
     X, Y = np.array(data["X"]).T, np.array(data["Y"]).T
     mesh = np2tensor(np.vstack([X.flatten(), Y.flatten()]).T, dtype)
     gridx = mesh.reshape([-1, 2])
     x = gridx.tile(repeat_times=(ndata, 1, 1))
     a = a.reshape([ndata, -1, 1])
     u = u.reshape([ndata, -1, 1])
-    return a, u, x, gridx, beta1, beta2
+    return a, u, x, gridx
+
+
+class fun_a(object):
+    def __init__(self, res):
+        super(fun_a, self).__init__()
+        self.res = res
+        self.delta = 1.0 / (res - 1)
+
+    def __call__(self, x, a):
+        a = paddle.squeeze(a, axis=-1)
+        x_loc = paddle.floor(x[..., 0] / self.delta + 0.5).astype("int64")
+        y_loc = paddle.floor(x[..., 1] / self.delta + 0.5).astype("int64")
+        loc = y_loc * self.res + x_loc
+        #
+        img = a[paddle.arange(a.shape[0]).unsqueeze(1), loc]
+
+        return img.unsqueeze(-1)
 
 
 class mollifer(object):
@@ -84,8 +103,7 @@ class LossClass(object):
         self.model_u = solver.model_dict["u"]
         self.mollifer = mollifer()
         self.a_train = a_train.to(self.device)
-        self.u_train = u_train.to(self.device)
-        self.x_train = x_train.to(self.device)
+
         self.deltax = 1 / (N_mesh - 1)
         self.deltay = 1 / (N_mesh - 1)
 
@@ -95,7 +113,10 @@ class LossClass(object):
             n_batch = tuple(index.shape)[0]
             x_mesh.tile(repeat_times=[n_batch, 1, 1]).to(self.device).stop_gradient = not True
             x = x_mesh.tile(repeat_times=[n_batch, 1, 1]).to(self.device)
-            a = self.fun_a(x, self.a_train[index])
+            if args.config == "config_pwc.yaml":
+                a = self.fun_a(x_mesh, self.a_train[index])
+            else:
+                a = self.fun_a(x, self.a_train[index])
             a = a.reshape([-1, N_mesh, N_mesh, 1])
             u = self.model_u(x, self.model_enc(self.a_train[index]))
             u = self.mollifer(u, x).reshape([-1, N_mesh, N_mesh, 1])
@@ -159,8 +180,13 @@ n_train, n_test = cfg["data"]["n_train"], cfg["data"]["n_test"]
 res = cfg["data"]["resolution"]
 
 # Prepare data
-a_train, u_train, x_train, gridx_train, beta1_train, beta2_train = get_data(data_train, n_train, dtype)
-a_test, u_test, x_test, gridx_test, beta1_test, beta2_test = get_data(data_test, n_test, dtype)
+a_train, u_train, x_train, gridx_train = get_data(data_train, n_train, dtype)
+a_test, u_test, x_test, gridx_test = get_data(data_test, n_test, dtype)
+if args.config == "config_pwc.yaml":
+    a_test[a_test == 1.0] = 10.0
+    a_test[a_test == 0.0] = 5.0
+    a_train[a_train == 1.0] = 10.0
+    a_train[a_train == 0.0] = 5.0
 
 # Mesh points
 pointGen = Point2D(x_lb=[0.0, 0.0], x_ub=[1.0, 1.0], dataType=dtype, random_seed=cfg["random_seed"])
@@ -168,10 +194,13 @@ x_mesh = pointGen.inner_point(cfg["data"]["N_mesh"], method="mesh")
 
 # Solver and model setup
 solver = PIMultiONet.Solver(device=device, dtype=dtype)
-fun_a = solver.getModel_a(
-    Exact_a=None,
-    **{**cfg["model"]["fun_a"], "x_mesh": gridx_train},
-)
+if args.config == "config_pwc.yaml":
+    fun_a = fun_a(res)
+else:
+    fun_a = solver.getModel_a(
+        Exact_a=None,
+        **{**cfg["model"]["fun_a"], "x_mesh": gridx_train},
+    )
 
 conv_arch = cfg["model"]["encoder"]["conv_arch"]
 fc_arch = cfg["model"]["encoder"]["fc_arch"]
