@@ -301,16 +301,23 @@ class GNOFNOGNO_all(GNOFNOGNO):
             if decode_fn is not None:
                 pred_decode = decode_fn(pred_key, i)
                 truth_decode = decode_fn(truth_key, i)
+
                 if key == "pressure":
                     drag_weight = data_dict["dragWeight"][0].cuda(blocking=True)
+                    # drag_weight = drag_weight * 10e10
                     drag_weight = drag_weight[:: self.subsample_eval]
+                    drag_pred = paddle.sum(x=drag_weight * pred_decode) * 1e-10
+                    drag_truth = paddle.sum(x=drag_weight * truth_decode) * 1e-10
+                    drag_pred = paddle.abs(drag_pred)
+                    drag_truth = paddle.abs(drag_truth)
                 elif key == "wallshearstress":
                     drag_weight = data_dict["dragWeightWss"][0][
                         : self.out_channels[i], :
                     ].cuda(blocking=True)
                     drag_weight = drag_weight[..., :: self.subsample_eval]
-                drag_pred = paddle.sum(x=drag_weight * pred_decode)
-                drag_truth = paddle.sum(x=drag_weight * truth_decode)
+                    drag_pred = paddle.sum(x=drag_weight * pred_decode)
+                    drag_truth = paddle.sum(x=drag_weight * truth_decode)
+
                 out_dict.update(
                     {f"Cd_{key}_pred": drag_pred, f"Cd_{key}_truth": drag_truth}
                 )
@@ -382,15 +389,20 @@ class GNOFNOGNO_all(GNOFNOGNO):
             pred_key = pred[st:end, :]
             if decode_fn is not None:
                 pred_decode = decode_fn(pred_key, i)
+                
                 if key == "pressure":
                     drag_weight = data_dict["dragWeight"][0].cuda(blocking=True)
+                    # drag_weight = drag_weight * 10e10
                     drag_weight = drag_weight[:: self.subsample_eval]
+                    drag_pred = paddle.sum(x=drag_weight * pred_decode) * 1e-10
+                    drag_pred = paddle.abs(drag_pred)
                 elif key == "wallshearstress":
                     drag_weight = data_dict["dragWeightWss"][0][
                         : self.out_channels[i], :
                     ].cuda(blocking=True)
                     drag_weight = drag_weight[..., :: self.subsample_eval]
-                drag_pred = paddle.sum(x=drag_weight * pred_decode)
+                    drag_pred = paddle.sum(x=drag_weight * pred_decode)
+
                 out_dict.update({f"Cd_{key}_pred": drag_pred})
                 out_dict["Cd_pred"] += drag_pred
 
