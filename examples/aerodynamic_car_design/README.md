@@ -41,10 +41,12 @@ cd .. && cd ..
 # 4. How to Run
 ## ShapeNet-Car
 ``` Train
+cp ../../ppcfd/models/pptransformer/Transolver.py transolver.py
 python main_shapenetcar.py
 ```
 
 ``` Test
+cp ../../ppcfd/models/pptransformer/Transolver.py transolver.py
 export PYTHONPATH=../../:${PYTHONPATH}
 python main_shapenetcar.py \
     mode=test \
