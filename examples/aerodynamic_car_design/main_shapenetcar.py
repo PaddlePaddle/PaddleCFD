@@ -24,7 +24,7 @@ import numpy as np
 import paddle
 from paddle.io import DataLoader
 from tqdm import tqdm
-from transolver import Transolver as Model
+from ppcfd.models import Transolver as Model
 from ppcfd.data.shapenetcar_datamodule import GraphDataset
 from ppcfd.data.shapenetcar_datamodule import load_train_val_fold
 
@@ -263,8 +263,8 @@ def train(
     np.savetxt(f"{path}/val_loss_{config.num_epochs}.txt", val_loss_list)
     end = time.time()
     time_elapsed = end - start
-    log.info("Number of parameters:", get_nb_trainable_params(model))
-    log.info("Time elapsed: {0:.2f} seconds".format(time_elapsed))
+    log.info(f"Number of parameters: {get_nb_trainable_params(model)})
+    log.info(f"Time elapsed: {time_elapsed} seconds")
     return model
 
 
