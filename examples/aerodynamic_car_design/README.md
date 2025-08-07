@@ -22,7 +22,7 @@ volume | 0.0211 | 0.0253
 
 
 # 3. Enviroment
-## datadownload
+## 3.1 Linux: data and checkpoint download
 ``` Data
 cd examples/aerodynamic_car_design/
 mkdir -p ./data && cd ./data
@@ -37,6 +37,11 @@ wget https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/pptransformer/model_
 cd .. && cd ..
 ```
 
+## 3.2 Windows: data and checkpoint download
+
+[click_me_to_download_data](https://paddle-org.bj.bcebos.com/paddlecfd/datasets/pptransformer/mlcfd_data.zip)
+
+[click_me_to_download_checkpoint](https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/pptransformer/model_131.pdparams)
 
 # 4. How to Run
 ## ShapeNet-Car
@@ -50,6 +55,10 @@ python main_shapenetcar.py \
     mode=test \
     checkpoint=./checkpoint/shapenet_car/model_131.pdparams
 ```
+
+if test successfully:
+<img width="1825" height="707" alt="image" src="https://github.com/user-attachments/assets/0e44b21a-e2ff-440e-9663-f0848d88a274" />
+
 
 ## DrivAerNet++ (TODO)
 ```sh
