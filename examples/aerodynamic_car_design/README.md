@@ -56,6 +56,10 @@ python main_shapenetcar.py \
     checkpoint=./checkpoint/shapenet_car/model_131.pdparams
 ```
 
+if test successfully:
+<img width="1825" height="707" alt="image" src="https://github.com/user-attachments/assets/0e44b21a-e2ff-440e-9663-f0848d88a274" />
+
+
 ## DrivAerNet++ (TODO)
 ```sh
 python -m paddle.distributed.launch --gpus=0,1 main_v2.py \
