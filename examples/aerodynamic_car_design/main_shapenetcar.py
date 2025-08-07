@@ -24,8 +24,7 @@ import numpy as np
 import paddle
 from paddle.io import DataLoader
 from tqdm import tqdm
-from transolver import Model
-
+from transolver import Transolver as Model
 from ppcfd.data.shapenetcar_datamodule import GraphDataset
 from ppcfd.data.shapenetcar_datamodule import load_train_val_fold
 
