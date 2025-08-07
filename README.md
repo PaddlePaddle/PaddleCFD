@@ -47,17 +47,16 @@ python -m pip install paddlepaddle-gpu==3.0.0 -i https://www.paddlepaddle.org.cn
 wget https://paddle-org.bj.bcebos.com/paddlecfd/envs/open3d-0.18.0+da239b25-cp310-cp310-manylinux_2_31_x86_64.whl
 python -m pip install open3d-0.18.0+da239b25-cp310-cp310-manylinux_2_31_x86_64.whl -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-# Unzip compiled customed operator (fused_segment_csr) to conda env directory
-wget https://paddle-org.bj.bcebos.com/paddlecfd/envs/fused_segment_csr.tar.gz
-tar -xzvf fused_segment_csr.tar.gz -C /root/miniconda3/envs/ppcfd/
-
-# Add environment variable
-export LD_LIBRARY_PATH=/root/miniconda3/envs/ppcfd/lib/python3.10/site-packages/paddle/libs:$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/root/miniconda3/envs/ppcfd/lib/python3.10/site-packages/paddle/base:$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/root/miniconda3/envs/ppcfd/lib:$LD_LIBRARY_PATH
+# Compile customed operator to conda environment
+wget -nc https://paddle-org.bj.bcebos.com/paddlescience/cmake-3.23.0-linux-x86_64.tar.gz
+tar -zxvf cmake-3.23.0-linux-x86_64.tar.gz
+rm -f cmake-3.23.0-linux-x86_64.tar.gz
+PATH=$PWD/cmake-3.23.0-linux-x86_64/bin:$PATH
+cd source/ppfno_op
+python -m pip install --no-build-isolation -v .
 ```
 
-##### PaddleCFD package installation
+##### PaddleCFD package installation (Choose one of the following)
 ```bash
 # Install PaddleCFD from sourcecode at PaddleCFD root directory
 python -m pip install -e . -i https://pypi.tuna.tsinghua.edu.cn/simple
