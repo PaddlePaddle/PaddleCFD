@@ -14,6 +14,7 @@ PaddleCFD is a deep learning toolkit for surrogate modeling, equation discovery,
 - `ppcfd/data`: data-process source code
 - `ppcfd/model`: model source code
 - `ppcfd/utils`: utils code
+- `source`: source code of paddlepaddle custom operators
 
 ## How to run
 
