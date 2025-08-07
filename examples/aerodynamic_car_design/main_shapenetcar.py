@@ -263,7 +263,7 @@ def train(
     np.savetxt(f"{path}/val_loss_{config.num_epochs}.txt", val_loss_list)
     end = time.time()
     time_elapsed = end - start
-    log.info(f"Number of parameters: {get_nb_trainable_params(model)})
+    log.info(f"Number of parameters: {get_nb_trainable_params(model)}")
     log.info(f"Time elapsed: {time_elapsed} seconds")
     return model
 
