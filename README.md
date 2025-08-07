@@ -40,8 +40,10 @@ cd PaddleCFD
 conda create --name ppcfd python=3.10
 conda activate ppcfd
 
+# Install requirements
 python -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 python -m pip install paddlepaddle-gpu==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
+apt-get install -y libgl1-mesa-glx
 
 # Download and install paddle-backended Open3D
 wget https://paddle-org.bj.bcebos.com/paddlecfd/envs/open3d-0.18.0+da239b25-cp310-cp310-manylinux_2_31_x86_64.whl
