@@ -10,6 +10,7 @@ logs
 log
 *.log
 *.mp3
+*.ruff_cache
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -39,6 +40,8 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+*.tar.gz
+*.whl
 MANIFEST
 
 # PyInstaller
