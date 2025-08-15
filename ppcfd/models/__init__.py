@@ -15,7 +15,7 @@
 from ppcfd.models import ppdeeponet
 from ppcfd.models import ppdiffusion
 
-# from ppcfd.models import ppfno
+from ppcfd.models import ppfno
 from ppcfd.models import ppkan
 from ppcfd.models import pptransformer
 
