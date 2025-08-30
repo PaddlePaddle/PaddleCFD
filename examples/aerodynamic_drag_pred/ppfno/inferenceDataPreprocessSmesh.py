@@ -11,7 +11,6 @@ import sys
 from typing import List
 from typing import Tuple
 
-import gmsh
 import hydra
 import meshio
 import numpy as np
