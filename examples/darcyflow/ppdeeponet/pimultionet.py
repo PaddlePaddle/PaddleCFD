@@ -14,7 +14,7 @@ from ppcfd.models.ppdeeponet.EncoderNet import EncoderCNNet2d
 
 
 parser = argparse.ArgumentParser(description="Run PI-MultiONet for Darcy Flow")
-parser.add_argument("-c", "--config", type=str, default="config.yaml", help="Path to the YAML config file")
+parser.add_argument("-c", "--config", type=str, default="config_smh.yaml", help="Path to the YAML config file")
 parser.add_argument(
     "-m",
     "--mode",

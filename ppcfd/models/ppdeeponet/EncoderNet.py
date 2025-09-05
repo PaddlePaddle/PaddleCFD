@@ -30,7 +30,7 @@ class EncoderFCNet(paddle.nn.Layer):
         Return:
             beta: size(n_batch, n_latent)
         """
-        x = x.reshape(tuple(x.shape)[0], -1)
+        x = x.reshape([tuple(x.shape)[0], -1])
         x = self.net(x)
         return x
 
