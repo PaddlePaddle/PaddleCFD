@@ -241,7 +241,7 @@ class PathDictDataset(paddle.io.Dataset, LoadMesh, LoadFile):
         flow_speed = return_dict["info"]["velocity"]
         const = 2.0 / (mass_density * flow_speed**2 * reference_area)
         projection = paddle.sum(
-            x=triangle_normals * flow_directions, axis=1, keepdim=False
+            x=(triangle_normals  * 1e10) * flow_directions, axis=1, keepdim=False
         )
         return_dict["dragWeight"] = const * projection * areas
         return_dict["dragWeightWss"] = (const * flow_directions * areas[:, None]).T

@@ -37,7 +37,7 @@ lazy_loading: true  # load all data into memory or not
 
 # settings
 enable_ddp: true
-devices: [1, 2]  # python -m paddle.distributed.launch --gpus=6 gino.py
+devices: [1, 2]  # python -m paddle.distributed.launch --gpus=6 train.py
 seed: 0
 lr: 0.0003 # 0.0005
 lr_cd: 0.01
@@ -46,20 +46,18 @@ batch_size: 1
 num_epochs: 1000 # 1000
 finetuning_epochs: 51
 mode: "train"  # train, test
-state: null # '/xxx/GNOFNOGNO_all_849.pdparams'
+state: null # '/xxx/GNOFNOGNO_all.pdparams'
 save_per_epoch: 200
 save_eval_results: true
 resume_ep: -1
 
 # inference & train DataPreprocess
 process_mode: train # train, infer
-pre_input_path: null # /home/chenkai26/Paddle-AeroSimOpt/data/pre_input
-pre_output_path: null # /home/chenkai26/Paddle-AeroSimOpt/pre_output
+pre_input_path: null 
+pre_output_path: null 
 bounds_dir: null # only for infer
 
 task_id: 1
-
-# output_dir: train_output/train_${task_id}
 
 model_name: ${model}
 

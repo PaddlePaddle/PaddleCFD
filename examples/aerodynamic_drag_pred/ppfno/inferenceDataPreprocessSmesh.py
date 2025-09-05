@@ -11,7 +11,6 @@ import sys
 from typing import List
 from typing import Tuple
 
-import gmsh
 import hydra
 import meshio
 import numpy as np
@@ -38,7 +37,6 @@ class STLConvert:
 
         # 提取法向量数组 [每个面含1个法向量]
         normals = stl_mesh.normals  # 形状为(n,3)的数组‌
-        # print("normals_n3:", normals)
         unit_normals = (
             -1 * normals / np.linalg.norm(normals, axis=1, keepdims=True)
         )  # 单位法向量‌
@@ -114,7 +112,6 @@ class Compute_df_stl:
         return query_points
 
     def compute_df_from_mesh(self):
-        # 读取starccm导出的stl文件
         stl_mesh = o3d.io.read_triangle_mesh(os.path.join(self.geo_path, self.stlID))
         num_triangles = len(stl_mesh.triangles)
         print(f"Mesh num in stl: {num_triangles}")

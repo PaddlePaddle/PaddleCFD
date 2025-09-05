@@ -39,7 +39,7 @@ lazy_loading: true  # load all data into memory or not
 
 # settings
 enable_ddp: true
-devices: [1, 2]  # python -m paddle.distributed.launch --gpus=6 gino.py
+devices: [1, 2]  # python -m paddle.distributed.launch --gpus=6 train.py
 seed: 0
 lr: 0.0003 # 0.0005
 lr_cd: 0.01
@@ -50,7 +50,7 @@ finetuning_epochs: 51
 output_dir: ${hydra:run.dir}
 # mode: "train"  # train, test
 mode: "inference"
-# state: /home/chenkai26/Paddle-AeroSimOpt/trainedModel/models/GNOFNOGNO_all_849.pdparams  # null
+# state: /home/checkpoint/GNOFNOGNO_all.pdparams  # null
 save_per_epoch: 20
 save_eval_results: true
 resume_ep: -1
@@ -58,7 +58,7 @@ resume_ep: -1
 # inference params
 state: null
 pd_path: null
-reason_input_path: null # /aidsw01/paddlefile/hstasim/pre_process/{case_id}
-reason_output_path: null # /aidsw01/paddlefile/hstasim/reason_output/reason_{taskId}
-pre_output_path: null # /aidsw01/paddlefile/hstasim/pre_output/{数据集id} for bounds txt files
+reason_input_path: null
+reason_output_path: null
+pre_output_path: null
 # gpu: null

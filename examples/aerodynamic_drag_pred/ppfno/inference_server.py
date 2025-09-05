@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
-#
-# Copyright (c) 2025 Baidu.com, Inc. All Rights Reserved
-
 
 from __future__ import annotations
 
@@ -45,22 +42,13 @@ from ppcfd.models.ppfno.utils.average_meter import AverageMeterDict
 from ppcfd.models.ppfno.utils.dot_dict import DotDict
 from ppcfd.models.ppfno.utils.dot_dict import flatten_dict
 
-# strategy = fleet.DistributedStrategy()
-# strategy.find_unused_parameters = True
-# fleet.init(is_collective=True, strategy=strategy)
-
-
-# 设置你要的配置打印日志
-
 os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 
 
 class InputData(BaseModel):
-    # data_path: str  # /home/chenkai26/Paddle-AeroSimOpt/refine_data
-    pre_output_path: str  # /aidsw01/paddlefile/hstasim/pre_output/{数据集id}
-    reason_input_path: str  # /aidsw01/paddlefile/hstasim/pre_process/{case_id}
-    reason_output_path: str  # /aidsw01/paddlefile/hstasim/reason_output/reason_{taskId}
-    # state: str # /home/chenkai26/Paddle-AeroSimOpt/trainedModel/models/GNOFNOGNO_all_849.pdparams
+    pre_output_path: str  
+    reason_input_path: str 
+    reason_output_path: str 
 
 
 class OutputData(BaseModel):
@@ -87,30 +75,6 @@ def save_vtp_from_dict(
     value_keys: Tuple[str, ...],
     num_timestamps: int = 1,
 ):
-    """Save dict data to '*.vtp' file.
-
-    Args:
-        filename (str): Output filename.
-        data_dict (Dict[str, np.ndarray]): Data in dict.
-        coord_keys (Tuple[str, ...]): Tuple of coord key. such as ("x", "y").
-        value_keys (Tuple[str, ...]): Tuple of value key. such as ("u", "v").
-        num_timestamps (int, optional): Number of timestamp in data_dict. Defaults to 1.
-
-    Examples:
-        >>> import ppsci
-        >>> import numpy as np
-        >>> filename = "path/to/file.vtp"
-        >>> data_dict = {
-        ...     "x": np.array([[1], [2], [3],[4]]),
-        ...     "y": np.array([[2], [3], [4],[4]]),
-        ...     "z": np.array([[3], [4], [5],[4]]),
-        ...     "u": np.array([[4], [5], [6],[4]]),
-        ...     "v": np.array([[5], [6], [7],[4]]),
-        ... }
-        >>> coord_keys = ("x","y","z")
-        >>> value_keys = ("u","v")
-        >>> ppsci.visualize.save_vtp_from_dict(filename, data_dict, coord_keys, value_keys) # doctest: +SKIP
-    """
 
     if len(coord_keys) not in [3]:
         raise ValueError(f"ndim of coord ({len(coord_keys)}) should be 3 in vtp format")
@@ -169,9 +133,7 @@ def save_vtp_from_dict(
 def load_model():
     global MODEL
     try:
-        # TODO() 这里替换为实际的模型加载代码
         MODEL = instantiate_network(CFG)
-        # loss_fn = LpLoss(size_average=True)
         if isinstance(MODEL, paddle.DataParallel):
             MODEL = MODEL._layers
         MODEL.eval()
@@ -282,7 +244,6 @@ async def infer_model_task(input_data: InputData) -> OutputData:
             inference_dataloader = datamodule.inference_dataloader(
                 enable_ddp=CFG.enable_ddp, batch_size=CFG.batch_size
             )
-            # all_files = os.listdir(os.path.join(CFG.reason_input_path, CFG.mode))
             all_files = os.listdir(CFG.reason_input_path)
             prefix = "area"
             indices = [item[5:9] for item in all_files if item.startswith(prefix)]
@@ -343,7 +304,6 @@ async def infer_model_task(input_data: InputData) -> OutputData:
                 t2 = default_timer()
                 paddle.device.cuda.empty_cache()
                 msg += f"Inference (pure) took {t2 - t1:.2f} seconds."
-                # logging.info('cd_dict:', cd_dict)
                 (
                     pred_pressure_csv_path,
                     pred_pressure_vtp_path,
@@ -367,24 +327,11 @@ async def infer_model_task(input_data: InputData) -> OutputData:
                 )
                 if CFG.save_eval_results:
 
-                    # (
-                    #     pred_pressure_csv_path,
-                    #     pred_pressure_vtp_path,
-                    #     pred_wallshearstress_csv_path,
-                    #     pred_wallshearstress_vtp_path,
-                    # ) = save_eval_results(
-                    #     CFG,
-                    #     pred,
-                    #     indices[0],
-                    #     datamodule.inference_full_caseids[0],
-                    #     decode_fn=datamodule.decode,
-                    # )
-
                     asyncio.create_task(
                         async_save_eval_results(
                             CFG,
                             pred,
-                            indices[0],
+                            indices,
                             datamodule.inference_full_caseids[0],
                             datamodule.decode,
                             output
@@ -407,25 +354,9 @@ async def infer_model_task(input_data: InputData) -> OutputData:
                     msg += f"{k}: {v.item():.4f}, "
                     eval_meter.update({k: v})
             msg += f"|| MRE and Value: "
-            """
-            for k, v in out_dict.items():
-                if "Cd" and "pred" in k.split("_"):
-                    k_truth = f"{k[:k.rfind('_')]}_truth"
-                    mre = cal_mre(v, out_dict[k_truth])
-                    eval_meter.update({f"MRE_{k[:k.rfind('_')]}": mre})
-                    msg += f"MRE_{k[:k.rfind('_')]}: {mre.item():.4f}, "
-                    msg += f"[{k}: {v:.4f}, {k_truth}: {out_dict[k_truth]:.4f}], "
-            """
             Cd_pred_modify = cd_dict["Cd_pred_modify"]
-            # Cd_truth = out_dict["Cd_truth"]
-            # Cd_pred = out_dict["Cd_pred"].item()
-            # Cd_mre_modify = paddle.abs(x=Cd_pred_modify - Cd_truth) / paddle.abs(x=Cd_truth)
-            # eval_meter.update({"Cd_mre_modify": Cd_mre_modify})
             eval_meter.update({"Cd_pred_modify": Cd_pred_modify})
-
-            # msg += f"MRE_Cd_modify: {Cd_mre_modify.item():.4f}, "
             msg += f"Cd_pred_modify: {Cd_pred_modify.item():.4f}, "
-            # msg += f"Cd_truth: {Cd_truth.item():.4f}], "
 
             inference_json_dict["parts"] = os.path.basename(CFG.reason_input_path)
             inference_json_dict["drag_coefficient"] = Cd_pred_modify.item()
@@ -461,17 +392,6 @@ async def infer_model_task(input_data: InputData) -> OutputData:
             ) / (1024 * 1024 * 1024)
             logging.info(f"Memory Usage: {max_memory_allocated:.2f} GB (MAX).")
 
-            # output = OutputData(
-            #     error_code=0,
-            #     error_message="",
-            #     cost_forward=t2 - t1,
-            #     cost_all=t3 - t1,
-            #     Cd_pred_modify=Cd_pred_modify,
-            #     pred_pressure_csv_path=pred_pressure_csv_path,
-            #     pred_pressure_vtp_path=pred_pressure_vtp_path,
-            #     pred_wallshearstress_csv_path=pred_wallshearstress_csv_path,
-            #     pred_wallshearstress_vtp_path=pred_wallshearstress_vtp_path,
-            # )
             logging.info(f"请求处理完成(线程ID: {id(asyncio.get_running_loop())})")
             return output
         except Exception as e:
@@ -489,8 +409,6 @@ async def infer_model(input_data: InputData) -> OutputData:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Model not loaded"
         )
-
-    # logging.info("got input:{}".format(input_data.input_file))
     try:
         async with semaphore:
             # TODO() 这里设置单个请求的超时时间，业务层超时
@@ -502,7 +420,6 @@ async def infer_model(input_data: InputData) -> OutputData:
             detail="request timeout > 60s",
         )
     except Exception as e:
-        # logging.error(f"Prediction error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Prediction failed: {str(e)}",
@@ -530,33 +447,18 @@ def save_eval_results(
 
     logging.info(evals_results.keys())
     for k, v in evals_results.items():
-        # print(k, v.shape)
-        # np.save(
-        # os.path.join(f"{cfg.reason_input_path}/evals_results", f"{k}_{centroid_idx}.npy"),
-        # v.T,
-        # )
-        # save 6 csv output files
         array_hstack = np.hstack((centroid, v.T))
         csv_filename = os.path.join(
-            # "/home/chenkai26/Paddle-AeroSimOpt/output/dataset1/inference/case1",
             cfg.reason_output_path,
             "vtp_csv",
             f"{caseid}_{k}.csv",
         )
         np.savetxt(csv_filename, array_hstack, delimiter=",", fmt="%f")
-
-        # save 6 vtp output files
-        # mesh = meshio.Mesh(points=centroid, cells=cells)
-        # mesh.point_data.update({f"{k}": v.T})
         vtp_filename = os.path.join(
-            # "/home/chenkai26/Paddle-AeroSimOpt/output/dataset1/inference/case1",
-            # "/home/chenkai26/Paddle-AeroSimOpt/output/dataset1/inference/case1",
             cfg.reason_output_path,
             "vtp_csv",
             f"{caseid}_{k}.vtp",
         )
-        # mesh.write(vtp_filename, file_format="vtk", binary=False)
-        # legacy_to_xml(vtp_filename)
         if v.T.shape[1] == 1:
             save_vtp_from_dict(
                 vtp_filename,
@@ -600,8 +502,6 @@ def save_eval_results(
 def get_pathes(
     cfg: DictConfig, caseid
 ) -> Tuple[str, str, str, str]:
-    # pred_pressure = decode_fn(pred[0:1, :], 0).cpu().detach().numpy()
-    # pred_wallshearstress = decode_fn(pred[1:4, :], 1).cpu().detach().numpy()
     evals_results = {
         "pred_pressure": None,
         "pred_wallshearstress": None,
@@ -649,26 +549,6 @@ def main(cfg: DictConfig):
 
     port = os.getenv("main", "8087")
     uvicorn.run(app, host="0.0.0.0", workers=1, port=int(port))
-
-    """
-    CUDA_VISIBLE_DEVICES=1 python inference_server.py \
-        -cn inference.yaml pd_path=/home/chenkai26/Paddle-AeroSim-DataModel/checkpoints/GNOFNOGNO_all.pdparams
-    """
-
-    """
-    curl -X POST "http://0.0.0.0:8087/api/v1/inference" \
-        -H "Content-Type: application/json" \
-        -d '{"reason_output_path":"/home/chenkai26/Paddle-AeroSim-DataModel/inference_output/dataset1/case016", "reason_input_path":"/home/chenkai26/Paddle-AeroSim-DataModel/pre_output/inference_dataset1/case016", "pre_output_path":"/home/chenkai26/Paddle-AeroSim-DataModel/pre_output/train_dataset1"}'
-    """
-
-    """
-    task_id: 123
-    pd_path: /aidsw01/paddlefile/hstasim/train_output/train_{taskId}/pd/GNOFNOGNO_all_849.pdparams，
-    pre_output_path:/aidsw01/paddlefile/hstasim/pre_output/{数据集id}  # 拿txt文件
-    reason_input_path:/aidsw01/paddlefile/hstasim/pre_process/{case_id},
-    reason_output_path:/aidsw01/paddlefile/hstasim/reason_output/reason_{taskId},
-    gpu: 1,2
-    """
 
 
 if __name__ == "__main__":
