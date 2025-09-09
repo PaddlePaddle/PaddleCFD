@@ -7,9 +7,10 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import paddle
-from matcho import Unet2D
 from numpy.lib.stride_tricks import sliding_window_view
 from paddle import summary
+
+from ppcfd.models.ppdiffusion.matcho import Unet2D
 
 
 paddle.seed(seed=23)

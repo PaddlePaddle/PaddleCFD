@@ -10,9 +10,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import paddle
 import scipy.stats as stats
-from matcho import Unet2D
 from numpy.lib.stride_tricks import sliding_window_view
 from tqdm import tqdm
+
+from ppcfd.models.ppdiffusion.matcho import Unet2D
 
 
 def setup_seed(seed):

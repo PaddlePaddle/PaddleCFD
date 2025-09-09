@@ -10,8 +10,9 @@ import paddle
 from numpy.lib.stride_tricks import sliding_window_view
 from paddle import summary
 from tqdm import tqdm
-from utils.architecture import Unet
-from utils.diffusion import ElucidatedDiffusion
+
+from ppcfd.models.ppdiffusion.utils.architecture import Unet
+from ppcfd.models.ppdiffusion.utils.diffusion import ElucidatedDiffusion
 
 
 def setup_seed(seed):

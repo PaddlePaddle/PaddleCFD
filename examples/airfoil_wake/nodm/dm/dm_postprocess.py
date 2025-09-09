@@ -11,8 +11,9 @@ import scipy.stats as stats
 from numpy.lib.stride_tricks import sliding_window_view
 from paddle import summary
 from sklearn.decomposition import TruncatedSVD
-from utils.architecture import Unet
-from utils.diffusion import ElucidatedDiffusion
+
+from ppcfd.models.ppdiffusion.utils.architecture import Unet
+from ppcfd.models.ppdiffusion.utils.diffusion import ElucidatedDiffusion
 
 
 matplotlib.rcParams["figure.dpi"] = 200
