@@ -325,9 +325,9 @@ if __name__ == "__main__":
     traj = traj * mask
     traj = np.expand_dims(traj, axis=2)
     logger.info(f"Data loading time: {time.time() - begin_time:.2f}s")
-    traj_train = traj[:, :800]
-    traj_val = traj[:, 800:900]
-    traj_test = traj[:, 900:]
+    traj_train = traj[:, :600]
+    traj_val = traj[:, 600:700]
+    traj_test = traj[:, 700:]
 
     logger.info(f"Shape of whole data (traj): {traj.shape}")
     logger.info(f"Shape of train data (traj_train): {traj_train.shape}")

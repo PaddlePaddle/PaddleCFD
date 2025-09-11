@@ -205,6 +205,7 @@ def do_svd(data):
     ld = TRAJ.shape[0]
     n_components = ld - 1
     t_svd = TruncatedSVD(n_components=n_components)
+    _ = t_svd.fit_transform(TRAJ)
     s_train = t_svd.singular_values_
     v_train = t_svd.components_
     return s_train, v_train
@@ -214,7 +215,7 @@ if __name__ == "__main__":
     seed_value = 23
     data_type = "float32"
     res = 128
-    path_model = "models/best_model.pdparams"
+    path_model = "models/dm_model.pdparams"
     check_choose_GPU()
 
     debug = False
@@ -396,7 +397,7 @@ if __name__ == "__main__":
     k_y_nq = np.pi / delta_y
     k_nq = min(k_x_nq, k_y_nq)
 
-    for p in range(0, 100, 1):
+    for p in range(0, 60, 1):
         sample_id = p
         print(f"Sample id: {sample_id}")
         skip_t = 4

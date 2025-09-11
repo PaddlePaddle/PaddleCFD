@@ -182,9 +182,9 @@ traj = traj * mask
 traj = np.expand_dims(traj, axis=2)
 print(f"traj: {tuple(traj.shape)}")
 print(f"Data Loading Time: {time.time() - begin_time:.1f}s")
-traj_train = traj[:, :800]
-traj_val = traj[:, 800:900]
-traj_test = traj[:, 900:]
+traj_train = traj[:, :600]
+traj_val = traj[:, 600:700]
+traj_test = traj[:, 700:]
 Par = {}
 Par["nx"] = tuple(traj_train.shape)[-2]
 Par["ny"] = tuple(traj_train.shape)[-1]
@@ -252,7 +252,7 @@ model = Unet2D(
     channels=Par["channels"],
 ).astype("float32")
 
-path_model = "models/best_model.pdparams"
+path_model = "models/no_model.pdparams"
 model.set_state_dict(state_dict=paddle.load(path=str(path_model)))
 
 # summary

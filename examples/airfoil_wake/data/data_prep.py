@@ -56,7 +56,7 @@ def fill_nan_with_nearest(data):
     Returns:
         np.array: Modified array with NaNs replaced by nearest non-NaN neighbors.
     """
-    nan_mask = np.isnan(data)
+    nan_mask = np.isnan(data) | (np.abs(data) > 10)
     distances, indices = distance_transform_edt(nan_mask, return_indices=True)
     filled_data = data[tuple(indices)]
     data[nan_mask] = filled_data[nan_mask]
@@ -69,7 +69,6 @@ delta_y = 128
 skip_x = skip_y = 2
 script_dir = os.path.dirname(os.path.abspath(__file__))
 print("Current directory:", script_dir)
-script_dir = "/workspace/workspace/NO_DM-develop/Airfoil-LES_paddle/data-prepare"
 
 file = h5py.File(os.path.join(script_dir, "airfoilLES_grid.h5"), "r")
 grid_x = np.array(file["x"])
