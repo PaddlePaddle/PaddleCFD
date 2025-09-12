@@ -16,9 +16,9 @@ pybind11::object select_segment_csr_sum(pybind11::object src_,
   PD_CHECK(map.shape().size() == 1);
   PD_CHECK(indptr.shape().size() == 1);
 
-  PD_CHECK(src.is_gpu());
-  PD_CHECK(map.is_gpu());
-  PD_CHECK(indptr.is_gpu());
+  PD_CHECK(src.is_gpu() || src.is_custom_device());
+  PD_CHECK(map.is_gpu() || map.is_custom_device());
+  PD_CHECK(indptr.is_gpu() || indptr.is_custom_device());
 
   PD_CHECK(src.is_contiguous());
   PD_CHECK(map.is_contiguous());
@@ -53,9 +53,9 @@ pybind11::object select_segment_csr_mean(pybind11::object src_,
   PD_CHECK(map.shape().size() == 1);
   PD_CHECK(indptr.shape().size() == 1);
 
-  PD_CHECK(src.is_gpu());
-  PD_CHECK(map.is_gpu());
-  PD_CHECK(indptr.is_gpu());
+  PD_CHECK(src.is_gpu() || src.is_custom_device());
+  PD_CHECK(map.is_gpu() || map.is_custom_device());
+  PD_CHECK(indptr.is_gpu() || indptr.is_custom_device());
 
   PD_CHECK(src.is_contiguous());
   PD_CHECK(map.is_contiguous());
@@ -91,12 +91,12 @@ pybind11::object select_segment_csr_mean_bwd(
   PD_CHECK(map.shape().size() == 1);
   PD_CHECK(indptr.shape().size() == 1);
 
-  PD_CHECK(map.is_gpu());
-  PD_CHECK(indptr.is_gpu());
+  PD_CHECK(map.is_gpu() || map.is_custom_device());
+  PD_CHECK(indptr.is_gpu() || indptr.is_custom_device());
 
   // For grad_output
   PD_CHECK(grad_output.shape()[0] == indptr.shape()[0] - 1);
-  PD_CHECK(grad_output.is_gpu());
+  PD_CHECK(grad_output.is_gpu() || grad_output.is_custom_device());
 
   PD_CHECK(map.is_contiguous());
   PD_CHECK(indptr.is_contiguous());
@@ -133,12 +133,12 @@ pybind11::object select_segment_csr_sum_bwd(
   PD_CHECK(map.shape().size() == 1);
   PD_CHECK(indptr.shape().size() == 1);
 
-  PD_CHECK(map.is_gpu());
-  PD_CHECK(indptr.is_gpu());
+  PD_CHECK(map.is_gpu() || map.is_custom_device());
+  PD_CHECK(indptr.is_gpu() || indptr.is_custom_device());
 
   // For grad_output
   PD_CHECK(grad_output.shape()[0] == indptr.shape()[0] - 1);
-  PD_CHECK(grad_output.is_gpu());
+  PD_CHECK(grad_output.is_gpu() || grad_output.is_custom_device());
 
   PD_CHECK(map.is_contiguous());
   PD_CHECK(indptr.is_contiguous());
