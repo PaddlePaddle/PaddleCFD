@@ -340,8 +340,7 @@ class Solver(Module.Solver):
                 print(
                     f"Epoch:{epoch + 1} Time:{time.time() - self.t_start:.4f}, loss:{loss_train_sum.item() / len(index_loader):.4f}, loss_pde:{loss_pde_sum.item() / len(index_loader):.4f}, loss_data:{loss_data_sum.item() / len(index_loader):.4f}"
                 )
-                for para in self.optimizer.param_groups:
-                    print(f"                l2_test:{error_test.item():.4f}, lr:{para['lr']}")
+                print(f"                l2_test:{error_test.item():.4f}, lr:{self.optimizer.get_lr()}")
         self.saveModel(
             kwrds["save_path"],
             name="model_pideeponet_final",
