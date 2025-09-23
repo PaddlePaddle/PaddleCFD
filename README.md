@@ -1,11 +1,11 @@
 # PaddleCFD
 
 <p align="left">
-    <a href=""><img src="https://img.shields.io/badge/python-3.10+-aff.svg"></a>
-    <a href=""><img src="https://img.shields.io/badge/os-linux%2C%20win%2C%20mac-yellow.svg"></a>
-    <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-dfd.svg"></a>
+    <a href=""><img src="https://img.shields.io/badge/python-3.10+-dfd.svg"></a>
+    <a href=""><img src="https://img.shields.io/badge/os-linux%2C%20win%2C%20mac-dfd.svg"></a>
+    <a href="./LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green.svg"></a>
     <!-- <a href=""><img src="https://img.shields.io/github/stars/PaddlePaddle/PaddleCFD?color=ccf"></a> -->
-    <a href="PyPI Downloads"><img src=https://static.pepy.tech/personalized-badge/ppcfd?period=total&units=INTERNATIONAL_SYSTEM&left_color=gray&right_color=GREEN&left_text=downloads></a>
+    <a href="PyPI Downloads"><img src=https://static.pepy.tech/personalized-badge/ppcfd?period=total&units=INTERNATIONAL_SYSTEM&left_color=GRAY&right_color=GREEN&left_text=downloads></a>
 </p>
 
 
