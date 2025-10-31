@@ -14,10 +14,10 @@ from paddle.distributed import fleet
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter1d
 
-from ppcfd.models.pptranskan.functions_data import DataLoader
-from ppcfd.models.pptranskan.functions_data import Dataset
-from ppcfd.models.pptranskan.average_meter import AverageMeterDict
-from ppcfd.models.pptranskan.TransKAN import Transolver
+from ppcfd.models.ppTransKan.functions_data import DataLoader
+from ppcfd.models.ppTransKan.functions_data import Dataset
+from ppcfd.models.ppTransKan.average_meter import AverageMeterDict
+from ppcfd.models.ppTransKan.TransKAN import Transolver
 
 
 # 采用分布式并行训练策略
