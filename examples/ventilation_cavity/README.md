@@ -44,7 +44,6 @@ $$
 Here, $\text{Linear}^{(i)}_{\sigma}$ and $\text{Linear}^{(i)}_{B}$ are learnable linear combinations used to control the output dimension of each layer; $\sigma$ is the nonlinear activation function SiLU; _B_ is the B-spline function.
 ***
 ##  3.Dataset
-受保密限制
 本项目需要时序数据构造样本，在模型训练及测试之前需要对数据进行预处理，并保存为csv格式，且需要：
 总共 _n_ ×5000行，其中 _n_ 为工况数，5000为每个工况的时间步数；共10列，其中1 ~ 3列为工况参数，4 ~ 8为5个迎、背水面测点压差，9、10列分别为侧向力和侧向力矩。
 具体格式参考[data_test.csv](https://github.com/lypUCAS/PaddleCFD/blob/develop/examples/ventilation_cavity/data/data_test.csv)
