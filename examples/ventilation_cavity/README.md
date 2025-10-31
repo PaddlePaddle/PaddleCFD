@@ -9,38 +9,53 @@
 ![Structure of the TransKAN model](https://github.com/lypUCAS/PaddleCFD/blob/develop/examples/ventilation_cavity/image/transkan.jpg)
 可以看出，该模型主体为transolver框架，且其输出层之前包含一个KAN模块。其中，transolver采用物理多头自注意力机制，具体来说：
 It first extracts raw features  and physical features  using two separate linear layers, as shown in Equations below.
+
 $$
 x_{\text{raw}} = \mathrm{linear}_x(x)
 $$
+
 $$
 x_{\text{physical}} = \mathrm{linear}_{fx}(x)
 $$
+
 Next, the input sequence is aggregated into _S_ representative slices through a linear layer, and the correlation weights **_W_** between each time step and different slices are calculated .
+
 $$
 \boldsymbol{W} = \text{softmax}\left( \frac{\text{linear}_{{slice}}(x_{\text{raw}})}{\tau} \right)
 $$
+
 Then, the correlation weights **_W_** is used to perform spatially weighted aggregation on the physical features, resulting in a physics-aware token **_Z_**.
+
 $$
 \boldsymbol{Z} = \frac{\boldsymbol{W}^T x_{\text{physical}}}{\boldsymbol{W}^T I + 10^{-6}}
 $$
+
 Subsequently, the query **_q_**, key **_k_**, and value **_v_** are derived from the token **_Z_**  through three separate linear layers, followed by the computation of dot-product attention.
+
 $$
 \boldsymbol{q} = \text{linear}_q(\boldsymbol{Z}), \boldsymbol{k} = \text{linear}_k(\boldsymbol{Z}), \boldsymbol{v} = \text{linear}_v(\boldsymbol{Z})
 $$
+
 $$
 \boldsymbol{Z'} = \text{softmax}\left( \frac{\boldsymbol{q}\boldsymbol{k}^T}{\sqrt{d}} \right) \boldsymbol{v}
 $$
+
 Finally, the attention output feature **_Z′_**  is reconstructed using the correlation weights **_W_** .
+
 $$
 \boldsymbol{Z'} = \boldsymbol{W}\boldsymbol{Z'}
 $$
+
 KAN模块用于对输入序列的时间维数进行非线性映射，从而实现输入/输出序列长度的自由配置，其具体的计算流程如下。
+
 $$
 \text{KANlayer}^{(1)}(x) = \tanh\left( \text{Linear}^{(1)}_{\sigma}(\sigma(x)) + \text{Linear}^{(1)}_{B}(B(x)) \right)
 $$
+
 $$
 \text{KANlayer}^{(2)}(x) = \text{Linear}^{(2)}_{\sigma}(\sigma(x)) + \text{Linear}^{(2)}_{B}(B(x))
 $$
+
 Here, $\text{Linear}^{(i)}_{\sigma}$ and $\text{Linear}^{(i)}_{B}$ are learnable linear combinations used to control the output dimension of each layer; $\sigma$ is the nonlinear activation function SiLU; _B_ is the B-spline function.
 ***
 ##  3.Dataset
