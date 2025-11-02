@@ -60,8 +60,6 @@ Here, ![formula](https://latex.codecogs.com/svg.image?\text{Linear}^{(i)}_{\sigm
 $\sigma$ is the nonlinear activation function SiLU; _B_ is the B-spline function.
 ***
 ##  3.Dataset
-本项目需要时序数据构造样本，在模型训练及测试之前需要对数据进行预处理，并保存为csv格式，且需要：
-总共 _n_ ×5000行，其中 _n_ 为工况数，5000为每个工况的时间步数；共10列，其中1 ~ 3列为工况参数，4 ~ 8为5个迎、背水面测点压差，9、10列分别为侧向力和侧向力矩。
 This project requires constructing time-series data samples. Before model training and testing, the data need to be preprocessed and saved in CSV format, with the following specifications:
  - A total of n × 5000 rows, where n is the number of operating conditions, and 5000 is the number of time steps for each condition.
 
