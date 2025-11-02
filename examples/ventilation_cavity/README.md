@@ -56,7 +56,10 @@ $$
 \text{KANlayer}^{(2)}(x) = \text{Linear}^{(2)}_{\sigma}(\sigma(x)) + \text{Linear}^{(2)}_{B}(B(x))
 $$
 
-Here,  $ \text{Linear}^{(i)}_{\sigma} $  and  $\text{Linear}^{(i)}_{B}$  are learnable linear combinations used to control the output dimension of each layer;  $\sigma$  is the nonlinear activation function SiLU; _B_ is the B-spline function.
+Here, ![formula](https://latex.codecogs.com/svg.image?\text{Linear}^{(i)}_{\sigma}) 
+and ![formula](https://latex.codecogs.com/svg.image?\text{Linear}^{(i)}_{B}) 
+are learnable linear combinations used to control the output dimension of each layer; 
+$\sigma$ is the nonlinear activation function SiLU; _B_ is the B-spline function.
 ***
 ##  3.Dataset
 本项目需要时序数据构造样本，在模型训练及测试之前需要对数据进行预处理，并保存为csv格式，且需要：
