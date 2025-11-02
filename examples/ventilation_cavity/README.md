@@ -63,6 +63,7 @@ $\sigma$ is the nonlinear activation function SiLU; _B_ is the B-spline function
 本项目需要时序数据构造样本，在模型训练及测试之前需要对数据进行预处理，并保存为csv格式，且需要：
 总共 _n_ ×5000行，其中 _n_ 为工况数，5000为每个工况的时间步数；共10列，其中1 ~ 3列为工况参数，4 ~ 8为5个迎、背水面测点压差，9、10列分别为侧向力和侧向力矩。
 具体格式参考[data_test.csv](https://github.com/lypUCAS/PaddleCFD/blob/develop/examples/ventilation_cavity/data/data_test.csv)
+
 本项目所构建的TransKAN模型可适用于解决多特征、多输出、多对多的时序预测问题，其中关于时序样本输入特征/输出标签以及输入/输出序列长度的选择位于[functiondata.py](https://github.com/lypUCAS/PaddleCFD/blob/develop/examples/ventilation_cavity/functions_data.py)中的第118和119行，可以根据需要自行调整。
 ```
 inputs = self.dataset_dict[self.mode][index, :self.t_len_in, :8]                                  
