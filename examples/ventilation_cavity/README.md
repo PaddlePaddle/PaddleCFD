@@ -94,4 +94,6 @@ if test successfully:
 ## 5.Result
 下图展示了TransKAN模型的通气空泡回转体未来长时段侧向力（矩）脉动量的预示结果与真实结果的比较，It can be seen that the predicted curve aligns well with the true curve in terms of overall pulsation frequency. Moreover, the phase and amplitude within each pulsation cycle are basically synchronized with the true curve. This indicates strong agreement between the predictions and true results, demonstrating the excellent temporal prediction capability of the TransKAN model.
 ![F](https://github.com/lypUCAS/PaddleCFD/blob/develop/examples/ventilation_cavity/image/F.jpg) ![T](https://github.com/lypUCAS/PaddleCFD/blob/develop/examples/ventilation_cavity/image/T.jpg) 
+***
 ## 6.Reference
+Y. Li, R. Huang, Y. Wang, L. Hao, and T. Liu, " TransKAN-GPR: A multi-scale framework for predicting hydrodynamic loads of a ventilated cavitating body,".(under review)
