@@ -67,9 +67,9 @@ This project requires constructing time-series data samples. Before model traini
 
  - A total of 10 columns: columns 1–3 correspond to the operating condition parameters, columns 4–8 correspond to the differential pressures at five measurement points on the pressure and suction surfaces, and columns 9 and 10 correspond to the lateral force and lateral moment, respectively.
 
-The specific format can be found in[data_test.csv](https://github.com/lypUCAS/PaddleCFD/blob/develop/examples/ventilation_cavity/data/data_test.csv)
+The specific format can be found in [data_test.csv](https://github.com/lypUCAS/PaddleCFD/blob/develop/examples/ventilation_cavity/data/data_test.csv)
 
-本项目所构建的TransKAN模型可适用于解决多特征、多输出、多对多的时序预测问题，其中关于时序样本输入特征/输出标签以及输入/输出序列长度的选择位于[functiondata.py](https://github.com/lypUCAS/PaddleCFD/blob/develop/examples/ventilation_cavity/functions_data.py)中的第118和119行，可以根据需要自行调整。
+The TransKAN model developed in this project is suitable for addressing multi-feature, multi-output, and many-to-many time-series prediction task. The selection of input features, output labels, and input/output sequence lengths can be found in lines 118 and 119 of [functiondata.py](https://github.com/lypUCAS/PaddleCFD/blob/develop/examples/ventilation_cavity/functions_data.py) , and can be adjusted as needed.
 ```
 inputs = self.dataset_dict[self.mode][index, :self.t_len_in, :8]                                  
 labels = self.dataset_dict[self.mode][index, self.t_len_in: self.t_len_in + self.t_len_out, 8:]   
@@ -77,8 +77,8 @@ labels = self.dataset_dict[self.mode][index, self.t_len_in: self.t_len_in + self
 ***
 ## 4.Model Training & prediction
 
-### (1) This project was developed and tested with **Python 3.10.16**.  
-To ensure proper execution, please install the following Python packages with the specified versions:
+### (1) Enviroment
+This project was developed and tested using **Python 3.10.16** on Windows. To ensure proper execution, please install the following Python packages with the specified versions:
 
 ```bash
 pip install einops==0.8.1
@@ -92,7 +92,8 @@ pip install pandas==2.3.3
 pip install scipy==1.16.3
 ```
 Attention: Ensure your CUDA version is compatible with `paddlepaddle-gpu==3.0.0b1`
-### (2) 设置config.yaml文件中的参数，具体包括：训练/测试模式选择、输入/输出序列长度设定、训练/测试集比例划分、工况数设定以及是否在训练中进行验证
+### (2) Configuration Parameters
+Set the parameters in the `config.yaml` file, including: the choice of training/testing mode, the input/output sequence length, the training/testing dataset split ratio, the number of operating conditions, and whether to perform validation during training.
 ```
 # Setting
 mode: "test"
@@ -108,7 +109,8 @@ with_val: true
 pred_ckpt: null
 ```
 
- -  Train or test the model:
+ ###  (3) Run the code
+The execution mode—training or testing—is determined by `cfg.mod`. Once set, the entire training or testing process can be carried out using the following commands.
 ```
 python main.py
 ```
@@ -116,7 +118,7 @@ if run successfully:
 ![Successfully run](https://github.com/lypUCAS/PaddleCFD/blob/develop/examples/ventilation_cavity/image/run.png)
 ***
 ## 5.Result
-下图展示了TransKAN模型的通气空泡回转体未来长时段侧向力（矩）脉动量的预示结果与真实结果的比较，It can be seen that the predicted curve aligns well with the true curve in terms of overall pulsation frequency. Moreover, the phase and amplitude within each pulsation cycle are basically synchronized with the true curve. This indicates strong agreement between the predictions and true results, demonstrating the excellent temporal prediction capability of the TransKAN model.
+The figure below shows a comparison between the predicted and true values of long-term lateral force (torque) pulsations of the cavitating axisymmetric body using the TransKAN model. It can be seen that the predicted curve aligns well with the true curve in terms of overall pulsation frequency. Moreover, the phase and amplitude within each pulsation cycle are largely synchronized with the true curve, indicating strong agreement between the predictions and the actual results. This demonstrates the excellent temporal prediction capability of the TransKAN model.
 ![F](https://github.com/lypUCAS/PaddleCFD/blob/develop/examples/ventilation_cavity/image/F.jpg) ![T](https://github.com/lypUCAS/PaddleCFD/blob/develop/examples/ventilation_cavity/image/T.jpg) 
 ***
 ## 6.Reference
