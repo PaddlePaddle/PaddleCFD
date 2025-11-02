@@ -63,7 +63,7 @@ $\sigma$ is the nonlinear activation function SiLU; _B_ is the B-spline function
 This project requires constructing time-series data samples. Before model training and testing, the data need to be preprocessed and saved in CSV format, with the following specifications:
  - A total of n × 5000 rows, where n is the number of operating conditions, and 5000 is the number of time steps for each condition.
 
- - A total of 10 columns: columns 1–3 correspond to the operating condition parameters, columns 4–8 correspond to the differential pressures at five measurement points on the pressure and suction surfaces, and columns 9 and 10 correspond to the lateral force and lateral moment, respectively.
+ - A total of 10 columns: columns 1–3 correspond to the operating condition parameters, columns 4–8 correspond to the differential pressures at five measurement points on the pressure and suction surfaces, and columns 9 and 10 correspond to the lateral force and lateral torque, respectively.
 
 The specific format can be found in [data_test.csv](https://github.com/lypUCAS/PaddleCFD/blob/develop/examples/ventilation_cavity/data/data_test.csv)
 
