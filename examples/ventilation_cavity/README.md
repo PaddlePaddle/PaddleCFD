@@ -89,7 +89,7 @@ pred_ckpt: null
 python main.py
 ```
 if test successfully:
-
+![Successfully run](https://github.com/lypUCAS/PaddleCFD/blob/develop/examples/ventilation_cavity/image/run.png)
 ***
 ## 5.Result
 下图展示了TransKAN模型的通气空泡回转体未来长时段侧向力（矩）脉动量的预示结果与真实结果的比较，It can be seen that the predicted curve aligns well with the true curve in terms of overall pulsation frequency. Moreover, the phase and amplitude within each pulsation cycle are basically synchronized with the true curve. This indicates strong agreement between the predictions and true results, demonstrating the excellent temporal prediction capability of the TransKAN model.
