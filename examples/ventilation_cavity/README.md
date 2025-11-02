@@ -107,7 +107,7 @@ pred_ckpt: null
 ```
 python main.py
 ```
-if test successfully:
+if run successfully:
 ![Successfully run](https://github.com/lypUCAS/PaddleCFD/blob/develop/examples/ventilation_cavity/image/run.png)
 ***
 ## 5.Result
