@@ -77,7 +77,7 @@ labels = self.dataset_dict[self.mode][index, self.t_len_in: self.t_len_in + self
 ***
 ## 4.Model Training & prediction
 
- - This project was developed and tested with **Python 3.10.16**.  
+### (1) This project was developed and tested with **Python 3.10.16**.  
 To ensure proper execution, please install the following Python packages with the specified versions:
 
 ```bash
@@ -92,7 +92,7 @@ pip install pandas==2.3.3
 pip install scipy==1.16.3
 ```
 Attention: Ensure your CUDA version is compatible with `paddlepaddle-gpu==3.0.0b1`
- - 设置config.yaml文件中的参数，具体包括：训练/测试模式选择、输入/输出序列长度设定、训练/测试集比例划分、工况数设定以及是否在训练中进行验证
+### (2) 设置config.yaml文件中的参数，具体包括：训练/测试模式选择、输入/输出序列长度设定、训练/测试集比例划分、工况数设定以及是否在训练中进行验证
 ```
 # Setting
 mode: "test"
