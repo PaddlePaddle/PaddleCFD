@@ -11,7 +11,30 @@ https://ai.gitee.com/
 ### 5.clicking Jupyter Lab, you will enter this interface. First, select the terminal; this article chooses Terminal.
 ![alt text](image-3.png)
 ## Training Process
-Using the aerodynamics case as an example to explain the training process:
+PaddleCFD Source Dir:
+```
+cd /opt/package/ppcfd/PaddleCFD
+```
+All Case Training Reference Documents :
+
+[1、PaddleCFD aerodynamic_car_design README](https://github.com/PaddlePaddle/PaddleCFD/blob/develop/examples/aerodynamic_car_design/README.md) 
+
+[2、PaddleCFD aerodynamic_drag_pred README](https://github.com/PaddlePaddle/PaddleCFD/blob/develop/examples/aerodynamic_drag_pred/ppfno/README.md) 
+
+[3、PaddleCFD aerodynamics README](https://github.com/PaddlePaddle/PaddleCFD/blob/develop/examples/aerodynamics/ppkan/README.md) 
+
+[4、PaddleCFD airfoil_wake README](https://github.com/PaddlePaddle/PaddleCFD/blob/develop/examples/airfoil_wake/README.md) 
+
+[5、PaddleCFD darcyflow ppdeeponet README](https://github.com/PaddlePaddle/PaddleCFD/blob/develop/examples/darcyflow/ppdeeponet/README.md) 
+
+[6、PaddleCFD darcyflow ppkan README](https://github.com/PaddlePaddle/PaddleCFD/blob/develop/examples/darcyflow/ppkan/README.md) 
+
+[7、PaddleCFD ppdiffusion README](https://github.com/PaddlePaddle/PaddleCFD/blob/develop/examples/flow_field_prediction/ppdiffusion/README.md)
+
+[8、PaddleCFD aerodynamic_car_design README](https://github.com/PaddlePaddle/PaddleCFD/blob/develop/examples/aerodynamic_car_design/README.md) 
+
+
+Using the [aerodynamics](https://github.com/PaddlePaddle/PaddleCFD/blob/develop/examples/aerodynamic_car_design/README.md)  case as an example to explain the training process:
 ```
 cd /opt/package/ppcfd/PaddleCFD/examples/aerodynamics/ppkan
 ```
@@ -37,6 +60,3 @@ python main.py model=KANONet
 ```python
 python main.py mode=test checkpoint="your checkpoint path"
 ```
-# References and citations
-
-Reference paper: 10.1016/j.cma.2024.117699
