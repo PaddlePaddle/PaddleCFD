@@ -25,7 +25,7 @@ PaddleCFD is a deep learning toolkit for surrogate modeling, equation discovery,
 - `ppcfd/utils`: utils code
 - `source`: source code of paddlepaddle custom operators
 
-## How to run
+## How to run on NVIDIA GPU
 
 ### Installation
 
@@ -81,6 +81,11 @@ python -m pip install ppcfd -i https://pypi.tuna.tsinghua.edu.cn/simple
 cd PaddleCFD/examples/xxx/xxx
 run the example according to the example README.md
 ```
+## How to run on MetaX
+
+Following the [guidelines of MetaX](.doc/metax/README.md) to run PaddleCFD on MetaX machine.
+
+[About MetaX](https://www.metax-tech.com/en/about/about.html)
 
 ## APIs
 
