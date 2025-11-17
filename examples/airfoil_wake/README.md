@@ -143,24 +143,6 @@ python dm_postprocess.py
 ```
 This script applies the trained Diffusion Model for post-processing, generating the final prediction results.
 
-#### 4.7 Run with PaddlePaddle-develop (Nightly build)
-If you have installed PaddlePaddle-develop instead of PaddlePaddle 3.0, you should repleace `custom_sdp_kernel()` in PaddleCFD/ppcfd/models/ppdiffusion/utils/utils.py with the new version as the following:
-
-```python
-def custom_sdp_kernel(enable_math: bool = False, enable_flash: bool = True, enable_mem_efficient: bool = True):
-    """Customize Paddle Attention Backend Controller"""
-    # Get the original module reference
-    flash_module = paddle.nn.functional.flash_attention
-
-    try:
-        # Set a new global variable value
-        flash_module.sdp_kernel(enable_math = enable_math, enable_flash = enable_flash, enable_mem_efficient = enable_mem_efficient)
-
-        yield
-    finally:
-        # Restore original global variable values
-        flash_module.sdp_kernel()
-```
 
 ## 5. Visualization of Results
 
