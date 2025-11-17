@@ -83,7 +83,7 @@ run the example according to the example README.md
 ```
 ## How to run on MetaX
 
-Following the [guidelines of MetaX](.doc/metax/README.md) to run PaddleCFD on MetaX machine.
+Following the [guidelines of MetaX](./doc/metax/README.md) to run PaddleCFD on MetaX machine.
 
 [About MetaX](https://www.metax-tech.com/en/about/about.html)
 
