@@ -89,7 +89,7 @@ Following the [guidelines of MetaX](./doc/metax/README.md) to run PaddleCFD on M
 
 ### Parallel efficiency on MetaX
 
-Parallel Efficiency ($\eta$) calculation：
+Parallel efficiency ($\eta$) calculation,
 $$\eta=\frac{t_1/t_n}{n} \times 100\%$$
 where $t_1$ is the running time on one card, $t_n$ is the running time on $n$ cards, and $n$ is the number of cards working parallelly.
 
