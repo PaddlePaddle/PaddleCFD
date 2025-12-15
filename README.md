@@ -83,9 +83,23 @@ run the example according to the example README.md
 ```
 ## How to run on MetaX
 
+### Quick start
+
 Following the [guidelines of MetaX](./doc/metax/README.md) to run PaddleCFD on MetaX machine.
 
-[About MetaX](https://www.metax-tech.com/en/about/about.html)
+### Parallel efficiency on MetaX
+
+Parallel efficiency ($\eta$) calculation,
+
+$\eta=\frac{t_1/t_n}{n} \times 100$ %
+
+where $t_1$ is the running time on one card, $t_n$ is the running time on $n$ cards, and $n$ is the number of cards working parallelly.
+
+| **Model** | **Single card/s** | **Single 8-card node/s** | **Four 8-card nodes/s** | **$\eta$ on single 8-card node/%** | **$\eta$ on four 8-card nodes/%** |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| PPFNO | 599.51 | 75.57 | 19.01 | 99.16 | 98.56 |
+
+### [About MetaX](https://www.metax-tech.com/en/about/about.html)
 
 ## APIs
 
