@@ -95,7 +95,7 @@ $\eta=\frac{t_1/t_n}{n} \times 100$ %
 
 where $t_1$ is the running time on one card, $t_n$ is the running time on $n$ cards, and $n$ is the number of cards working parallelly.
 
-| **Model** | **Single card/s** | **Single 8-card node/s** | **Four 8-card nodes/s** | **$\eta$ on single 8-card node/%** | **$\eta$ on four 8-card nodes/%** |
+| **Model** | **One card/s** | **One 8-card node/s** | **Four 8-card nodes/s** | **$\eta$ on one 8-card node/%** | **$\eta$ on four 8-card nodes/%** |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | PPFNO | 599.51 | 75.57 | 19.01 | 99.16 | 98.56 |
 
