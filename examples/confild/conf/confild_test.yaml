@@ -1,0 +1,54 @@
+hydra:
+  run:
+    dir: outputs/confild_test/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  job:
+    name: ${mode}
+    chdir: false
+
+# Setting
+mode: train  # "train" or "test"
+seed: 2025
+output_dir: ${hydra:run.dir}
+log_freq: 2  # Log every 2 epochs for quick testing
+
+# Training Configuration (reduced for testing)
+TRAIN:
+  batch_size: 8
+  test_batch_size: 8
+  epochs: 10  # Only 10 epochs for testing
+  num_gpus: 1
+  num_workers: 0  # Use 0 workers for testing
+  lr:
+    cnf: 1.e-4
+    latents: 1.e-5
+
+# CNF Model Configuration
+CONFILD:
+  input_keys: ["confild_x", "latent_z"]
+  output_keys: ["confild_output"]
+  num_hidden_layers: 3  # Reduced for faster testing
+  out_features: 3
+  hidden_features: 32  # Reduced for faster testing
+  in_coord_features: 2
+  in_latent_features: 32  # Reduced to match
+
+# Latent Container Configuration
+LATENT:
+  input_keys: ["latent_x"]
+  output_keys: ["latent_z"]
+  N_samples: 100  # Match test data
+  lumped: True
+  N_features: 32  # Reduced for faster testing
+  dims: 2
+
+# Data Configuration
+DATA:
+  data_path: data/Case1/case1_data.npy
+  coor_path: data/Case1/case1_coords.npy
+  normalizer:
+    method: "-11"
+    dim: 0
+  load_data_fn: load_elbow_flow
+
+# Checkpoint
+checkpoint: null

@@ -12,13 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ppcfd.models import confild
-from ppcfd.models import ppdeeponet
-from ppcfd.models import ppdiffusion
-from ppcfd.models import ppfno
-from ppcfd.models import ppkan
-from ppcfd.models import pptransformer
-from ppcfd.models import symbolic_gn
+"""Symbolic Graph Network models for physics discovery."""
 
+from .models import HGN, OGN, VarOGN, get_edge_index
 
-__all__ = ["confild", "ppfno", "ppkan", "pptransformer", "ppdiffusion", "ppdeeponet", "symbolic_gn"]
+__all__ = ["OGN", "HGN", "VarOGN", "get_edge_index"]
