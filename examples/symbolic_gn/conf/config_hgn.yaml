@@ -41,7 +41,7 @@ TRAIN:
     weight_decay: 1e-8
   lr_scheduler:
     name: "CosineAnnealingDecay"
-    gamma: 0.95  # 仅用于ExponentialDecay
+    gamma: 0.95  # Only used for ExponentialDecay
   loss:
     type: "MAE"
 

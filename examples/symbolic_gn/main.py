@@ -9,12 +9,10 @@ import paddle
 from omegaconf import DictConfig
 from simulate import SimulationDataset
 
-# Add parent directory to path for ppcfd imports
-import sys
-from pathlib import Path
-sys.path.append(str(Path(__file__).parents[2]))
-
-from ppcfd.models.symbolic_gn import HGN, OGN, VarOGN, get_edge_index
+from ppcfd.models.symbolic_gn import HGN
+from ppcfd.models.symbolic_gn import OGN
+from ppcfd.models.symbolic_gn import VarOGN
+from ppcfd.models.symbolic_gn import get_edge_index
 
 
 def set_seed(seed: int = 42):
@@ -119,9 +117,23 @@ def prepare_data(cfg: DictConfig):
     logging.info(f"Data generation took {t2 - t1:.2f} seconds.")
 
     # Prepare training data
+    # IMPORTANT: Use actual number of generated samples, not requested number
+    # Some samples may have failed during ODE integration
     X_list = []
     y_list = []
-    for sample_idx in range(cfg.DATA.num_samples):
+    actual_num_samples = sim.data.shape[0]
+
+    if actual_num_samples < cfg.DATA.num_samples:
+        logging.warning(
+            f"Only {actual_num_samples}/{cfg.DATA.num_samples} samples were successfully generated. "
+            f"Some samples failed during ODE integration. Proceeding with available data."
+        )
+        print(
+            f"Note: Training will use {actual_num_samples} samples "
+            f"(requested {cfg.DATA.num_samples}, {cfg.DATA.num_samples - actual_num_samples} failed)."
+        )
+
+    for sample_idx in range(actual_num_samples):
         for t in range(0, sim.data.shape[1], cfg.DATA.sample_interval):
             X_list.append(sim.data[sample_idx, t])
             y_list.append(accel_data[sample_idx, t])
@@ -135,8 +147,8 @@ def prepare_data(cfg: DictConfig):
     val_size = int(len(X) * 0.15)
 
     train_idx = indices[:train_size]
-    val_idx = indices[train_size:train_size + val_size]
-    test_idx = indices[train_size + val_size:]
+    val_idx = indices[train_size : train_size + val_size]
+    test_idx = indices[train_size + val_size :]
 
     X_train, X_val, X_test = X[train_idx], X[val_idx], X[test_idx]
     y_train, y_val, y_test = y[train_idx], y[val_idx], y[test_idx]
@@ -172,7 +184,7 @@ def train(cfg: DictConfig, with_val=True):
     # Create model
     model = create_model(cfg, edge_index)
     if cfg.checkpoint:
-        checkpoint_path = cfg.checkpoint if cfg.checkpoint.endswith('.pdparams') else f"{cfg.checkpoint}.pdparams"
+        checkpoint_path = cfg.checkpoint if cfg.checkpoint.endswith(".pdparams") else f"{cfg.checkpoint}.pdparams"
         model.set_state_dict(paddle.load(checkpoint_path))
         logging.info(f"Loaded checkpoint from {checkpoint_path}")
     model.train()
@@ -180,8 +192,7 @@ def train(cfg: DictConfig, with_val=True):
     # Create optimizer and learning rate scheduler
     if cfg.TRAIN.lr_scheduler.name == "CosineAnnealingDecay":
         lr_scheduler = paddle.optimizer.lr.CosineAnnealingDecay(
-            learning_rate=cfg.TRAIN.optimizer.learning_rate,
-            T_max=cfg.TRAIN.epochs
+            learning_rate=cfg.TRAIN.optimizer.learning_rate, T_max=cfg.TRAIN.epochs
         )
     elif cfg.TRAIN.lr_scheduler.name == "ExponentialDecay":
         lr_scheduler = paddle.optimizer.lr.ExponentialDecay(
@@ -208,7 +219,7 @@ def train(cfg: DictConfig, with_val=True):
     # Training loop
     train_losses = []
     val_losses = []
-    best_val_loss = float('inf')
+    best_val_loss = float("inf")
 
     for epoch in range(1, cfg.TRAIN.epochs + 1):
         # model.train() is redundant here since valid() switches back to train mode
@@ -218,7 +229,7 @@ def train(cfg: DictConfig, with_val=True):
         # Shuffle training data each epoch
         indices = np.random.permutation(len(X_train))
         for i in range(0, len(X_train), cfg.TRAIN.batch_size):
-            batch_indices = indices[i:i + cfg.TRAIN.batch_size]
+            batch_indices = indices[i : i + cfg.TRAIN.batch_size]
             batch_x = paddle.to_tensor(X_train[batch_indices], dtype="float32")
             batch_y = paddle.to_tensor(y_train[batch_indices], dtype="float32")
             # Use original edge_index, not batch edge_index
@@ -247,7 +258,7 @@ def train(cfg: DictConfig, with_val=True):
         train_losses.append(avg_train_loss)
 
         # Learning rate scheduling (per epoch)
-        if hasattr(lr_scheduler, 'step'):
+        if hasattr(lr_scheduler, "step"):
             lr_scheduler.step()
 
         # Validation
@@ -255,7 +266,9 @@ def train(cfg: DictConfig, with_val=True):
             val_loss = valid(cfg, X_val, y_val, edge_index, model, loss_fn)
             val_losses.append(val_loss)
 
-            logging.info(f"Epoch {epoch}/{cfg.TRAIN.epochs} - Train Loss: {avg_train_loss:.6f}, Val Loss: {val_loss:.6f}")
+            logging.info(
+                f"Epoch {epoch}/{cfg.TRAIN.epochs} - Train Loss: {avg_train_loss:.6f}, Val Loss: {val_loss:.6f}"
+            )
 
             # Save best model
             if val_loss < best_val_loss:
@@ -276,16 +289,16 @@ def train(cfg: DictConfig, with_val=True):
 
     # Plot loss curves
     plt.figure(figsize=(10, 5))
-    plt.plot(train_losses, label='Train Loss')
+    plt.plot(train_losses, label="Train Loss")
     if with_val and val_losses:
         val_epochs = [i * cfg.log_freq for i in range(1, len(val_losses) + 1)]
-        plt.plot(val_epochs, val_losses, label='Val Loss', marker='o')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.title(f'{cfg.MODEL.arch} Training Progress')
+        plt.plot(val_epochs, val_losses, label="Val Loss", marker="o")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title(f"{cfg.MODEL.arch} Training Progress")
     plt.legend()
     plt.grid(True)
-    plt.savefig(os.path.join(cfg.output_dir, 'loss_curve.png'), dpi=150, bbox_inches='tight')
+    plt.savefig(os.path.join(cfg.output_dir, "loss_curve.png"), dpi=150, bbox_inches="tight")
     plt.close()
 
     logging.info("Training completed!")
@@ -312,8 +325,8 @@ def valid(cfg: DictConfig, X_val, y_val, edge_index, model, loss_fn):
     num_batches = 0
 
     for i in range(0, len(X_val), cfg.TRAIN.batch_size):
-        batch_x = paddle.to_tensor(X_val[i:i + cfg.TRAIN.batch_size], dtype="float32")
-        batch_y = paddle.to_tensor(y_val[i:i + cfg.TRAIN.batch_size], dtype="float32")
+        batch_x = paddle.to_tensor(X_val[i : i + cfg.TRAIN.batch_size], dtype="float32")
+        batch_y = paddle.to_tensor(y_val[i : i + cfg.TRAIN.batch_size], dtype="float32")
         # Use original edge_index, not batch edge_index
         batch_edge = paddle.to_tensor(edge_index, dtype="int64")
 
@@ -356,7 +369,9 @@ def test(cfg: DictConfig):
 
     # Load model
     model = create_model(cfg, edge_index)
-    checkpoint_path = cfg.checkpoint if cfg.checkpoint else os.path.join(cfg.output_dir, f"{cfg.MODEL.arch}_best.pdparams")
+    checkpoint_path = (
+        cfg.checkpoint if cfg.checkpoint else os.path.join(cfg.output_dir, f"{cfg.MODEL.arch}_best.pdparams")
+    )
     model.set_state_dict(paddle.load(checkpoint_path))
     logging.info(f"Loaded model from {checkpoint_path}")
     model.eval()
@@ -375,8 +390,8 @@ def test(cfg: DictConfig):
 
     with paddle.no_grad():
         for i in range(0, len(X_test), cfg.TRAIN.batch_size):
-            batch_x = paddle.to_tensor(X_test[i:i + cfg.TRAIN.batch_size], dtype="float32")
-            batch_y = paddle.to_tensor(y_test[i:i + cfg.TRAIN.batch_size], dtype="float32")
+            batch_x = paddle.to_tensor(X_test[i : i + cfg.TRAIN.batch_size], dtype="float32")
+            batch_y = paddle.to_tensor(y_test[i : i + cfg.TRAIN.batch_size], dtype="float32")
             # Use original edge_index, not batch edge_index
             batch_edge = paddle.to_tensor(edge_index, dtype="int64")
 

@@ -1,5 +1,7 @@
-import numpy as np
 import os
+
+import numpy as np
+
 
 # Create data directory
 os.makedirs("data/Case1", exist_ok=True)
@@ -42,17 +44,17 @@ print(f"Case1 data shape (with dummy): {case1_data.shape}")
 
 # Save data
 np.save("data/Case1/case1_data.npy", case1_data)
-print(f"Saved: data/Case1/case1_data.npy")
+print("Saved: data/Case1/case1_data.npy")
 
 # Generate coordinates
 coords = np.stack([X.flatten(), Y.flatten()], axis=-1).astype(np.float32)
 print(f"Coordinates shape: {coords.shape}")
 np.save("data/Case1/case1_coords.npy", coords)
-print(f"Saved: data/Case1/case1_coords.npy")
+print("Saved: data/Case1/case1_coords.npy")
 
-print("\n" + "="*50)
+print("\n" + "=" * 50)
 print("Test data generation completed!")
-print("="*50)
+print("=" * 50)
 print(f"Total samples: {N_samples}")
 print(f"Spatial resolution: {height}x{width}")
 print(f"Features: {features} (u, v, p)")

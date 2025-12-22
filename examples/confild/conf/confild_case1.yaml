@@ -43,8 +43,8 @@ LATENT:
 
 # Data Configuration
 DATA:
-  data_path: data/Case1/case1_data.npy
-  coor_path: data/Case1/case1_coords.npy
+  data_path: data/Case1/data.npy
+  coor_path: data/Case1/coords.npy
   normalizer:
     method: "-11"  # Normalization method: "-11", "01", "ms", "none"
     dim: 0

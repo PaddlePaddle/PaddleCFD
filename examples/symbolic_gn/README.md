@@ -194,6 +194,8 @@ After training, the `outputs/` directory will contain:
 - `loss_curve.png`: Training and validation loss curves
 - `train.log`: Training log file
 
+![](examples\symbolic_gn\images\loss_curve.png)
+
 **Testing Outputs**:
 - Terminal output shows MAE, MSE, RMSE metrics
 - Evaluation results logged to file

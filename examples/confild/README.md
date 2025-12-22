@@ -57,23 +57,73 @@ $$
 
 ## 3.Dataset
 
-### 3.1 CNF Training Data
+### 3.1 Complete Dataset Download
 
-Data file structure:
+[Download complete dataset from AI Studio](https://aistudio.baidu.com/dataset/detail/357298) - includes both CNF training data and extracted diffusion latent codes.
+
+**Complete directory structure**:
 ```
 data/
-├── data.npy       # Flow field data to fit [N_samples, spatial_dims..., features]
-└── coords.npy     # Query coordinates [spatial_dims..., coord_features]
+├── Case1/
+│   ├── data.npy           # CNF: Flow field data [N_samples, spatial_dims..., features]
+│   ├── coords.npy         # CNF: Query coordinates [spatial_dims..., coord_features]
+│   ├── train_data.npy     # Diffusion: Training latent codes from CNF
+│   ├── valid_data.npy     # Diffusion: Validation latent codes from CNF
+│   ├── cnf/
+│   │   └── normalizer_params.pdparams  # (Optional) Pre-trained normalizer
+│   └── diffusion/
+│       ├── ema.pdparams   # (Optional) Pre-trained diffusion model
+│       └── ema.pkl
+│
+├── Case2/
+│   ├── data.npy           # Channel flow data (no coords - uses dynamic grid)
+│   ├── train_data.npy
+│   ├── valid_data.npy
+│   ├── cnf/
+│   │   └── normalizer_params.pdparams
+│   └── diffusion/
+│       └── ema.pkl
+│
+├── Case3/
+│   ├── data.npy
+│   ├── coords.npy
+│   ├── train_data.npy
+│   ├── valid_data.npy
+│   ├── cnf/
+│   │   └── normalizer_params.pdparams
+│   └── diffusion/
+│       └── ema.pkl
+│
+└── Case4/
+    ├── data.npy
+    ├── coords.npy
+    ├── train_data.npy
+    ├── valid_data.npy
+    ├── cnf/
+    │   └── normalizer_params.pdparams
+    └── diffusion/
+        ├── ema.pdparams
+        └── ema.pkl
 ```
 
-### 3.2 Diffusion Model Training Data
+**Notes**:
+- **Case2** (channel flow) doesn't have `coords.npy` as it uses dynamically generated structured grid coordinates
+- Pre-trained model checkpoints (`cnf/` and `diffusion/` subdirectories) are optional
+- You can train from scratch using only `data.npy`, `coords.npy` (if applicable), `train_data.npy`, and `valid_data.npy`
 
-Extract latent representations from trained CNF model:
-```
-data/
-├── train_data.npy  # Training set latent representations from CNF
-└── valid_data.npy  # Validation set latent representations from CNF
-```
+### 3.2 Data File Descriptions
+
+#### CNF Training Files
+- `data.npy`: Original flow field snapshots for CNF to compress
+- `coords.npy`: Spatial coordinates (not needed for Case2 which uses structured grids)
+
+#### Diffusion Training Files
+- `train_data.npy`: Extracted latent codes from trained CNF model (training set)
+- `valid_data.npy`: Extracted latent codes from trained CNF model (validation set)
+
+#### Optional Pre-trained Models
+- `cnf/normalizer_params.pdparams`: Pre-trained data normalizer
+- `diffusion/ema.pdparams` & `ema.pkl`: Pre-trained diffusion model with EMA
 
 ### 3.3 Data Split
 
@@ -126,8 +176,8 @@ TRAIN:
 
 # Data Configuration
 DATA:
-  data_path: data/Case1/case1_data.npy      # Flow field data path
-  coor_path: data/Case1/case1_coords.npy    # Coordinate data path
+  data_path: data/Case1/data.npy      # Flow field data path
+  coor_path: data/Case1/coords.npy    # Coordinate data path
   normalizer:
     method: "-11"                # Normalization method: "-11", "01", "ms", "none"
     dim: 0                       # Normalization dimension
@@ -260,10 +310,12 @@ After training, the `outputs/` directory will contain:
 - `cnf_model_*.pdparams`: CNF model weights
 - `latents_model_*.pdparams`: Latent vector weights
 - `case.png`: Training loss curve
+![](https://ai-studio-static-online.cdn.bcebos.com/1f81af1d579b4b41a525f867ac0fde19d59fb6fc44f8406aa84345c6015938c9)
 
 **Diffusion Model Outputs**:
 - `unet.pdparams`: U-Net model weights
 - `loss_curve.png`: Training and validation loss curves
+![](examples\confild\images\loss_curve.png)
 
 **Evaluation Metrics**:
 - Velocity field MSE: ~0.041
@@ -284,4 +336,3 @@ After training, the `outputs/` directory will contain:
 - **Paper**: [AI-assisted spatiotemporal turbulence generation: CoNFILD](https://doi.org/10.1038/s41467-024-54712-1)
 - **Authors**: Pan Du, Meet Hemant Parikh, Xiantao Fan, Xin-Yang Liu, Jian-Xun Wang
 - **Original Code**: [github.com/jx-wang-s-group/CoNFILD](https://github.com/jx-wang-s-group/CoNFILD)
-

@@ -37,13 +37,13 @@ LATENT:
   input_keys: ["latent_x"]
   output_keys: ["latent_z"]
   N_samples: 1200   # Total number of samples (channel flow)
-  lumped: False     # Not lumped for channel flow
+  lumped: True
   N_features: 256   # Latent dimension
   dims: 2           # Spatial dimension
 
 # Data Configuration
 DATA:
-  data_path: data/Case2/case2_data.npy
+  data_path: data/Case2/data.npy
   coor_path: null   # No explicit coordinates for channel flow (structured grid)
   normalizer:
     method: "-11"  # Normalization method

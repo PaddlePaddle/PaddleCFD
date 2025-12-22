@@ -12,13 +12,63 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ppcfd.models import confild
-from ppcfd.models import ppdeeponet
-from ppcfd.models import ppdiffusion
-from ppcfd.models import ppfno
-from ppcfd.models import ppkan
-from ppcfd.models import pptransformer
-from ppcfd.models import symbolic_gn
+# Import models with graceful fallback for missing dependencies
+__all__ = []
 
+# CoNFILD - Conditional Neural Field Latent Diffusion (always available)
+try:
+    from ppcfd.models import confild
 
-__all__ = ["confild", "ppfno", "ppkan", "pptransformer", "ppdiffusion", "ppdeeponet", "symbolic_gn"]
+    __all__.append("confild")
+except ImportError as e:
+    import warnings
+
+    warnings.warn(f"Failed to import confild: {e}")
+
+# ppFNO - Fourier Neural Operator (requires custom C++ extensions)
+try:
+    from ppcfd.models import ppfno
+
+    __all__.append("ppfno")
+except ImportError:
+    pass  # Optional dependency
+
+# ppKAN - Kolmogorov-Arnold Networks
+try:
+    from ppcfd.models import ppkan
+
+    __all__.append("ppkan")
+except ImportError:
+    pass  # Optional dependency
+
+# ppTransformer
+try:
+    from ppcfd.models import pptransformer
+
+    __all__.append("pptransformer")
+except ImportError:
+    pass  # Optional dependency
+
+# ppDiffusion
+try:
+    from ppcfd.models import ppdiffusion
+
+    __all__.append("ppdiffusion")
+except ImportError:
+    pass  # Optional dependency
+
+# ppDeepONet
+try:
+    from ppcfd.models import ppdeeponet
+
+    __all__.append("ppdeeponet")
+except ImportError:
+    pass  # Optional dependency
+
+# Symbolic Graph Networks
+try:
+    from ppcfd.models import symbolic_gn
+
+    __all__.append("symbolic_gn")
+except ImportError:
+    pass  # Optional dependency

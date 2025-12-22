@@ -16,7 +16,7 @@ TRAIN:
   batch_size: 4
   test_batch_size: 4
   epochs: 20000
-  num_gpus: 2         # Number of GPUs (>1 for distributed training)
+  num_gpus: 1         # Number of GPUs (use 2+ for distributed training if available)
   num_workers: 4      # Number of data loading workers
   lr:
     cnf: 1.e-4      # CNF learning rate
@@ -43,8 +43,8 @@ LATENT:
 
 # Data Configuration
 DATA:
-  data_path: data/Case4/case4_data.npy
-  coor_path: data/Case4/case4_coords.npy
+  data_path: data/Case4/data.npy
+  coor_path: data/Case4/coords.npy
   normalizer:
     method: "-11"  # Normalization method
     dim: 0

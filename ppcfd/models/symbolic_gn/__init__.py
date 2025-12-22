@@ -14,6 +14,10 @@
 
 """Symbolic Graph Network models for physics discovery."""
 
-from .models import HGN, OGN, VarOGN, get_edge_index
+from .models import HGN
+from .models import OGN
+from .models import VarOGN
+from .models import get_edge_index
+
 
 __all__ = ["OGN", "HGN", "VarOGN", "get_edge_index"]

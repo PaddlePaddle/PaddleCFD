@@ -33,7 +33,7 @@ UNET:
   num_heads: 4                       # Number of attention heads
   num_head_channels: 64              # Channels per attention head
   attention_resolutions: "32,16,8"   # Attention resolutions
-  channel_mult: null                 # Channel multipliers (null for default)
+  channel_mult: [1, 2, 4, 8]         # Channel multipliers for each resolution level
 
 # Diffusion Process Configuration
 DIFF:

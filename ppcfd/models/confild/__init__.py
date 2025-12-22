@@ -1,32 +1,11 @@
-# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+from .models import LatentContainer
+from .models import LossType
+from .models import ModelMeanType
+from .models import ModelVarType
+from .models import SIRENAutodecoder_film
+from .models import SpacedDiffusion
+from .models import UNetModel
 
-"""
-CoNFILD (Conditional Neural Field Latent Diffusion) Models
-
-This package provides models for the CoNFILD framework for AI-assisted spatiotemporal turbulence generation.
-"""
-
-from .models import (
-    LatentContainer,
-    LossType,
-    ModelMeanType,
-    ModelVarType,
-    SIRENAutodecoder_film,
-    SpacedDiffusion,
-    UNetModel,
-)
 
 __all__ = [
     "SIRENAutodecoder_film",

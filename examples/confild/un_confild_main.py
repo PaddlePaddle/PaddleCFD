@@ -2,8 +2,6 @@ import functools
 import logging
 import math
 import os
-from pathlib import Path
-import sys
 
 import hydra
 import matplotlib.pyplot as plt
@@ -12,15 +10,11 @@ import paddle
 from omegaconf import DictConfig
 from resample import UniformSampler
 
-sys.path.append(str(Path(__file__).parents[2]))
-
-from ppcfd.models.confild import (
-    LossType,
-    ModelMeanType,
-    ModelVarType,
-    SpacedDiffusion,
-    UNetModel,
-)
+from ppcfd.models.confild import LossType
+from ppcfd.models.confild import ModelMeanType
+from ppcfd.models.confild import ModelVarType
+from ppcfd.models.confild import SpacedDiffusion
+from ppcfd.models.confild import UNetModel
 
 
 def mean_flat(tensor):
@@ -48,9 +42,7 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         scale = 1000 / num_diffusion_timesteps
         beta_start = scale * 0.0001
         beta_end = scale * 0.02
-        return np.linspace(
-            beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
-        )
+        return np.linspace(beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64)
     elif schedule_name == "cosine":
         return betas_for_alpha_bar(
             num_diffusion_timesteps,
@@ -63,8 +55,8 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
 class Normalizer_ts(object):
     """Time-series data normalizer"""
 
-    def __init__(self, params=[], method="-11", dim=None):
-        self.params = params
+    def __init__(self, params=None, method="-11", dim=None):
+        self.params = params if params is not None else []
         self.method = method
         self.dim = dim
 
@@ -92,7 +84,7 @@ class Normalizer_ts(object):
             else:
                 self.params = (
                     paddle.max(data, axis=self.dim, keepdim=True),
-                    paddle.min(data, axis=self.dim, keepdim=True)
+                    paddle.min(data, axis=self.dim, keepdim=True),
                 )
 
 
@@ -108,28 +100,29 @@ def create_diffusion_model(cfg: DictConfig):
     """
     attention_resolutions = [int(x) for x in cfg.UNET.attention_resolutions.split(",")]
 
-    model = UNetModel(
-        image_size=cfg.UNET.image_size,
-        in_channels=cfg.UNET.get("in_channels", 128),  # Latent feature dimension
-        model_channels=cfg.UNET.num_channels,
-        out_channels=cfg.UNET.get("out_channels", 128),  # Latent feature dimension
-        num_res_blocks=cfg.UNET.num_res_blocks,
-        attention_resolutions=tuple(attention_resolutions),
-        dropout=0,
-        channel_mult=cfg.UNET.get("channel_mult", None),
-        num_classes=None,
-        use_checkpoint=False,
-        use_fp16=False,
-        num_heads=cfg.UNET.num_heads,
-        num_head_channels=cfg.UNET.num_head_channels,
-        num_heads_upsample=-1,
-        use_scale_shift_norm=True,
-        resblock_updown=False,
-        use_new_attention_order=False,
-        use_spatial_transformer=False,
-        transformer_depth=1,
-        dims=2,
-    )
+    model_params = {
+        "image_size": cfg.UNET.image_size,
+        "in_channels": cfg.UNET.in_channels,
+        "model_channels": cfg.UNET.num_channels,
+        "out_channels": cfg.UNET.out_channels,
+        "num_res_blocks": cfg.UNET.num_res_blocks,
+        "attention_resolutions": tuple(attention_resolutions),
+        "dropout": 0,
+        "channel_mult": tuple(cfg.UNET.channel_mult),
+        "num_classes": None,
+        "use_checkpoint": False,
+        "use_fp16": False,
+        "num_heads": cfg.UNET.num_heads,
+        "num_head_channels": cfg.UNET.num_head_channels,
+        "num_heads_upsample": -1,
+        "use_scale_shift_norm": True,
+        "resblock_updown": False,
+        "use_new_attention_order": False,
+        "dims": 2,
+    }
+
+    model = UNetModel(**model_params)
+    print(f"Model created with {sum(p.numel() for p in model.parameters()):,} parameters")
 
     return model
 
@@ -151,10 +144,11 @@ def create_diffusion(cfg: DictConfig):
         use_timesteps=range(cfg.DIFF.steps),
         betas=betas,
         model_mean_type=ModelMeanType.EPSILON,
-        model_var_type=ModelVarType.LEARNED_RANGE,
+        model_var_type=ModelVarType.FIXED_LARGE,  # Fixed variance (not learned)
         loss_type=LossType.MSE,
         rescale_timesteps=False,
     )
+    print(f"Diffusion model created with {cfg.DIFF.steps} steps, noise schedule: {cfg.DIFF.noise_schedule}")
 
     return diffusion
 
@@ -173,9 +167,18 @@ def prepare_data(cfg: DictConfig):
     train_data = np.load(cfg.DATA.train_data)
     valid_data = np.load(cfg.DATA.valid_data)
 
+    print(f"Train data shape: {train_data.shape}, range: [{train_data.min():.3f}, {train_data.max():.3f}]")
+    print(f"Valid data shape: {valid_data.shape}, range: [{valid_data.min():.3f}, {valid_data.max():.3f}]")
+
     # Convert to tensors
     train_tensor = paddle.to_tensor(train_data, dtype="float32")
     valid_tensor = paddle.to_tensor(valid_data, dtype="float32")
+
+    # Reshape 3D data to 4D: [N, D, D] -> [N, 1, D, D]
+    # This converts latent codes to image-like format: [batch, channels=1, height, width]
+    if train_tensor.ndim == 3:
+        train_tensor = train_tensor.unsqueeze(axis=1)  # Add channel dimension at axis 1
+        valid_tensor = valid_tensor.unsqueeze(axis=1)
 
     # Normalize data
     normalizer = Normalizer_ts(method="-11")
@@ -183,6 +186,10 @@ def prepare_data(cfg: DictConfig):
 
     train_normalized = normalizer.encode(train_tensor)
     valid_normalized = normalizer.encode(valid_tensor)
+
+    print(
+        f"After normalization: train range: [{float(train_normalized.min()):.3f}, {float(train_normalized.max()):.3f}]"
+    )
 
     logging.info(f"Train data shape: {train_normalized.shape}")
     logging.info(f"Val data shape: {valid_normalized.shape}")
@@ -198,12 +205,7 @@ def train(cfg: DictConfig, with_val=True):
         cfg: Configuration object
         with_val: Whether to perform validation during training
     """
-    # Setup logging
-    logging.basicConfig(
-        filename=os.path.join(cfg.output_dir, "train.log"),
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s"
-    )
+    # Logging is already configured in main()
 
     # Prepare data
     train_data, val_data, normalizer = prepare_data(cfg)
@@ -218,11 +220,10 @@ def train(cfg: DictConfig, with_val=True):
         logging.info(f"Loaded checkpoint from {cfg.checkpoint}")
 
     # Create optimizer
-    optimizer = paddle.optimizer.Adam(
-        learning_rate=cfg.TRAIN.lr,
-        parameters=unet_model.parameters(),
-        weight_decay=cfg.TRAIN.weight_decay
+    optimizer = paddle.optimizer.AdamW(
+        learning_rate=cfg.TRAIN.lr, parameters=unet_model.parameters(), weight_decay=cfg.TRAIN.get("weight_decay", 0.0)
     )
+    print(f"Optimizer initialized with lr={cfg.TRAIN.lr}, weight_decay={cfg.TRAIN.get('weight_decay', 0.0)}")
 
     # Create EMA model
     ema_params = [param.clone().detach() for param in unet_model.parameters()]
@@ -237,7 +238,9 @@ def train(cfg: DictConfig, with_val=True):
     # Training loop
     train_losses = []
     val_losses = []
-    best_val_loss = float('inf')
+    best_val_loss = float("inf")
+
+    print(f"Starting training: max_steps={cfg.TRAIN.max_steps}, lr_anneal_steps={cfg.TRAIN.get('lr_anneal_steps', 0)}")
 
     for step in range(1, cfg.TRAIN.max_steps + 1):
         unet_model.train()
@@ -261,34 +264,44 @@ def train(cfg: DictConfig, with_val=True):
         losses = compute_losses()
         loss = (losses["loss"] * weights).mean()
 
-        # Backward pass (clear gradients first for safety)
+        # Backward pass
         optimizer.clear_grad()
         loss.backward()
+
+        # Gradient clipping for stability
+        paddle.nn.utils.clip_grad_norm_(unet_model.parameters(), max_norm=1.0)
+
         optimizer.step()
 
         # Update EMA
-        for rate in [ema_rate]:
-            for ema_param, param in zip(ema_params, unet_model.parameters()):
-                updated = rate * ema_param.detach() + (1 - rate) * param.detach()
+        for ema_param, param in zip(ema_params, unet_model.parameters()):
+            with paddle.no_grad():
+                updated = ema_rate * ema_param + (1 - ema_rate) * param
                 ema_param.set_value(updated)
 
         # Learning rate annealing
-        if cfg.TRAIN.lr_anneal_steps > 0:
-            frac_done = min(step / cfg.TRAIN.lr_anneal_steps, 1.0)  # Clip to prevent lr going negative
-            new_lr = cfg.TRAIN.lr + frac_done * (cfg.TRAIN.final_lr - cfg.TRAIN.lr)
+        if cfg.TRAIN.get("lr_anneal_steps", 0) > 0:
+            final_lr = cfg.TRAIN.get("final_lr", 0.0)
+            frac_done = min(step / cfg.TRAIN.lr_anneal_steps, 1.0)
+            # Linear annealing: from lr to final_lr
+            new_lr = cfg.TRAIN.lr * (1 - frac_done) + final_lr * frac_done
             optimizer.set_lr(new_lr)
 
         # Logging
         if step % cfg.log_freq == 0:
             train_losses.append(loss.item())
-            logging.info(f"Step {step}/{cfg.TRAIN.max_steps} - Train Loss: {loss.item():.6f}")
+            current_lr = optimizer.get_lr()
+            logging.info(f"Step {step}/{cfg.TRAIN.max_steps} - Loss: {loss.item():.6f}, LR: {current_lr:.2e}")
+            print(f"Step {step}: Loss={loss.item():.6f}, LR={current_lr:.2e}")
 
         # Validation
-        if with_val and (step % cfg.TRAIN.save_interval == 0 or step == cfg.TRAIN.max_steps):
+        save_interval = cfg.TRAIN.get("save_interval", 1000)
+        if with_val and (step % save_interval == 0 or step == cfg.TRAIN.max_steps):
             val_loss = valid(cfg, val_data, unet_model, diffusion, schedule_sampler)
             val_losses.append(val_loss)
 
             logging.info(f"Step {step} - Val Loss: {val_loss:.6f}")
+            print(f"Step {step}: Validation Loss={val_loss:.6f}")
 
             # Save best model
             if val_loss < best_val_loss:
@@ -297,15 +310,14 @@ def train(cfg: DictConfig, with_val=True):
 
                 # Save EMA parameters
                 ema_state_dict = {
-                    name: ema_param for name, ema_param in zip(
-                        [n for n, _ in unet_model.named_parameters()], ema_params
-                    )
+                    name: ema_param
+                    for name, ema_param in zip([n for n, _ in unet_model.named_parameters()], ema_params)
                 }
                 paddle.save(ema_state_dict, os.path.join(cfg.output_dir, "ema_best.pdparams"))
                 logging.info(f"Saved best model with val loss: {val_loss:.6f}")
 
         # Periodic save
-        if step % cfg.TRAIN.save_interval == 0:
+        if step % save_interval == 0:
             paddle.save(unet_model.state_dict(), os.path.join(cfg.output_dir, f"unet_{step}.pdparams"))
 
     # Save final models
@@ -315,16 +327,16 @@ def train(cfg: DictConfig, with_val=True):
     plt.figure(figsize=(10, 5))
     if train_losses:
         train_steps = [i * cfg.log_freq for i in range(1, len(train_losses) + 1)]
-        plt.plot(train_steps, train_losses, label='Train Loss', alpha=0.7)
+        plt.plot(train_steps, train_losses, label="Train Loss", alpha=0.7)
     if val_losses:
         val_steps = [i * cfg.TRAIN.save_interval for i in range(1, len(val_losses) + 1)]
-        plt.plot(val_steps, val_losses, label='Val Loss', marker='o')
-    plt.xlabel('Step')
-    plt.ylabel('Loss')
-    plt.title('Diffusion Model Training Progress')
+        plt.plot(val_steps, val_losses, label="Val Loss", marker="o")
+    plt.xlabel("Step")
+    plt.ylabel("Loss")
+    plt.title("Diffusion Model Training Progress")
     plt.legend()
     plt.grid(True)
-    plt.savefig(os.path.join(cfg.output_dir, 'diffusion_loss_curve.png'), dpi=150, bbox_inches='tight')
+    plt.savefig(os.path.join(cfg.output_dir, "diffusion_loss_curve.png"), dpi=150, bbox_inches="tight")
     plt.close()
 
     logging.info("Training completed!")
@@ -351,7 +363,7 @@ def valid(cfg: DictConfig, val_data, unet_model, diffusion, schedule_sampler):
     num_batches = 0
 
     for i in range(0, len(val_data), cfg.TRAIN.test_batch_size):
-        batch = val_data[i:i + cfg.TRAIN.test_batch_size]
+        batch = val_data[i : i + cfg.TRAIN.test_batch_size]
         batch_size = len(batch)
 
         # Sample timesteps (don't use weights in validation for unbiased evaluation)
@@ -374,12 +386,7 @@ def test(cfg: DictConfig):
     Args:
         cfg: Configuration object
     """
-    # Setup logging
-    logging.basicConfig(
-        filename=os.path.join(cfg.output_dir, "test.log"),
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s"
-    )
+    # Logging is already configured in main()
 
     # Prepare data
     _, val_data, normalizer = prepare_data(cfg)
@@ -398,7 +405,9 @@ def test(cfg: DictConfig):
     # Generate samples
     num_samples = min(cfg.TRAIN.test_batch_size, len(val_data))
     # Shape should be [batch, in_channels, time_length, latent_length]
-    shape = [num_samples, cfg.UNET.get("in_channels", 128), cfg.EVAL.time_length, cfg.EVAL.latent_length]
+    time_length = cfg.EVAL.time_length if hasattr(cfg, "EVAL") else 128
+    latent_length = cfg.EVAL.latent_length if hasattr(cfg, "EVAL") else 128
+    shape = [num_samples, cfg.UNET.in_channels, time_length, latent_length]
 
     logging.info(f"Generating {num_samples} samples with shape {shape}")
 
@@ -431,11 +440,20 @@ def test(cfg: DictConfig):
         print(f"Generation MSE: {mse.item():.6f}, MAE: {mae.item():.6f}")
 
 
-@hydra.main(version_base=None, config_path="./conf", config_name="un_confild_main.yaml")
+@hydra.main(version_base=None, config_path="./conf", config_name="un_confild_case1.yaml")
 def main(cfg: DictConfig):
     """Main entry point"""
     paddle.seed(cfg.seed)
     np.random.seed(cfg.seed)
+
+    # Setup logging once for the entire program
+    log_file = os.path.join(cfg.output_dir, f"{cfg.mode}.log")
+    logging.basicConfig(
+        filename=log_file,
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        force=True,  # Python 3.8+ allows reconfiguration
+    )
 
     if cfg.mode == "train":
         print("################## Training Diffusion Model #####################")

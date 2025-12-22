@@ -24,15 +24,10 @@ def make_transparent_color(ntimes, fraction):
                       Each row represents the color [R, G, B, Alpha] at a time step.
     """
     rgba = np.ones((ntimes, 4))
-
     alpha = np.linspace(0, 1, ntimes)[:, np.newaxis]
-
     color = np.array(mpl.colors.to_rgba(mpl.cm.gist_ncar(fraction)))[np.newaxis, :]
-
     rgba[:, :] = 1 * (1 - alpha) + color * alpha
-
     rgba[:, 3] = alpha[:, 0]
-
     return rgba
 
 
@@ -172,9 +167,7 @@ class SimulationDataset(object):
         pairwise (function): Pairwise potential energy function.
     """
 
-    def __init__(
-        self, sim="r2", n=5, dim=2, dt=0.01, nt=100, extra_potential=None, **kwargs
-    ):
+    def __init__(self, sim="r2", n=5, dim=2, dt=0.01, nt=100, extra_potential=None, **kwargs):
         """
         Initialize simulation dataset.
 
@@ -313,9 +306,7 @@ class SimulationDataset(object):
                         radius = paddle.to_tensor(4.0, dtype="float64")
 
                         k_repel = 100.0
-                        pot = pot + k_repel / paddle.maximum(
-                            r - radius + 0.5, paddle.to_tensor(0.01, dtype="float64")
-                        )
+                        pot = pot + k_repel / paddle.maximum(r - radius + 0.5, paddle.to_tensor(0.01, dtype="float64"))
 
                     sum_potential = sum_potential + G * pot
 
@@ -324,9 +315,7 @@ class SimulationDataset(object):
                     for j in range(i + 1, n):
                         x1 = xt_for_potential[i]
                         x2 = xt_for_potential[j]
-                        dist = paddle.sqrt(
-                            paddle.sum(paddle.square(x1[:dim] - x2[:dim]))
-                        )
+                        dist = paddle.sqrt(paddle.sum(paddle.square(x1[:dim] - x2[:dim])))
                         bounded_dist = dist + 1e-2
 
                         if sim == "r2":
@@ -368,9 +357,9 @@ class SimulationDataset(object):
                             pot_c = (bounded_dist - 1) ** 2
 
                             cond1 = paddle.cast(bounded_dist < 1, "float64")
-                            cond2 = paddle.cast(
-                                bounded_dist >= 1, "float64"
-                            ) * paddle.cast(bounded_dist < 2, "float64")
+                            cond2 = paddle.cast(bounded_dist >= 1, "float64") * paddle.cast(
+                                bounded_dist < 2, "float64"
+                            )
                             cond3 = paddle.cast(bounded_dist >= 2, "float64")
 
                             pot = pot_a * cond1 + pot_b * cond2 + pot_c * cond3
@@ -395,7 +384,17 @@ class SimulationDataset(object):
                 inputs=positions,
                 create_graph=False,
                 retain_graph=False,
+                allow_unused=True,
             )[0]
+
+            # Check if gradient computation succeeded
+            # This can happen when ODE solver explores non-physical states (NaN/Inf)
+            if grads is None:
+                raise ValueError(
+                    "Gradient computation failed in force_paddle(). "
+                    "This indicates numerical instability (NaN/Inf in positions or potential). "
+                    "Common causes: particles too close, mxstep too small, or stiff system."
+                )
 
             force = -grads.numpy()
 
@@ -431,9 +430,7 @@ class SimulationDataset(object):
 
             a = acceleration(y)
 
-            dydt = np.concatenate(
-                [y[:, dim : 2 * dim], a, np.zeros((n, params))], axis=1
-            )
+            dydt = np.concatenate([y[:, dim : 2 * dim], a, np.zeros((n, params))], axis=1)
 
             return dydt.flatten()
 
@@ -446,32 +443,82 @@ class SimulationDataset(object):
 
             Returns:
                 numpy.ndarray: Simulation trajectory with shape (nt, n, total_dim).
+                None: If ODE integration fails.
             """
             if sim in ["string", "string_ball"]:
-
                 x0 = np.random.randn(n, total_dim)
                 x0[:, -1] = 1.0
                 x0[:, 0] = np.arange(n) + x0[:, 0] * 0.5
                 x0[:, 2:3] = 0.0
             else:
-
                 x0 = np.random.randn(n, total_dim)
                 x0[:, -1] = np.exp(x0[:, -1])
-
                 if sim in ["charge", "superposition"]:
                     x0[:, -2] = np.sign(x0[:, -2])
-
-            x_times = odeint(odefunc, x0.flatten(), times, mxstep=2000).reshape(
-                -1, n, total_dim
-            )
-
+            # Try ODE integration with error handling
+            # For stiff systems (r2, r1), this may take 30-120 seconds per sample
+            try:
+                x_times = odeint(odefunc, x0.flatten(), times, mxstep=2000).reshape(-1, n, total_dim)
+            except Exception as e:
+                # ODE integration can fail due to:
+                # 1. Numerical instability (gradient computation error)
+                # 2. mxstep too small for stiff system
+                # 3. Invalid particle configurations during integration
+                print(f"\nWarning: Sample {sample_idx} failed - {type(e).__name__}: {str(e)[:100]}")
+                return None
             return x_times
 
         data = []
         print(f"Start generating {ns} samples...")
-        for i in tqdm(range(ns)):
-            data.append(make_sim(i))
-
+        # Warn users about expected behavior for stiff systems
+        if sim in ["r2", "r1"]:
+            print(
+                f"\n⚠️  WARNING: System '{sim}' uses singular potentials (1/r or log(r)).\n"
+                f"   This creates STIFF ODEs that require extensive computation:\n"
+                f"   - Each sample may take 30-120 seconds (up to {2000} internal ODE steps)\n"
+                f"   - Progress bar shows sample-level completion\n"
+                f"   - If a sample takes >2 minutes, this is still NORMAL for stiff systems\n"
+                f"   - The solver is working correctly - please be patient!\n"
+            )
+        elif sim in ["charge", "superposition", "damped"]:
+            print(f"Note: System '{sim}' may have moderate stiffness. " f"Each sample might take 5-30 seconds.")
+        # Generate samples with failure tracking
+        failed_count = 0
+        for i in tqdm(range(ns), desc="Generating samples", unit="sample"):
+            result = make_sim(i)
+            if result is not None:
+                data.append(result)
+            else:
+                failed_count += 1
+        # Report failed samples
+        if failed_count > 0:
+            print(f"\n⚠️  {failed_count}/{ns} samples failed to generate ({failed_count/ns*100:.1f}%).")
+        # Check if we have enough data
+        if len(data) == 0:
+            raise ValueError(
+                "❌ FATAL: Failed to generate ANY valid samples!\n"
+                "Possible causes:\n"
+                "  1. mxstep=2000 is too small for this system (try increasing in line 465)\n"
+                "  2. System type incompatible with initial conditions\n"
+                "  3. Severe numerical instability\n"
+                "Solutions:\n"
+                "  - Try a simpler system first: DATA.type=spring\n"
+                "  - Reduce number of particles: DATA.num_nodes=3\n"
+                "  - Increase time step: DATA.time_step_size=0.05"
+            )
+        # Warn if success rate is too low
+        success_rate = len(data) / ns
+        if success_rate < 0.5:
+            print(
+                f"\n⚠️  CRITICAL WARNING: Only {success_rate*100:.1f}% of samples succeeded!\n"
+                f"   Training with such low-quality data will produce poor models.\n"
+                f"   Recommendations:\n"
+                f"   - If using r2/r1: These systems are extremely stiff. Consider:\n"
+                f"     * Switch to 'spring' or 'charge' for initial testing\n"
+                f"     * Reduce num_nodes to 3-4\n"
+                f"   - If using other systems: Check simulation parameters\n"
+                f"   You may continue, but expect degraded model performance."
+            )
         self.data = np.array(data)
         print(f"Generation complete! Data shape: {self.data.shape}")
 
@@ -504,9 +551,7 @@ class SimulationDataset(object):
                 positions = xt_tensor[:, :dim]
                 positions.stop_gradient = False
 
-                xt_for_potential = paddle.concat(
-                    [positions, xt_tensor[:, dim:]], axis=1
-                )
+                xt_for_potential = paddle.concat([positions, xt_tensor[:, dim:]], axis=1)
 
                 sum_potential = paddle.to_tensor(0.0, dtype="float64")
 
@@ -515,9 +560,7 @@ class SimulationDataset(object):
 
                         x1 = xt_for_potential[i]
                         x2 = xt_for_potential[i + 1]
-                        dist = paddle.sqrt(
-                            paddle.sum(paddle.square(x1[:dim] - x2[:dim]))
-                        )
+                        dist = paddle.sqrt(paddle.sum(paddle.square(x1[:dim] - x2[:dim])))
                         bounded_dist = dist + 1e-2
 
                         if sim == "string":
@@ -540,9 +583,7 @@ class SimulationDataset(object):
                         for j in range(i + 1, n):
                             x1 = xt_for_potential[i]
                             x2 = xt_for_potential[j]
-                            dist = paddle.sqrt(
-                                paddle.sum(paddle.square(x1[:dim] - x2[:dim]))
-                            )
+                            dist = paddle.sqrt(paddle.sum(paddle.square(x1[:dim] - x2[:dim])))
                             bounded_dist = dist + 1e-2
 
                             if sim == "r2":
@@ -575,9 +616,9 @@ class SimulationDataset(object):
                                 pot_c = (bounded_dist - 1) ** 2
 
                                 cond1 = paddle.cast(bounded_dist < 1, "float64")
-                                cond2 = paddle.cast(
-                                    bounded_dist >= 1, "float64"
-                                ) * paddle.cast(bounded_dist < 2, "float64")
+                                cond2 = paddle.cast(bounded_dist >= 1, "float64") * paddle.cast(
+                                    bounded_dist < 2, "float64"
+                                )
                                 cond3 = paddle.cast(bounded_dist >= 2, "float64")
 
                                 pot = pot_a * cond1 + pot_b * cond2 + pot_c * cond3
@@ -599,9 +640,22 @@ class SimulationDataset(object):
                     inputs=positions,
                     create_graph=False,
                     retain_graph=False,
+                    allow_unused=True,
                 )[0]
 
-                force = -grads.numpy()
+                # Check if gradient computation succeeded
+                # Unlike in force_paddle(), here we use a fallback instead of failing
+                # because this is post-processing on already-generated trajectories
+                if grads is None:
+                    # This can happen if the trajectory contains NaN/Inf from partial ODE failures
+                    print(
+                        f"Warning: Gradient is None at sample {sample_idx}, timestep {time_idx}. "
+                        f"Using zero acceleration as fallback. Check data quality!"
+                    )
+                    force = np.zeros((n, dim))
+                else:
+                    force = -grads.numpy()
+
                 masses = xt[:, -1:]
                 accel = force / masses
 
@@ -651,15 +705,11 @@ class SimulationDataset(object):
                             s=3 * masses[:, j] * s_size,
                         )
                     else:
-                        plt.scatter(
-                            x_times[:, j, 0], x_times[:, j, 1], color=rgba, s=s_size
-                        )
+                        plt.scatter(x_times[:, j, 0], x_times[:, j, 1], color=rgba, s=s_size)
         else:
 
             if sim in ["string", "string_ball"]:
-                raise NotImplementedError(
-                    "Animation mode not yet supported for string type"
-                )
+                raise NotImplementedError("Animation mode not yet supported for string type")
 
             fig = plt.figure()
             camera = Camera(fig)
@@ -680,9 +730,7 @@ class SimulationDataset(object):
                             s=3 * masses[:, j],
                         )
                     else:
-                        plt.scatter(
-                            cx_times[:, j, 0], cx_times[:, j, 1], color=rgba, s=s_size
-                        )
+                        plt.scatter(cx_times[:, j, 0], cx_times[:, j, 1], color=rgba, s=s_size)
 
                 camera.snap()
 

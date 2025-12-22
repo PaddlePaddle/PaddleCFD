@@ -21,7 +21,8 @@ This module implements three types of graph networks:
 - VarOGN: Variational OGN (Uncertainty quantification)
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict
+from typing import Optional
 
 import numpy as np
 import paddle
@@ -95,9 +96,7 @@ class OGN(nn.Layer):
         self.l1_strength = l1_strength
 
         if edge_index is not None:
-            self.register_buffer(
-                "edge_index_buffer", paddle.to_tensor(edge_index, dtype="int64")
-            )
+            self.register_buffer("edge_index_buffer", paddle.to_tensor(edge_index, dtype="int64"))
         else:
             self.edge_index_buffer = None
 
@@ -123,9 +122,7 @@ class OGN(nn.Layer):
             nn.Linear(hidden, ndim),
         )
 
-    def message_passing(
-        self, x: paddle.Tensor, edge_index: np.ndarray
-    ) -> paddle.Tensor:
+    def message_passing(self, x: paddle.Tensor, edge_index: np.ndarray) -> paddle.Tensor:
         """
         Execute message passing to predict acceleration.
 
@@ -150,9 +147,9 @@ class OGN(nn.Layer):
 
                 row, col = edge_index[0], edge_index[1]
 
-                # Get source and target node features
-                x_i = x_batch[col]  # Receiver
-                x_j = x_batch[row]  # Sender
+                # Get source (sender) and target (receiver) node features
+                x_i = x_batch[col]  # Target node
+                x_j = x_batch[row]  # Source node
 
                 # Compute messages
                 msg_input = paddle.concat([x_i, x_j], axis=1)
@@ -260,9 +257,7 @@ class HGN(nn.Layer):
         self.hidden = hidden
 
         if edge_index is not None:
-            self.register_buffer(
-                "edge_index_buffer", paddle.to_tensor(edge_index, dtype="int64")
-            )
+            self.register_buffer("edge_index_buffer", paddle.to_tensor(edge_index, dtype="int64"))
         else:
             self.edge_index_buffer = None
 
@@ -300,21 +295,16 @@ class HGN(nn.Layer):
             paddle.Tensor: Energy per node.
         """
         row, col = edge_index[0], edge_index[1]
-
         x_i = x[col]
         x_j = x[row]
         edge_input = paddle.concat([x_i, x_j], axis=1)
         pair_energies = self.pair_energy(edge_input)
-
         num_nodes = x.shape[0]
         aggr_pair = paddle.zeros([num_nodes, 1], dtype=pair_energies.dtype)
         for i in range(len(col)):
             aggr_pair[col[i]] += pair_energies[i]
-
         self_energies = self.self_energy(x)
-
         total_energy = aggr_pair + self_energies
-
         return total_energy
 
     def forward(self, inputs: Dict[str, paddle.Tensor]) -> Dict[str, paddle.Tensor]:
@@ -358,10 +348,10 @@ class HGN(nn.Layer):
                 v = x_batch[:, self.ndim : 2 * self.ndim]
                 other = x_batch[:, 2 * self.ndim :]
 
-                m_scalar = other[:, -1:]  # Mass
-                m_vec = paddle.tile(m_scalar, [1, self.ndim])
+                m_scalar = other[:, -1:]  # Extract mass
+                m_vec = paddle.tile(m_scalar, [1, self.ndim])  # Broadcast to spatial dims
 
-                p = v * m_vec  # Momentum
+                p = v * m_vec  # Compute momentum p = mv
 
                 x_hamilton = paddle.concat([q, p, other], axis=1)
                 x_hamilton.stop_gradient = False
@@ -376,14 +366,30 @@ class HGN(nn.Layer):
                     inputs=x_hamilton,
                     create_graph=False,
                     retain_graph=False,
+                    allow_unused=True,
                 )[0]
+
+                # Check if gradient computation succeeded
+                if dH is None:
+                    raise ValueError(
+                        "Hamiltonian gradient computation failed (returned None).\n"
+                        "This indicates the training data contains invalid states.\n"
+                        "Possible causes:\n"
+                        "  1. ODE integration produced NaN/Inf during data generation\n"
+                        "  2. Particle positions are constant (no dynamics)\n"
+                        "  3. mxstep was too small, resulting in corrupted trajectories\n"
+                        "Solutions:\n"
+                        "  - Regenerate data with larger mxstep\n"
+                        "  - Check data quality with sim.plot()\n"
+                        "  - Try a simpler system (e.g., 'spring' instead of 'r2')"
+                    )
 
                 dH_dq = dH[:, : self.ndim]
                 dH_dp = dH[:, self.ndim : 2 * self.ndim]
 
-                dq_dt = dH_dp  # Velocity
-                dp_dt = -dH_dq  # Force
-                dv_dt = dp_dt / m_vec  # Acceleration
+                dq_dt = dH_dp  # dq/dt = ∂H/∂p (velocity)
+                dp_dt = -dH_dq  # dp/dt = -∂H/∂q (force)
+                dv_dt = dp_dt / m_vec  # dv/dt = F/m (acceleration)
 
                 derivative = paddle.concat([dq_dt, dv_dt], axis=1)
                 results.append(derivative)
@@ -413,7 +419,23 @@ class HGN(nn.Layer):
                 inputs=x_hamilton,
                 create_graph=False,
                 retain_graph=False,
+                allow_unused=True,
             )[0]
+
+            # Check if gradient computation succeeded
+            if dH is None:
+                raise ValueError(
+                    "Hamiltonian gradient computation failed (returned None).\n"
+                    "This indicates the training data contains invalid states.\n"
+                    "Possible causes:\n"
+                    "  1. ODE integration produced NaN/Inf during data generation\n"
+                    "  2. Particle positions are constant (no dynamics)\n"
+                    "  3. mxstep was too small, resulting in corrupted trajectories\n"
+                    "Solutions:\n"
+                    "  - Regenerate data with larger mxstep\n"
+                    "  - Check data quality with sim.plot()\n"
+                    "  - Try a simpler system (e.g., 'spring' instead of 'r2')"
+                )
 
             dH_dq = dH[:, : self.ndim]
             dH_dp = dH[:, self.ndim : 2 * self.ndim]
@@ -467,9 +489,7 @@ class VarOGN(nn.Layer):
         self.l1_strength = l1_strength
 
         if edge_index is not None:
-            self.register_buffer(
-                "edge_index_buffer", paddle.to_tensor(edge_index, dtype="int64")
-            )
+            self.register_buffer("edge_index_buffer", paddle.to_tensor(edge_index, dtype="int64"))
         else:
             self.edge_index_buffer = None
 
@@ -495,9 +515,7 @@ class VarOGN(nn.Layer):
             nn.Linear(hidden, ndim),
         )
 
-    def message_passing(
-        self, x: paddle.Tensor, edge_index: np.ndarray
-    ) -> paddle.Tensor:
+    def message_passing(self, x: paddle.Tensor, edge_index: np.ndarray) -> paddle.Tensor:
         """
         Variational message passing with stochastic sampling.
 
