@@ -1,0 +1,58 @@
+hydra:
+  run:
+    # dynamic output directory according to running time and override name
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  job:
+    name: ${mode} # name of logfile
+    chdir: false # keep current working directory unchanged
+  sweep:
+    # output directory for multirun
+    dir: ${hydra.run.dir}
+    subdir: ./
+
+# Setting
+mode: train
+seed: 42
+output_dir: ${hydra:run.dir}
+log_freq: 20
+
+# Model Architecture
+MODEL:
+  arch: "OGN"  # Options: "OGN", "HGN", "VarOGN"
+  msg_dim: 100  # Message dimension (for OGN and VarOGN)
+  hidden: 300  # Hidden layer size
+  regularization_type: "l1"  # "l1" or "none"
+  l1_strength: 1e-2  # L1 regularization strength
+
+# Data Configuration
+DATA:
+  type: "spring"  # Options: "r2", "r1", "spring", "damped", "string", "charge", "superposition", "discontinuous", "string_ball"
+  num_samples: 1000  # Number of simulation trajectories
+  num_nodes: 6  # Number of particles/nodes
+  dimension: 2  # Spatial dimension (2 or 3)
+  time_steps: 100  # Number of time steps per trajectory
+  time_step_size: 0.01  # Time step dt
+  sample_interval: 5  # Downsample factor for training
+
+# Training Hyperparameters
+TRAIN:
+  epochs: 1000
+  batch_size: 32
+  save_freq: 100
+  optimizer:
+    learning_rate: 1e-3
+    weight_decay: 1e-8
+  lr_scheduler:
+    name: "CosineAnnealingDecay"  # "CosineAnnealingDecay" or "ExponentialDecay"
+    gamma: 0.95  # Only used for ExponentialDecay
+  loss:
+    type: "MAE"  # "MAE" or "MSE"
+
+# Distributed Training
+enable_ddp: false
+
+# Checkpoint
+checkpoint: null  # Path to resume training (e.g., "outputs/.../OGN_best.pdparams")
+
+# Test (mode=test)
+# checkpoint will be used for testing if specified, otherwise uses best model from output_dir

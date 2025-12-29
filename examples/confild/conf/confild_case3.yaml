@@ -1,0 +1,54 @@
+hydra:
+  run:
+    dir: outputs/confild_case3/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  job:
+    name: ${mode}
+    chdir: false
+
+# Setting
+mode: train  # "train" or "test"
+seed: 2025
+output_dir: ${hydra:run.dir}
+log_freq: 20
+
+# Training Configuration
+TRAIN:
+  batch_size: 100
+  test_batch_size: 100
+  epochs: 4800
+  num_gpus: 1         # Number of GPUs (use 2+ for distributed training if available)
+  num_workers: 4      # Number of data loading workers
+  lr:
+    cnf: 1.e-4      # CNF learning rate
+    latents: 1.e-5  # Latent codes learning rate
+
+# CNF Model Configuration
+CONFILD:
+  input_keys: ["confild_x", "latent_z"]
+  output_keys: ["confild_output"]
+  num_hidden_layers: 117   # Very deep network for periodic hill flow
+  out_features: 2          # Number of output features (u, v for 2D flow)
+  hidden_features: 256     # Larger hidden features
+  in_coord_features: 2     # Coordinate dimension (2D)
+  in_latent_features: 256  # Latent dimension
+
+# Latent Container Configuration
+LATENT:
+  input_keys: ["latent_x"]
+  output_keys: ["latent_z"]
+  N_samples: 2880   # Total number of samples (periodic hill flow)
+  lumped: True
+  N_features: 256   # Latent dimension
+  dims: 2           # Spatial dimension
+
+# Data Configuration
+DATA:
+  data_path: data/Case3/data.npy
+  coor_path: data/Case3/coords.npy
+  normalizer:
+    method: "-11"  # Normalization method
+    dim: 0
+  load_data_fn: load_periodic_hill_flow  # Data loading function name
+
+# Checkpoint
+checkpoint: null  # Path to resume training or for testing
