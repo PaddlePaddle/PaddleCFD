@@ -1,0 +1,54 @@
+hydra:
+  run:
+    dir: outputs/confild_case4/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  job:
+    name: ${mode}
+    chdir: false
+
+# Setting
+mode: train  # "train" or "test"
+seed: 2025
+output_dir: ${hydra:run.dir}
+log_freq: 20
+
+# Training Configuration
+TRAIN:
+  batch_size: 4
+  test_batch_size: 4
+  epochs: 20000
+  num_gpus: 1         # Number of GPUs (use 2+ for distributed training if available)
+  num_workers: 4      # Number of data loading workers
+  lr:
+    cnf: 1.e-4      # CNF learning rate
+    latents: 1.e-5  # Latent codes learning rate
+
+# CNF Model Configuration
+CONFILD:
+  input_keys: ["confild_x", "latent_z"]
+  output_keys: ["confild_output"]
+  num_hidden_layers: 15
+  out_features: 3          # Number of output features (u, v, w for 3D flow)
+  hidden_features: 384     # Largest hidden features for 3D flow
+  in_coord_features: 3     # Coordinate dimension (3D)
+  in_latent_features: 384  # Latent dimension
+
+# Latent Container Configuration
+LATENT:
+  input_keys: ["latent_x"]
+  output_keys: ["latent_z"]
+  N_samples: 1200   # Total number of samples (3D flow)
+  lumped: True
+  N_features: 384   # Latent dimension (largest for 3D)
+  dims: 3           # Spatial dimension (3D)
+
+# Data Configuration
+DATA:
+  data_path: data/Case4/data.npy
+  coor_path: data/Case4/coords.npy
+  normalizer:
+    method: "-11"  # Normalization method
+    dim: 0
+  load_data_fn: load_3d_flow  # Data loading function name
+
+# Checkpoint
+checkpoint: null  # Path to resume training or for testing

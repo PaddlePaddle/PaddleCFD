@@ -1,0 +1,56 @@
+hydra:
+  run:
+    dir: outputs/un_confild_case1/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  job:
+    name: ${mode}
+    chdir: false
+
+# Setting
+mode: train  # "train" or "test"
+seed: 2025
+output_dir: ${hydra:run.dir}
+log_freq: 20
+
+# Training Configuration
+TRAIN:
+  batch_size: 16
+  test_batch_size: 16
+  ema_rate: "0.9999"      # EMA decay rate
+  lr: 5.e-5               # Learning rate
+  weight_decay: 0.0
+  final_lr: 1.e-5         # Final learning rate for annealing
+  lr_anneal_steps: 10000  # Learning rate annealing steps
+  max_steps: 10000        # Maximum training steps
+  save_interval: 1000     # Save checkpoint every N steps
+
+# U-Net Model Configuration
+UNET:
+  image_size: 128                    # Latent space spatial size (time_length, latent_length)
+  in_channels: 1                     # Input channels (single channel for latent codes treated as 2D images)
+  out_channels: 1                    # Output channels (single channel output)
+  num_channels: 128                  # Base channel number for UNet
+  num_res_blocks: 2                  # Number of residual blocks
+  num_heads: 4                       # Number of attention heads
+  num_head_channels: 64              # Channels per attention head
+  attention_resolutions: "32,16,8"   # Attention resolutions
+  channel_mult: [1, 2, 4, 8]         # Channel multipliers for each resolution level
+
+# Diffusion Process Configuration
+DIFF:
+  steps: 1000              # Number of diffusion steps
+  noise_schedule: "cosine" # Noise schedule: "linear" or "cosine"
+
+# Evaluation Configuration (for test mode)
+EVAL:
+  time_length: 128   # Time dimension for generation
+  latent_length: 128 # Latent dimension for generation
+
+# Data Configuration
+DATA:
+  train_data: "data/Case1/train_data.npy"  # Training latent codes
+  valid_data: "data/Case1/valid_data.npy"  # Validation latent codes
+  max_val: 1.0
+  min_val: -1.0
+
+# Checkpoint
+checkpoint: null  # Path to resume training or for testing
