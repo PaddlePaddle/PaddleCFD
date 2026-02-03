@@ -105,6 +105,10 @@ where $t_1$ is the running time on one card, $t_n$ is the running time on $n$ ca
 
 [ppcfd/data](./doc/data.md)
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=PaddlePaddle/PaddleCFD&type=date&legend=top-left)](https://www.star-history.com/#PaddlePaddle/PaddleCFD&type=date&legend=top-left)
+
 ## Community
 Join PaddleCFD WeChat group to discuss with us!
 
