@@ -65,6 +65,14 @@ try:
 except ImportError:
     pass  # Optional dependency
 
+# PhysicsRegression
+try:
+    from ppcfd.models import physicsregression
+
+    __all__.append("physicsregression")
+except ImportError:
+    pass  # Optional dependency
+
 # Symbolic Graph Networks
 try:
     from ppcfd.models import symbolic_gn
