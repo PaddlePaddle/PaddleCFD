@@ -9,7 +9,7 @@ basic_config: &basic_config # Run settings
   enable_amp: !!bool False # Use automatic mixed precision - blows up with low variance fields right now
   compile: !!bool False # Compile model - Does not currently work
   gradient_checkpointing: !!bool False # Whether to use gradient checkpointing - Slow, but lower memory
-  exp_dir: "./" # Output path, modify as needed
+  exp_dir: "~/MPP" # Output path
   log_interval: 1 # How often to log - Don't think this is actually implemented
   pretrained: !!bool False # Whether to load a pretrained model
   # wandb settings
@@ -19,21 +19,21 @@ basic_config: &basic_config # Run settings
   # Training settings
   drop_path: 0.1
   batch_size: 1
-  max_epochs: 10
+  max_epochs: 500
   scheduler_epochs: -1
-  epoch_size: 20 # Artificial epoch size
+  epoch_size: 2000 # Artificial epoch size
   rescale_gradients: !!bool False # Activate hook that scales block gradients to norm 1
   optimizer: "adan" # adam, adan, whatever else i end up adding - adan did better on HP sweep
   scheduler: "cosine" # Only cosine implemented
-  warmup_steps: 20 # Warmup when not using DAdapt
-  learning_rate: -1 # Quick validation: fixed lr; for DAdapt auto-tune set to -1
+  warmup_steps: 1000 # Warmup when not using DAdapt
+  learning_rate: -1 # -1 means use DAdapt
   weight_decay: 1e-3
   n_states: 12 # Number of state variables across the datasets - Can be larger than real number and things will just go unused
   state_names: ["Pressure", "Vx", "Vy", "Density", "Vx", "Vy", "Density", "Pressure"] # Should be sorted
   dt: 1 # Striding of data - Not currently implemented > 1
-  n_steps: 4 # Quick validation: set to 4; for real training use 16
+  n_steps: 16 # Length of history to include in input
   enforce_max_steps: !!bool False # If false and n_steps > dataset steps, use dataset steps. Otherwise, raise Exception.
-  accum_grad: 2 # Quick validation: set to 2; for real training use 5
+  accum_grad: 5 # Real batch size is accum * batch_size, real steps/"epoch" is epoch_size / accum
   # Model settings
   model_type: "avit" # Only option so far
   block_type: "axial" # Which type of block to use - if axial, next two fields must be set to define axial ops
@@ -54,23 +54,21 @@ basic_config: &basic_config # Run settings
   embedding_offset: 0 # Use when adding extra finetuning fields
   train_data_paths:
     [
-      # Use absolute path - ~ is not auto-expanded by Python's glob/os.path
-      # IMPORTANT: modify the following paths to point to your PDEBench data
-      ["/home/lkyu/baidu/PDEBench/data/2D_rdb_NA_NA", "swe", ""],
-      # ["/home/lkyu/PDEBench/2D/NS_incom", "incompNS", ""],
-      # ["/home/lkyu/PDEBench/2D/CFD/2D_Train_Rand", compNS, "128"],
-      # ["/home/lkyu/PDEBench/2D/CFD/2D_Train_Rand", compNS, "512"],
-      # ["/home/lkyu/PDEBench/2D/CFD/2D_Train_Turb", compNS, ""],
-      # ["/home/lkyu/PDEBench/2D/diffusion-reaction", "diffre2d", ""],
+      ["~/PDEBench/2D/shallow-water", "swe", ""],
+      ["~/PDEBench/2D/NS_incom", "incompNS", ""],
+      ["~/PDEBench/2D/CFD/2D_Train_Rand", compNS, "128"],
+      ["~/PDEBench/2D/CFD/2D_Train_Rand", compNS, "512"],
+      ["~/PDEBench/2D/CFD/2D_Train_Turb", compNS, ""],
+      ["~/PDEBench/2D/diffusion-reaction", "diffre2d", ""],
     ]
   valid_data_paths:
     [
-      ["/home/lkyu/baidu/PDEBench/data/2D_rdb_NA_NA", "swe", ""],
-      # ["/home/lkyu/PDEBench/2D/NS_incom", "incompNS", ""],
-      # ["/home/lkyu/PDEBench/2D/CFD/2D_Train_Rand", compNS, "128"],
-      # ["/home/lkyu/PDEBench/2D/CFD/2D_Train_Rand", compNS, "512"],
-      # ["/home/lkyu/PDEBench/2D/CFD/2D_Train_Turb", compNS, ""],
-      # ["/home/lkyu/PDEBench/2D/diffusion-reaction", "diffre2d", ""],
+      ["~/PDEBench/2D/shallow-water", "swe", ""],
+      ["~/PDEBench/2D/NS_incom", "incompNS", ""],
+      ["~/PDEBench/2D/CFD/2D_Train_Rand", compNS, "128"],
+      ["~/PDEBench/2D/CFD/2D_Train_Rand", compNS, "512"],
+      ["~/PDEBench/2D/CFD/2D_Train_Turb", compNS, ""],
+      ["~/PDEBench/2D/diffusion-reaction", "diffre2d", ""],
     ]
   append_datasets: [] # List of datasets to append to the input/output projections for finetuning
 
