@@ -1,4 +1,8 @@
+#ifdef __HIP_PLATFORM_AMD__
+#include <hip/hip_runtime.h>
+#else
 #include <cuda_runtime.h>
+#endif
 #include <paddle/phi/api/ext/dispatch.h>
 #include <paddle/phi/api/include/tensor.h>
 
