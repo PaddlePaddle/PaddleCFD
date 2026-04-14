@@ -52,6 +52,14 @@ python train_basic.py --run_name my_finetune --config finetune --yaml_config con
 
 ### Inference
 
+If needed, use follow code to generate test input.
+
+```bash
+python multiple_physics_pretraining/generate_forward_case.py --output /tmp/case.npz --labels 0,1,2 --bcs 0,0 --output ./forward_case.npz
+```
+
+Then run a test forward case:
+
 ```bash
 python forward_pretrained.py \
     --yaml_config config/mpp_avit_s_config.yaml \
