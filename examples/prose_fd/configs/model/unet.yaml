@@ -1,0 +1,4 @@
+name: unet
+
+width: 32
+act: 'gelu'

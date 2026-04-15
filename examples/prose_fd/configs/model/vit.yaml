@@ -1,0 +1,31 @@
+name: vit
+
+# shared attributes
+dim_emb: 1024
+dim_ffn: 2048
+dropout: 0
+n_head: 8
+norm_first: true
+
+patch_num: 8 # for input, number of patches per dimension
+patch_num_output: 8 # for output, number of patches per dimension
+
+
+embedder:
+    # choose from [linear, conv, overlap_linear] 
+    type: conv
+    dim: ${..dim_emb}
+    patch_num: ${..patch_num}
+    patch_num_output: ${..patch_num_output}
+
+    early_conv: 0
+
+encoder:
+    n_layer: 10
+    positional_embedding: null
+    dim_emb: ${..dim_emb}
+    dim_ffn: ${..dim_ffn}
+    n_head: ${..n_head}
+    dropout: ${..dropout}
+    norm_first: ${..norm_first}
+    

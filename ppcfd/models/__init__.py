@@ -72,3 +72,11 @@ try:
     __all__.append("symbolic_gn")
 except ImportError:
     pass  # Optional dependency
+
+# PROSE-FD - PROSE for PDE surrogate modeling
+try:
+    from ppcfd.models import prose_fd
+
+    __all__.append("prose_fd")
+except ImportError:
+    pass  # Optional dependency
