@@ -1,0 +1,26 @@
+dataset:
+  value: "fluids.compressible.steady.Airfoil"
+num_trajectories:
+  value: 128
+model_name:
+  value: "T"
+lr:
+  value: 0.00005
+lr_embedding_recovery:
+  value: 0.0005
+lr_time_embedding:
+  value: 0.0005
+weight_decay:
+  value: 0.000001
+lr_scheduler:
+  value: "cosine"
+warmup_ratio:
+  value: 0.0
+early_stopping_patience:
+  value: 2
+num_epochs:
+  value: 2
+batch_size:
+  value: 2
+max_grad_norm:
+  value: 5.0

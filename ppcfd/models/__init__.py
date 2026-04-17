@@ -72,3 +72,11 @@ try:
     __all__.append("symbolic_gn")
 except ImportError:
     pass  # Optional dependency
+
+# Poseidon - Scientific Operator Transformer
+try:
+    from ppcfd.models import poseidon
+
+    __all__.append("poseidon")
+except ImportError:
+    pass  # Optional dependency
