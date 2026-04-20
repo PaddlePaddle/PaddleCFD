@@ -72,3 +72,11 @@ try:
     __all__.append("symbolic_gn")
 except ImportError:
     pass  # Optional dependency
+
+# G-FNO
+try:
+    from ppcfd.models import g_fno
+
+    __all__.append("g_fno")
+except ImportError:
+    pass  # Optional dependency
