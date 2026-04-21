@@ -45,10 +45,13 @@ def _detect_rocm():
     rocm_path = os.environ.get("ROCM_PATH", os.environ.get("ROCM_HOME", ""))
     if rocm_path and os.path.isdir(rocm_path):
         return rocm_path
-    default = "/opt/rocm"
-    if os.path.isdir(default):
-        return default
-    return ""
+    default_rocm = "/opt/rocm"
+    if os.path.isdir(default_rocm):
+        return default_rocm
+    default_dtk = "/opt/dtk"
+    if os.path.isdir(default_dtk):
+        return default_dtk
+    return None
 
 
 class cmake_build_ext(build_ext):
@@ -80,7 +83,7 @@ class cmake_build_ext(build_ext):
         ]
 
         rocm_path = _detect_rocm()
-        if rocm_path:
+        if rocm_path is not None:
             cmake_args.extend(
                 [
                     "-DUSE_ROCM=ON",

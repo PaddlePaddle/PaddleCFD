@@ -163,41 +163,61 @@ if(USE_ROCM)
     endif()
     message(STATUS "ROCm path: ${ROCM_PATH}")
 
-    find_package(HIP REQUIRED)
+    enable_language(HIP)
+    set(CMAKE_HIP_STANDARD "${CMAKE_CXX_STANDARD}")
+    set(CMAKE_HIP_STANDARD_REQUIRED ON)
+    add_definitions(-D__USE_HIP__ -D__HIP_PLATFORM_AMD__)
 
-    if(HIP_FOUND AND NOT WIN32)
-        enable_language(HIP)
-        set(CMAKE_HIP_STANDARD "${CMAKE_CXX_STANDARD}")
-        set(CMAKE_HIP_STANDARD_REQUIRED ON)
-        add_definitions(-D__USE_HIP__ -D__HIP_PLATFORM_AMD__)
+    if(NOT DEFINED AMDGPU_TARGETS)
+        if(NOT "$ENV{AMDGPU_TARGETS}" STREQUAL "")
+            set(AMDGPU_TARGETS "$ENV{AMDGPU_TARGETS}")
+        else()
+            file(WRITE
+                "${CMAKE_CURRENT_BINARY_DIR}/rocm_architectures.sh"
+                "
+                #!/bin/bash
+                set -e
 
-        if(NOT DEFINED AMDGPU_TARGETS)
-            if(NOT "$ENV{AMDGPU_TARGETS}" STREQUAL "")
-                set(AMDGPU_TARGETS "$ENV{AMDGPU_TARGETS}")
+                ARCH=$(rocminfo | grep -E '^\\s*Name:\\s+gfx[0-9]+' | awk '{print $2}' | sort -u)
+
+                if [ -z "$ARCH" ]; then
+                    echo -n "Unknown"
+                    exit 1
+                else
+                    echo -n "$ARCH"
+                    exit 0
+                fi
+                ")
+
+            execute_process(
+                COMMAND bash ${CMAKE_CURRENT_BINARY_DIR}/rocm_architectures.sh
+                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                RESULT_VARIABLE RET
+                OUTPUT_VARIABLE DETECTED_ARCHITECTURES
+                ERROR_VARIABLE ERROR
+            )
+
+            if(RET EQUAL 0)
+                message(STATUS "Building with detected architectures")
+                set(AMDGPU_TARGETS ${DETECTED_ARCHITECTURES})
             else()
-                set(AMDGPU_TARGETS "gfx906;gfx926;gfx928;gfx936")
+                message(FATAL_ERROR "Failed to detect ROCM architectures")
             endif()
         endif()
-
-        set(CMAKE_HIP_ARCHITECTURES "${AMDGPU_TARGETS}")
-        message(STATUS "HIP target architectures: ${CMAKE_HIP_ARCHITECTURES}")
-
-        include_directories(${ROCM_PATH}/include)
-
-        if(USE_FP16)
-            message(STATUS "FP16 support enabled for ROCm build.")
-            add_definitions(-DHIP_HAS_FP16=1)
-        endif()
-
-        string(APPEND CMAKE_HIP_FLAGS_RELEASE " -O3")
-        message(STATUS "CMAKE_HIP_FLAGS: \"${CMAKE_HIP_FLAGS}\"")
-    else()
-        if(NOT HIP_FOUND)
-            message(STATUS "HIP not found, build for CPU-only.")
-        else()
-            message(STATUS "HIP found, but build for CPU-only on Windows.")
-        endif()
     endif()
+
+    set(CMAKE_HIP_ARCHITECTURES "${AMDGPU_TARGETS}")
+    message(STATUS "HIP target architectures: ${CMAKE_HIP_ARCHITECTURES}")
+
+    include_directories(${ROCM_PATH}/include)
+
+    if(USE_FP16)
+        message(STATUS "FP16 support enabled for ROCm build.")
+        add_definitions(-DHIP_HAS_FP16=1)
+    endif()
+
+    string(APPEND CMAKE_HIP_FLAGS_RELEASE " -O3")
+    message(STATUS "CMAKE_HIP_FLAGS: \"${CMAKE_HIP_FLAGS}\"")
 else()
     # ---- CUDA build path ----
     find_package(CUDAToolkit REQUIRED)
