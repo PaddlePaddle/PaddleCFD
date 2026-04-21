@@ -63,6 +63,17 @@ python "ns_2d_rt.py" --nu=1e-4 --T=30 --N=1200 --save_path="./data" --ntest=100 
 
 ## 6. Training From Examples
 
+### Supported `--model_type`
+
+The Paddle version currently supports the model types below.
+
+| Status            | Model types                                                                                                                                                                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Supported         | `FNO2d`, `FNO2d_aug`, `FNO3d`, `FNO3d_aug`, `GCNN2d_p4`, `GCNN2d_p4m`, `GCNN3d_p4`, `GCNN3d_p4m`, `GFNO2d_p4`, `GFNO2d_p4m`, `GFNO3d_p4`, `GFNO3d_p4m`, `Ghybrid2d_p4`, `Ghybrid2d_p4m`, `radialNO2d_p4`, `radialNO2d_p4m`, `radialNO3d_p4`, `radialNO3d_p4m` |
+| Removed in Paddle | `GFNO2d_p4_steer`, `GFNO2d_p4m_steer`, `Unet_Rot2d`, `Unet_Rot_M2d`, `Unet_Rot_3D`                                                                                                                                                                            |
+
+The removed Paddle-only model types depended on `e2cnn` or `escnn`, which require Torch at runtime. The four main experiment commands documented below all use `GFNO2d_p4`, which remains supported.
+
 From `examples/G-FNO`:
 
 ### NS
@@ -107,8 +118,13 @@ python "experiments.py" --seed=1 --data_path="./data/2D_rdb_NA_NA.h5" \
     --learning_rate=1e-3 --early_stopping=100 --verbose --super --device=auto
 ```
 
-## 7. Notes
+## 7. Citation
 
-- `setup.sh` is intentionally not included in PaddleCFD.
-- `run_experiment.sh` is intentionally not included in PaddleCFD.
-- Removed Paddle-only unsupported model types that depend on Torch-only group-equivariant libraries remain unsupported here as well.
+```latex
+@inproceedings{helwig2023group,
+author = {Jacob Helwig and Xuan Zhang and Cong Fu and Jerry Kurtin and Stephan Wojtowytsch and Shuiwang Ji},
+title = {Group Equivariant {Fourier} Neural Operators for Partial Differential Equations},
+booktitle = {Proceedings of the 40th International Conference on Machine Learning},
+year = {2023},
+}
+```
