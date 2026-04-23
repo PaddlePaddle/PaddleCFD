@@ -184,7 +184,6 @@ class TransformerModel(paddle.nn.Module):
         self.is_encoder = is_encoder
         self.is_decoder = not is_encoder
         self.with_output = with_output
-        self.apex = params.nvidia_apex
         self.id2word = id2word
         self.word2id = {s: i for i, s in self.id2word.items()}
         self.eos_index = self.word2id["<EOS>"]
@@ -792,10 +791,7 @@ class TransformerModel(paddle.nn.Module):
                 use_cache=True,
             )
             assert tensor.size() == (1, bs * beam_size, self.dim)
-            if self.apex:
-                tensor = tensor.data[-1, :, :].to(self.dtype)
-            else:
-                tensor = tensor.data[-1, :, :]
+            tensor = tensor.data[-1, :, :]
             scores = self.proj(tensor)
             scores = paddle.nn.functional.log_softmax(x=scores.float(), axis=-1)
             assert scores.size() == (bs * beam_size, n_words)

@@ -41,7 +41,10 @@ def get_parser():
         "--amp",
         type=int,
         default=-1,
-        help="Use AMP wrapper for float16 / distributed / gradient accumulation. Level of optimization. -1 to disable.",
+        help=(
+            "Use Paddle native AMP. -1 disables AMP; any non-negative value "
+            "enables native autocast and GradScaler."
+        ),
     )
     parser.add_argument(
         "--rescale", type=int, default=1, help="Whether to rescale at inference."
@@ -371,9 +374,6 @@ def get_parser():
         type=bool_flag,
         default=False,
         help="Windows version (no multiprocessing for eval)",
-    )
-    parser.add_argument(
-        "--nvidia_apex", type=bool_flag, default=False, help="NVIDIA version of apex"
     )
     parser.add_argument(
         "--save_periodic",

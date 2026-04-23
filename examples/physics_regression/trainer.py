@@ -18,11 +18,13 @@ from optim import get_optimizer
 from ppcfd.models.physicsregression.paddle_utils import *
 from ppcfd.models.physicsregression.symbolicregression.utils import to_cuda
 
-has_apex = True
-try:
-    import apex
-except:
-    has_apex = False
+from ppcfd.models.physicsregression.symbolicregression.checkpoint_io import (
+    load_paddle_payload,
+    require_keys,
+    set_grad_scaler_state,
+    set_modules_state,
+    set_optimizer_state,
+)
 logger = getLogger()
 
 
@@ -90,7 +92,6 @@ class Trainer(object):
         self.set_parameters()
         assert params.amp >= 1 or not params.fp16
         assert params.amp >= 0 or params.accumulate_gradients == 1
-        assert not params.nvidia_apex or has_apex
         if params.multi_gpu:
             logger.info("Using nn.parallel.DistributedDataParallel ...")
             for k in self.modules.keys():
@@ -211,34 +212,18 @@ class Trainer(object):
         logger.info("Optimizer: %s" % type(self.optimizer))
 
     def init_amp(self):
-        """
-        Initialize AMP optimizer.
-        """
         params = self.params
         assert (
             params.amp == 0
             and params.fp16 is False
-            or params.amp in [1, 2, 3]
+            or params.amp > 0
             and params.fp16 is True
         )
-        mod_names = sorted(self.modules.keys())
-        if params.nvidia_apex is True:
-            modules, optimizer = apex.amp.initialize(
-                [self.modules[k] for k in mod_names],
-                self.optimizer,
-                opt_level="O%i" % params.amp,
-            )
-            self.modules = {k: module for k, module in zip(mod_names, modules)}
-            self.optimizer = optimizer
-        else:
-            self.scaler = paddle.amp.GradScaler(
-                incr_every_n_steps=2000, init_loss_scaling=65536.0
-            )
+        self.scaler = paddle.amp.GradScaler(
+            incr_every_n_steps=2000, init_loss_scaling=65536.0
+        )
 
     def optimize(self, loss):
-        """
-        Optimize.
-        """
         if (loss != loss).data.any():
             logger.warning("NaN detected")
         params = self.params
@@ -251,22 +236,6 @@ class Trainer(object):
                     parameters=self.parameters["model"], max_norm=params.clip_grad_norm
                 )
             optimizer.step()
-        elif params.nvidia_apex is True:
-            if (self.n_iter + 1) % params.accumulate_gradients == 0:
-                with apex.amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-                if params.clip_grad_norm > 0:
-                    paddle.nn.utils.clip_grad_norm_(
-                        parameters=apex.amp.master_params(self.optimizer),
-                        max_norm=params.clip_grad_norm,
-                    )
-                optimizer.step()
-                optimizer.zero_grad()
-            else:
-                with apex.amp.scale_loss(
-                    loss, optimizer, delay_unscale=True
-                ) as scaled_loss:
-                    scaled_loss.backward()
         else:
             if params.accumulate_gradients > 1:
                 loss = loss / params.accumulate_gradients
@@ -443,72 +412,57 @@ class Trainer(object):
                 )
                 return
         logger.warning(f"Reloading checkpoint from {checkpoint_path} ...")
-        data = paddle.load(path=str(checkpoint_path))
-        if "checkpoint" in checkpoint_path:
-            for k, v in self.modules.items():
-                weights = data[k]
-                try:
-                    weights = data[k]
-                    v.load_state_dict(weights)
-                except RuntimeError:
-                    weights = {name.partition(".")[2]: v for name, v in data[k].items()}
-                    v.load_state_dict(weights)
-                v.stop_gradient = not requires_grad
-            if self.params.amp == -1 or not self.params.nvidia_apex:
-                logger.warning("Reloading checkpoint optimizer ...")
-                self.optimizer.load_state_dict(data["optimizer"])
+        data = load_paddle_payload(checkpoint_path)
+        required_keys = (
+            "epoch",
+            "n_total_iter",
+            "best_metrics",
+            "best_stopping_criterion",
+            "params",
+            "embedder",
+            "encoder",
+            "decoder",
+            "optimizer",
+        )
+        try:
+            require_keys(data, required_keys, checkpoint_path)
+        except ValueError as exc:
+            raise ValueError(
+                f"{checkpoint_path} 不是训练 checkpoint。"
+                "如果要加载预训练模型，请使用 --reload_model。"
+            ) from exc
 
-                # 新增：恢复学习率调度器状态
-                if hasattr(self.optimizer, 'num_updates') and "optimizer_num_updates" in data:
-                    self.optimizer.num_updates = data["optimizer_num_updates"]
-                    logger.warning(f"Restored optimizer num_updates: {self.optimizer.num_updates}")
+        set_modules_state(self.modules, data)
+        for module in self.modules.values():
+            module.stop_gradient = not requires_grad
 
-                    # 重新计算并设置学习率
-                    if hasattr(self.optimizer, 'get_lr_for_step'):
-                        restored_lr = self.optimizer.get_lr_for_step(self.optimizer.num_updates)
-                        self.optimizer._learning_rate = restored_lr
-                        logger.warning(f"Restored learning rate: {restored_lr}")
-                else:
-                    if "optimizer_num_updates" not in data:
-                        logger.warning("Old checkpoint format detected. Learning rate scheduling will restart.")
-                        logger.warning("Consider retraining from a newer checkpoint for optimal performance.")
-                    else:
-                        logger.warning("No num_updates found in optimizer or optimizer doesn't support it")
-            else:
-                logger.warning("Not reloading checkpoint optimizer.")
-                for group_id, param_group in enumerate(self.optimizer._param_groups):
-                    if "num_updates" not in param_group:
-                        logger.warning("No 'num_updates' for optimizer.")
-                        continue
-                    logger.warning("Reloading 'num_updates' and 'lr' for optimizer.")
-                    param_group["num_updates"] = data["optimizer"]["_param_groups"][
-                        group_id
-                    ]["num_updates"]
-                    param_group["lr"] = self.optimizer.get_lr_for_step(
-                        param_group["num_updates"]
-                    )
-            if self.params.fp16 and not self.params.nvidia_apex:
-                logger.warning("Reloading gradient scaler ...")
-                self.scaler.load_state_dict(data["scaler"])
-            else:
-                assert self.scaler is None and "scaler" not in data
-            self.epoch = data["epoch"] + 1
-            self.n_total_iter = data["n_total_iter"]
-            self.best_metrics = data["best_metrics"]
-            self.best_stopping_criterion = data["best_stopping_criterion"]
-            logger.warning(
-                f"Checkpoint reloaded. Resuming at epoch {self.epoch} / iteration {self.n_total_iter} ..."
-            )
+        logger.warning("Reloading checkpoint optimizer ...")
+        set_optimizer_state(self.optimizer, data["optimizer"])
+        if hasattr(self.optimizer, "num_updates") and "optimizer_num_updates" in data:
+            self.optimizer.num_updates = data["optimizer_num_updates"]
+            logger.warning(f"Restored optimizer num_updates: {self.optimizer.num_updates}")
+            if hasattr(self.optimizer, "get_lr_for_step"):
+                restored_lr = self.optimizer.get_lr_for_step(self.optimizer.num_updates)
+                self.optimizer._learning_rate = restored_lr
+                logger.warning(f"Restored learning rate: {restored_lr}")
         else:
-            for k, v in self.modules.items():
-                weights = data[k]
-                try:
-                    weights = data[k]
-                    v.load_state_dict(weights)
-                except RuntimeError:
-                    weights = {name.partition(".")[2]: v for name, v in data[k].items()}
-                    v.load_state_dict(weights)
-                v.stop_gradient = not requires_grad
+            if "optimizer_num_updates" not in data:
+                logger.warning("Old checkpoint format detected. Learning rate scheduling will restart.")
+                logger.warning("Consider retraining from a newer checkpoint for optimal performance.")
+
+        if self.params.amp >= 0:
+            logger.warning("Reloading gradient scaler ...")
+            set_grad_scaler_state(self.scaler, data["scaler"])
+        else:
+            self.scaler = None
+
+        self.epoch = data["epoch"] + 1
+        self.n_total_iter = data["n_total_iter"]
+        self.best_metrics = data["best_metrics"]
+        self.best_stopping_criterion = data["best_stopping_criterion"]
+        logger.warning(
+            f"Checkpoint reloaded. Resuming at epoch {self.epoch} / iteration {self.n_total_iter} ..."
+        )
 
     def save_periodic(self):
         """
@@ -710,7 +664,7 @@ class Trainer(object):
         else:
             y_units = None
         x2, len2, y = to_cuda(x2, len2, y, device=env.params.device)
-        if params.amp == -1 or params.nvidia_apex:
+        if params.amp == -1:
             encoded = encoder("fwd", x=x1, lengths=len1, causal=False)
             decoded = decoder(
                 "fwd",

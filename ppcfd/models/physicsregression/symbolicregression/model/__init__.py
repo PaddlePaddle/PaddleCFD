@@ -5,6 +5,8 @@ import paddle
 
 from ...paddle_utils import *
 
+from ..checkpoint_io import load_paddle_model_bundle
+from ..checkpoint_io import set_modules_state
 from .embedders import LinearPointEmbedder
 from .model_wrapper import ModelWrapper
 from .sklearn_wrapper import SymbolicTransformerRegressor
@@ -49,14 +51,8 @@ def build_modules(env, params):
     )
     if params.reload_model != "":
         logger.info(f"Reloading modules from {params.reload_model} ...")
-        reloaded = paddle.load(path=str(params.reload_model))
-        for k, v in modules.items():
-            assert k in reloaded
-            if all([k2.startswith("module.") for k2 in reloaded[k].keys()]):
-                reloaded[k] = {
-                    k2[len("module.") :]: v2 for k2, v2 in reloaded[k].items()
-                }
-            v.load_state_dict(reloaded[k])
+        reloaded = load_paddle_model_bundle(params.reload_model)
+        set_modules_state(modules, reloaded)
     for k, v in modules.items():
         logger.debug(f"{v}: {v}")
     for k, v in modules.items():

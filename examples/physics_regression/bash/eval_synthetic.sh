@@ -20,6 +20,6 @@ do
                     --decode_physical_units single-seq\
                     --eval_noise_gamma 0\
                     --eval_noise_type additive\
-                    --reload_checkpoint ./model.pt\
+                    --reload_model ./model.pdparams\
                     --expr_test_data_path ./data/exprs_test_ranked.json
 done

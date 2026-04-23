@@ -12,6 +12,8 @@ import tqdm
 from scipy.optimize import minimize
 from sklearn.metrics import r2_score
 from .Oracle.oracle import Oracle
+from .symbolicregression.checkpoint_io import load_paddle_model_bundle
+from .symbolicregression.checkpoint_io import set_modules_state
 from .symbolicregression.envs import build_env
 from .symbolicregression.GA.ga import GeneticProgramming
 from .symbolicregression.GA.ga import TreeGenerator
@@ -20,88 +22,6 @@ from .symbolicregression.model import build_modules
 from .symbolicregression.model.model_wrapper import ModelWrapper
 from .symbolicregression.model.sklearn_wrapper import \
     SymbolicTransformerRegressor
-
-
-def _load_model(path: str) -> dict:
-    """
-    加载模型权重字典，支持多种格式：
-
-    1. PaddlePaddle 原生格式（paddle.save 保存的 .pth / .pdparams / checkpoint）
-       - 支持 params 为 Namespace 或 dict（自动转换为 Namespace）
-    2. numpy pickle 格式（examples/physics_regression/convert_model.py 转换的 .pkl）
-       - Tensor 以 numpy 数组存储，自动转换为 paddle.Tensor（float64→float32）
-
-    对于未转换的 PyTorch .pt 文件，给出友好的一次性转换指引。
-
-    Args:
-        path: 模型文件路径
-
-    Returns:
-        包含 embedder/encoder/decoder state_dict 及 Namespace 类型 params 的字典
-
-    Raises:
-        ValueError: 文件格式不支持或无法读取
-    """
-    import pickle as _pickle
-    import numpy as _np
-
-    # --- 格式1: PaddlePaddle 原生格式（paddle.save 产物）---
-    try:
-        data = paddle.load(path=path)
-        if "embedder" in data and "encoder" in data and "decoder" in data:
-            if not isinstance(data.get("params"), Namespace):
-                data["params"] = Namespace(**data["params"])
-            return data
-    except Exception:
-        pass
-
-    # --- 格式2: numpy pickle 格式（examples/physics_regression/convert_model.py 产物）---
-    try:
-        with open(path, "rb") as _f:
-            data = _pickle.load(_f)
-        if all(k in data for k in ("embedder", "encoder", "decoder", "params")):
-            for mod in ("embedder", "encoder", "decoder"):
-                data[mod] = {
-                    k: paddle.to_tensor(
-                        v.astype(_np.float32) if v.dtype == _np.float64 else v
-                    )
-                    for k, v in data[mod].items()
-                }
-            if not isinstance(data["params"], Namespace):
-                data["params"] = Namespace(**data["params"])
-            return data
-    except Exception:
-        pass
-
-    # --- 格式检测：PyTorch .pt 文件（给出明确转换指引）---
-    try:
-        import torch as _torch
-        _model = _torch.load(path, map_location="cpu", weights_only=False)
-        if all(k in _model for k in ("embedder", "encoder", "decoder")):
-            _pkl_path = os.path.splitext(path)[0] + ".pkl"
-            raise ValueError(
-                f"\n检测到 PyTorch 格式文件: {path}\n"
-                "paddle.load() 无法直接读取 torch.save() 的文件（序列化格式不兼容）。\n\n"
-                "请在安装了 PyTorch 的环境中运行一次性格式转换:\n"
-                f"  conda activate <torch_env>\n"
-                f"  python examples/physics_regression/convert_model.py {path} {_pkl_path}\n\n"
-                "转换完成后，在 PaddlePaddle 环境中加载转换后的文件:\n"
-                f"  from ppcfd.models.physicsregression import PhyReg\n"
-                f"  PhyReg('{_pkl_path}')"
-            )
-    except ImportError:
-        pass
-    except ValueError:
-        raise
-
-    raise ValueError(
-        f"无法加载模型文件: {path}\n"
-        "支持的格式:\n"
-        "  - PaddlePaddle 原生格式: .pdparams 或 .pth（paddle.save 保存）\n"
-        "  - numpy pickle 格式: .pkl（examples/physics_regression/convert_model.py 转换后）\n\n"
-        "如果是 PyTorch .pt 文件，请先在 PyTorch 环境中运行:\n"
-        "  python examples/physics_regression/convert_model.py model.pt"
-    )
 
 
 def _cleanup_pysr_artifacts(search_root: Path | None = None) -> None:
@@ -117,8 +37,7 @@ def _cleanup_pysr_artifacts(search_root: Path | None = None) -> None:
 
 class PhyReg:
     def __init__(self, path, max_len=None, refinement_strategy=None, device=None):
-        model = _load_model(str(path))
-        # _load_model 已保证 params 是 Namespace 类型
+        model = load_paddle_model_bundle(str(path))
         params = model["params"]
         params.rescale = False
         if max_len is not None:
@@ -138,20 +57,14 @@ class PhyReg:
         self.env = env
         self.modules = modules
         self.oracle = oracle
-        embedder = modules["embedder"]
-        encoder = modules["encoder"]
-        decoder = modules["decoder"]
-        embedder.load_state_dict(model["embedder"])
-        encoder.load_state_dict(model["encoder"])
-        decoder.load_state_dict(model["decoder"])
-        embedder.eval()
-        encoder.eval()
-        decoder.eval()
+        set_modules_state(modules, model)
+        for module in modules.values():
+            module.eval()
         self.mw = ModelWrapper(
             env=env,
-            embedder=embedder,
-            encoder=encoder,
-            decoder=decoder,
+            embedder=modules["embedder"],
+            encoder=modules["encoder"],
+            decoder=modules["decoder"],
             beam_length_penalty=params.beam_length_penalty,
             beam_size=params.beam_size,
             max_generated_output_len=params.max_generated_output_len,

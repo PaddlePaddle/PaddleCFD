@@ -36,10 +36,7 @@ def init_eval(params):
     env = build_env(params)
     env.rng = np.random.RandomState()
     modules = build_modules(env, params)
-    if "model.pt" in params.reload_checkpoint and params.reload_checkpoint != "":
-        trainer = Trainer(modules, env, params, path="model.pt", root="./")
-    else:
-        trainer = Trainer(modules, env, params)
+    trainer = Trainer(modules, env, params)
     evaluator = Evaluator(trainer)
     return evaluator, logger
 

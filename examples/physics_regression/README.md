@@ -30,10 +30,12 @@ Make sure your Python environment already contains a compatible PaddlePaddle bui
 
 A pre-trained model training on 6M synthetic formulas is avaliable from [Google Drive](https://drive.google.com/drive/folders/14M0Ed0gvSKmtuTOornfEoup8l48IfEUW).
 
-PyTorch checkpoints must be converted before loading in Paddle:
+PyTorch checkpoints must be converted to a Paddle native model bundle before loading in PaddleCFD:
 
 ```bash
-python examples/physics_regression/convert_model.py ./model.pt ./model.pkl
+python examples/physics_regression/convert_torch_to_paddle.py \
+  --torch-model ./model.pt \
+  --paddle-model ./model.pdparams
 ```
 
 After downloading and converting the pretrained checkpoint, you can play with `example.ipynb` as a demo example.
@@ -76,7 +78,7 @@ Using our pre-trained model to evaluate, run the following command to evaluate t
 
 `bash ./bash/eval_feynman.sh`
 
-If you want to use a trained model on your own, just reload checkpoint by modifying parameter `reload_checkpoint` to the path of your training checkpoint.
+If you want to evaluate a pretrained inference model, set `reload_model` to a Paddle native `model.pdparams`. If you want to resume training, set `reload_checkpoint` to a Paddle training checkpoint such as `checkpoint.pth`.
 
 The Divide-and-Conquer strategy requires training of oracle models. A small demo oracle checkpoint is bundled inside `examples/physics_regression/Oracle_model/demo`, while larger oracle assets should still be downloaded externally when needed.
 
@@ -87,7 +89,8 @@ Similarly, the most useful hyper-parameters for evaluation are presented in `./b
 - **`filename`**: The path to save evaluation results.
 - **`oraclename`**: The path to save oracle neural network model.
 - **`max_len`**: The number of datapoints for each formula.
-- **`reload_checkpoint`**: The path to reload model or checkpoint.
+- **`reload_model`**: The path to a Paddle native inference model (`model.pdparams`).
+- **`reload_checkpoint`**: The path to a Paddle training checkpoint for resuming training (`checkpoint.pth`).
 - **`expr_test_data_path`**: The path to the evaluation dataset. A small default test file is bundled in `examples/physics_regression/data/exprs_test_ranked.json`.
 
 ## Applications
