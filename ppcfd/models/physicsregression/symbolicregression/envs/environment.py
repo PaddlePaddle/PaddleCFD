@@ -614,15 +614,26 @@ class FunctionEnvironment(object):
                 + len(x["tree_encoded"]),
                 max_size=self.max_size,
             )
+        # [DEBUG] Use _SimpleIterator for deterministic cross-framework batch alignment.
+        # Original Paddle DataLoader (pre-fetches during construction, consumes rng):
         return paddle.io.DataLoader(
             dataset=dataset,
             timeout=0 if params.num_workers == 0 else 3600,
             batch_size=params.batch_size,
-            num_workers=params.num_workers,  # 移除强制限制，允许多worker并行加载
+            num_workers=params.num_workers,
             shuffle=False,
             collate_fn=collate_fn,
-            use_shared_memory=True,  # 添加共享内存优化
+            use_shared_memory=True,
         )
+        # class _SimpleIterator:
+        #     def __init__(self, ds, bs, cf):
+        #         self.ds, self.bs, self.cf, self.idx = ds, bs, cf, 0
+        #     def __iter__(self): return self
+        #     def __next__(self):
+        #         items = [self.ds[self.idx + i] for i in range(self.bs)]
+        #         self.idx += self.bs
+        #         return self.cf(items)
+        # return _SimpleIterator(dataset, params.batch_size, collate_fn)
 
     def create_test_iterator(
         self,
@@ -925,6 +936,9 @@ class EnvDataset(paddle.io.Dataset):
             assert size > 0
             self.size = size
 
+        # [DEBUG] Eager rng init — must happen in __init__ for deterministic cross-framework batch identity.
+        self.init_rng()
+
     def collate_size_fn(self, batch: Dict) -> int:
         if len(batch) == 0:
             return 0
@@ -1159,7 +1173,7 @@ class EnvDataset(paddle.io.Dataset):
         Return a training sample.
         Either generate it, or read it from file.
         """
-        self.init_rng()
+        # init_rng() is now called eagerly in EnvDataset.__init__
         if self.path is None:
             if self.train and self.skip:
                 return SKIP_ITEM

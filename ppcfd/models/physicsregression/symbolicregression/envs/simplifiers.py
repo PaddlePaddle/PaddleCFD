@@ -114,9 +114,9 @@ class Simplifier:
         return mod
 
     def expr_to_paddle_module(self, expr, dtype):
-        print(
-            "You are using sympypaddle converted from sympytorch to convert expr to paddle module!!!"
-        )
+        # print(
+        #     "You are using sympypaddle converted from sympytorch to convert expr to paddle module!!!"
+        # )
         # mod = sympytorch.SymPyModule(expressions=[expr])
         mod = sympypaddle.SymPyModule(expressions=[expr])
         mod.to(dtype)
