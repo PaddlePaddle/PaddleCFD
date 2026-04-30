@@ -36,5 +36,5 @@ def log_versions():
         "git hash: "
         + str(subprocess.check_output(["git", "rev-parse", "HEAD"]).strip())
     )
-    logging.info("Torch: " + str(paddle.__version__))
+    logging.info("Paddle: " + str(paddle.__version__))
     logging.info("----------------------------------------")
