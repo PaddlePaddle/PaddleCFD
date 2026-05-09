@@ -36,6 +36,14 @@ def drop_path(
     return input_tensor / keep_prob * random_tensor
 
 
+def safe_l2_normalize(
+    input_tensor: paddle.Tensor, axis: int = -1, epsilon: float = 1e-6
+) -> paddle.Tensor:
+    safe_input = input_tensor + epsilon
+    norm = paddle.linalg.norm(safe_input, p=2, axis=axis, keepdim=True)
+    return input_tensor / norm
+
+
 class Swinv2DropPath(paddle.nn.Layer):
     def __init__(self, drop_prob: Optional[float] = None) -> None:
         super().__init__()
@@ -320,15 +328,11 @@ class Swinv2SelfAttention(paddle.nn.Layer):
         value_layer = self.transpose_for_scores(self.value(hidden_states))
         query_layer = self.transpose_for_scores(mixed_query_layer)
 
-        # Add a tiny constant before normalize to prevent NaN in Paddle's
-        # backward when input contains all-zero tokens (padding regions).
-        # Paddle's normalize backward divides by the L2 norm, and for zero
-        # inputs this produces extremely large gradients that overflow float32.
-        # This has no meaningful effect on non-zero tokens.
-        _NORM_STABILITY_EPS = 1e-6
         attention_scores = paddle.matmul(
-            paddle.nn.functional.normalize(query_layer + _NORM_STABILITY_EPS, axis=-1),
-            paddle.nn.functional.normalize(key_layer + _NORM_STABILITY_EPS, axis=-1).transpose([0, 1, 3, 2]),
+            safe_l2_normalize(query_layer, axis=-1, epsilon=1e-6),
+            safe_l2_normalize(key_layer, axis=-1, epsilon=1e-6).transpose(
+                [0, 1, 3, 2]
+            ),
         )
         logit_scale = paddle.exp(
             paddle.clip(self.logit_scale, max=math.log(1.0 / 0.01))
@@ -1322,8 +1326,23 @@ class ScOT(paddle.nn.Layer):
         parameters = list(self.parameters())
         return parameters[0].dtype if parameters else paddle.float32
 
+    def _reset_conv_transpose_like_torch(self, module):
+        weight = getattr(module, "weight", None)
+        if weight is None:
+            return
+        fan_in = weight.shape[1]
+        for dim in weight.shape[2:]:
+            fan_in *= dim
+        bound = 1.0 / math.sqrt(fan_in)
+        paddle.nn.initializer.Uniform(-bound, bound)(weight)
+        bias = getattr(module, "bias", None)
+        if bias is not None:
+            paddle.nn.initializer.Uniform(-bound, bound)(bias)
+
     def _init_weights(self, module):
-        if isinstance(module, (paddle.nn.Linear, paddle.nn.Conv2D, paddle.nn.Conv2DTranspose)):
+        if isinstance(module, paddle.nn.Conv2DTranspose):
+            self._reset_conv_transpose_like_torch(module)
+        elif isinstance(module, (paddle.nn.Linear, paddle.nn.Conv2D)):
             weight = getattr(module, "weight", None)
             if weight is not None:
                 initializer = paddle.nn.initializer.Normal(

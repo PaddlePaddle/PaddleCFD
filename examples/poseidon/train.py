@@ -170,6 +170,18 @@ if __name__ == "__main__":
         action="store_true",
         help="Set this if you have to replace the embeddings and recovery layers because you are not just using the density, velocity and pressure channels. Only relevant for finetuning.",
     )
+    parser.add_argument(
+        "--debug_initial_state_path",
+        type=str,
+        default=None,
+        help="Debug-only path to a Paddle state_dict used for loss alignment.",
+    )
+    parser.add_argument(
+        "--debug_batch_order_path",
+        type=str,
+        default=None,
+        help="Debug-only path to a JSON file with epoch_batches for loss alignment.",
+    )
     params = read_cli(parser).parse_args()
     run, config, ckpt_dir, rank, cpu_cores = setup(params)
     paddle.set_device(resolve_runtime_device())
@@ -275,8 +287,7 @@ if __name__ == "__main__":
         lr_scheduler_type=config["lr_scheduler"],
         warmup_ratio=config["warmup_ratio"],
         log_level="passive",
-        logging_strategy="steps",
-        logging_steps=5,
+        logging_strategy="epoch",
         logging_nan_inf_filter=False,
         save_strategy="epoch",
         save_total_limit=1,
@@ -295,6 +306,7 @@ if __name__ == "__main__":
         run_name=params.wandb_run_name,
         early_stopping_patience=config["early_stopping_patience"],
         disable_tqdm=params.disable_tqdm,
+        debug_batch_order_path=params.debug_batch_order_path,
     )
     early_stopping = EarlyStoppingCallback(
         early_stopping_patience=config["early_stopping_patience"],
@@ -309,6 +321,9 @@ if __name__ == "__main__":
         )
     else:
         model = ScOT(model_config)
+
+    if params.debug_initial_state_path is not None:
+        model.set_state_dict(paddle.load(params.debug_initial_state_path))
 
     num_params = get_num_parameters(model)
     num_params_no_embed = get_num_parameters_no_embed(model)

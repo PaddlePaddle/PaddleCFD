@@ -57,6 +57,7 @@ class TrainingArguments:
     past_index: int = -1
     early_stopping_patience: Optional[int] = None
     disable_tqdm: bool = False
+    debug_batch_order_path: Optional[str] = None
 
 
 @dataclass
@@ -558,6 +559,35 @@ class Trainer:
             prepared[key] = value
         return prepared
 
+    def _load_debug_epoch_batches(self):
+        path = getattr(self.args, "debug_batch_order_path", None)
+        if not path:
+            return None
+        with open(path, "r", encoding="utf-8") as stream:
+            payload = json.load(stream)
+        epoch_batches = payload.get("epoch_batches")
+        if epoch_batches is None:
+            epoch_batches = [payload["batches"]]
+        if len(epoch_batches) == 0:
+            raise ValueError("debug epoch batch order must contain at least one epoch")
+        return epoch_batches
+
+    def _collate_indexed_batch(self, indices):
+        samples = [self.train_dataset[int(index)] for index in indices]
+        batch = {}
+        for key in samples[0]:
+            values = [sample[key] for sample in samples]
+            if isinstance(values[0], paddle.Tensor):
+                batch[key] = paddle.stack(values, axis=0)
+            else:
+                batch[key] = paddle.to_tensor(values)
+        return batch
+
+    def _iter_debug_epoch_batches(self, epoch_batches, epoch):
+        current_batches = epoch_batches[epoch % len(epoch_batches)]
+        for indices in current_batches:
+            yield self._collate_indexed_batch(indices)
+
     def _create_dataloader(self, dataset, batch_size, shuffle):
         return paddle.io.DataLoader(
             dataset,
@@ -579,7 +609,13 @@ class Trainer:
         train_dataloader = self._create_dataloader(
             self.train_dataset, self.args.per_device_train_batch_size, shuffle=True
         )
-        num_training_steps = len(train_dataloader) * int(self.args.num_train_epochs)
+        debug_epoch_batches = self._load_debug_epoch_batches()
+        if debug_epoch_batches is not None:
+            train_dataloader = None
+            steps_per_epoch = len(debug_epoch_batches[0])
+        else:
+            steps_per_epoch = len(train_dataloader)
+        num_training_steps = steps_per_epoch * int(self.args.num_train_epochs)
         optimizer = self.create_optimizer(num_training_steps)
 
         if resume_from_checkpoint:
@@ -592,17 +628,29 @@ class Trainer:
 
         patience = self.args.early_stopping_patience
         no_improve_epochs = 0
+        train_start = time.perf_counter()
+        all_epoch_losses = []
 
         for epoch in range(int(self.args.num_train_epochs)):
             self.model.train()
             epoch_losses = []
-            steps_in_epoch = max(len(train_dataloader), 1)
-            for step, batch in enumerate(train_dataloader, start=1):
+            epoch_iterator = (
+                train_dataloader
+                if debug_epoch_batches is None
+                else self._iter_debug_epoch_batches(debug_epoch_batches, epoch)
+            )
+            steps_in_epoch = max(steps_per_epoch, 1)
+            last_grad_norm = None
+
+            for step, batch in enumerate(epoch_iterator, start=1):
                 inputs = self._prepare_batch(batch)
                 loss = self.compute_loss(self.model, inputs)
-                epoch_losses.append(float(loss.detach().numpy()))
+                loss_value = float(loss.detach().numpy())
+                epoch_losses.append(loss_value)
+                all_epoch_losses.append(loss_value)
+
                 loss.backward()
-                grad_norm = self._compute_grad_norm()
+                last_grad_norm = self._compute_grad_norm()
                 optimizer.step()
                 if self.lr_scheduler is not None:
                     for scheduler in self._all_lr_schedulers:
@@ -613,12 +661,14 @@ class Trainer:
                 if (
                     self.args.logging_strategy == "steps"
                     and self.args.logging_steps > 0
-                    and step % self.args.logging_steps == 0
+                    and self.global_step % self.args.logging_steps == 0
                 ):
                     self._log(
                         {
-                            "loss": float(np.mean(epoch_losses[-self.args.logging_steps :])),
-                            "grad_norm": grad_norm,
+                            "loss": float(
+                                np.mean(epoch_losses[-self.args.logging_steps :])
+                            ),
+                            "grad_norm": last_grad_norm,
                             "learning_rate": self._current_learning_rate(),
                             "epoch": epoch + step / steps_in_epoch,
                         }
@@ -626,17 +676,31 @@ class Trainer:
 
             train_loss = float(np.mean(epoch_losses)) if epoch_losses else 0.0
             self.completed_epochs = epoch + 1
-            metrics = {"train_loss": train_loss}
+
+            if self.args.logging_strategy == "epoch":
+                self._log(
+                    {
+                        "loss": train_loss,
+                        "grad_norm": last_grad_norm,
+                        "learning_rate": self._current_learning_rate(),
+                        "epoch": float(self.completed_epochs),
+                    }
+                )
+
             if self.args.evaluation_strategy == "epoch" and self.eval_dataset is not None:
                 eval_metrics = self.evaluate()
-                metrics.update(eval_metrics)
+                eval_metrics["epoch"] = float(self.completed_epochs)
                 self._log(eval_metrics)
                 metric_key = self._resolve_best_metric_key(eval_metrics)
                 metric_value = eval_metrics.get(metric_key)
                 if metric_value is not None:
                     better = (
                         self.best_metric is None
-                        or (metric_value > self.best_metric if self.args.greater_is_better else metric_value < self.best_metric)
+                        or (
+                            metric_value > self.best_metric
+                            if self.args.greater_is_better
+                            else metric_value < self.best_metric
+                        )
                     )
                     if better:
                         self.best_metric = metric_value
@@ -654,11 +718,32 @@ class Trainer:
                 self.model.save_pretrained(self.args.output_dir)
                 self._save_training_state(self.args.output_dir, epoch=epoch + 1)
 
+        train_runtime = time.perf_counter() - train_start
+        num_train_samples = (
+            len(self.train_dataset) * max(self.completed_epochs, 1)
+            if hasattr(self.train_dataset, "__len__")
+            else 0
+        )
+        train_summary = {
+            "train_runtime": train_runtime,
+            "train_samples_per_second": (
+                num_train_samples / train_runtime if train_runtime > 0 else 0.0
+            ),
+            "train_steps_per_second": (
+                self.global_step / train_runtime if train_runtime > 0 else 0.0
+            ),
+            "train_loss": float(np.mean(all_epoch_losses)) if all_epoch_losses else 0.0,
+            "epoch": float(self.completed_epochs),
+        }
+        self._log(train_summary)
+
         if self.args.load_best_model_at_end and os.path.exists(self.best_model_dir):
             best_model = self.model.__class__.from_pretrained(
                 self.best_model_dir, config=self.model.config, ignore_mismatched_sizes=True
             )
             self.model.set_state_dict(best_model.state_dict())
+
+        return train_summary
 
     def predict(self, dataset, metric_key_prefix="eval"):
         dataloader = self._create_dataloader(
