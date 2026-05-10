@@ -1,0 +1,65 @@
+[
+  {
+    "case": "advection",
+    "decoder": "nonlinear",
+    "n": 10,
+    "forward_loss_jax": 1.0849930047988892,
+    "forward_loss_paddle": 1.0849928855895996,
+    "forward_loss_abs_diff": 1.1920928955078125e-07,
+    "prediction_max_abs_diff": 7.450580596923828e-08,
+    "grad_max_abs_diff": 7.450580596923828e-08,
+    "train_loss_trace_jax": [
+      1.0849930047988892,
+      1.0849918127059937,
+      1.0849907398223877
+    ],
+    "train_loss_trace_paddle": [
+      1.0849928855895996,
+      1.0849918127059937,
+      1.0849907398223877
+    ],
+    "train_loss_trace_max_abs_diff": 1.1920928955078125e-07
+  },
+  {
+    "case": "antiderivative",
+    "decoder": "nonlinear",
+    "n": 10,
+    "forward_loss_jax": 1.3916261196136475,
+    "forward_loss_paddle": 1.3916258811950684,
+    "forward_loss_abs_diff": 2.384185791015625e-07,
+    "prediction_max_abs_diff": 7.450580596923828e-08,
+    "grad_max_abs_diff": 1.0943040251731873e-08,
+    "train_loss_trace_jax": [
+      1.3916261196136475,
+      1.3916256427764893,
+      1.3916256427764893
+    ],
+    "train_loss_trace_paddle": [
+      1.3916258811950684,
+      1.3916257619857788,
+      1.3916255235671997
+    ],
+    "train_loss_trace_max_abs_diff": 2.384185791015625e-07
+  },
+  {
+    "case": "shallowwater",
+    "decoder": "nonlinear",
+    "n": 10,
+    "forward_loss_jax": 0.8417395353317261,
+    "forward_loss_paddle": 0.8417394757270813,
+    "forward_loss_abs_diff": 5.960464477539063e-08,
+    "prediction_max_abs_diff": 1.043081283569336e-07,
+    "grad_max_abs_diff": 2.9802322387695312e-08,
+    "train_loss_trace_jax": [
+      0.8417395353317261,
+      0.8417384624481201,
+      0.8417376279830933
+    ],
+    "train_loss_trace_paddle": [
+      0.8417394757270813,
+      0.8417385220527649,
+      0.8417375087738037
+    ],
+    "train_loss_trace_max_abs_diff": 1.1920928955078125e-07
+  }
+]

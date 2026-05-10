@@ -11,18 +11,10 @@ log
 *.log
 *.mp3
 *.ruff_cache
-<<<<<<< HEAD
 *.npz
 *.npy
 results/
-=======
-examples/nomad/shallowwater/*.npz
-examples/nomad/shallowwater/*.npy
-*.npz
-*.npy
-results/
-
->>>>>>> recover-code
+NOMAD/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

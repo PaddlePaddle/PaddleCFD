@@ -7,7 +7,13 @@ from utils import load_model
 from ppcfd.models.nomad.advection.operator_model import OperatorModel
 
 
-def main(n, decoder):
+def main(
+    n,
+    decoder,
+    num_test=1000,
+    infer_batch_size=100,
+    checkpoint="checkpoints/nomad_advection_model.pdparams",
+):
 
     # =========
     # 参数设置
@@ -16,8 +22,6 @@ def main(n, decoder):
     m = 256
     dy = 2
     ds = 1
-
-    num_test = 100
 
     # =========
     # 构建模型结构
@@ -52,7 +56,7 @@ def main(n, decoder):
     # =========
     load_model(
         model,
-        "checkpoints/nomad_advection_model.pdparams",
+        checkpoint,
     )
 
     # =========
@@ -91,9 +95,16 @@ def main(n, decoder):
     # =========
     model.eval()
 
-    with paddle.no_grad():
+    pred_batches = []
 
-        pred = model.predict((U_test, y_test))
+    with paddle.no_grad():
+        for start in range(0, num_test, infer_batch_size):
+            end = min(start + infer_batch_size, num_test)
+            pred_batches.append(
+                model.predict((U_test[start:end], y_test[start:end])).numpy()
+            )
+
+    pred = np.concatenate(pred_batches, axis=0)
 
     # =========
     # 保存结果
@@ -102,7 +113,7 @@ def main(n, decoder):
 
     np.savez(
         "results/prediction.npz",
-        prediction=pred.numpy(),
+        prediction=pred,
     )
 
     print("Inference finished.")
@@ -126,10 +137,31 @@ if __name__ == "__main__":
         type=str,
         help="Decoder type: linear or nonlinear",
     )
+    parser.add_argument(
+        "--num-test",
+        type=int,
+        default=1000,
+        help="Number of test samples to run inference on.",
+    )
+    parser.add_argument(
+        "--infer-batch-size",
+        type=int,
+        default=100,
+        help="Number of test samples per inference batch.",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=str,
+        default="checkpoints/nomad_advection_model.pdparams",
+        help="Path to model parameters.",
+    )
 
     args = parser.parse_args()
 
-    n = args.n
-    decoder = args.decoder
-
-    main(n, decoder)
+    main(
+        args.n,
+        args.decoder,
+        args.num_test,
+        args.infer_batch_size,
+        args.checkpoint,
+    )

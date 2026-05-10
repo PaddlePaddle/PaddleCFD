@@ -38,7 +38,7 @@ def generate_one_datum(freq, m=500, P=500):
 
     X = np.linspace(0, 1, m).astype(np.float32)
 
-    u = np.cos(2 * np.pi * freq * X).astype(np.float32)
+    u = (2 * np.pi * freq * np.cos(2 * np.pi * freq * X)).astype(np.float32)
 
     y_train = np.linspace(0, 1, P).astype(np.float32)
 

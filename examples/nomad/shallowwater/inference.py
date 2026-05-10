@@ -6,7 +6,7 @@ import paddle
 from ppcfd.models.nomad.shallowwater.nomad_model import OperatorModel
 
 
-def main(n, decoder):
+def main(n, decoder, checkpoint=None):
 
     num_test = 1000
 
@@ -62,9 +62,11 @@ def main(n, decoder):
 
     model = OperatorModel(branch_layers, trunk_layers, n=n, decoder=decoder, ds=ds)
 
-    model.load_dict(
-        paddle.load(f"checkpoints/nomad_sw_{decoder}_n{n}.pdparams")
-    )
+    if checkpoint is None:
+        checkpoint = f"checkpoints/nomad_sw_{decoder}_n{n}.pdparams"
+
+    model.load_dict(paddle.load(checkpoint))
+    print("Model loaded:", checkpoint)
 
     model.eval()
 
@@ -97,7 +99,13 @@ if __name__ == "__main__":
 
     parser.add_argument("n", type=int, nargs="+")
     parser.add_argument("decoder", type=str, nargs="+")
+    parser.add_argument(
+        "--checkpoint",
+        type=str,
+        default=None,
+        help="Path to model parameters.",
+    )
 
     args = parser.parse_args()
 
-    main(args.n[0], args.decoder[0])
+    main(args.n[0], args.decoder[0], args.checkpoint)

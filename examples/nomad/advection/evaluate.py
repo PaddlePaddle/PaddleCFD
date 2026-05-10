@@ -1,15 +1,12 @@
 import numpy as np
 
-# 读取预测
 pred = np.load("results/prediction.npz")["prediction"]
-
-# 读取真实数据
 data = np.load("./pure_advection_traintest.npz")
 
-s_test = data["solution"][-100:]
+num_test = pred.shape[0]
+s_test = data["solution"][-num_test:]
 
-# reshape
-s_test = s_test.reshape(100, 25600, 1)
+s_test = s_test.reshape(num_test, 25600, 1)
 
 errors = []
 

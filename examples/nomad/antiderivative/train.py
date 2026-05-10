@@ -49,7 +49,7 @@ def train_model(model, train_dataset, test_dataset, optimizer, scheduler, nIter)
             model.train()
 
 
-def main(n, decoder):
+def main(n, decoder, iterations=20000, train_seed=0, test_seed=12345):
 
     P = 500
     m = 500
@@ -59,10 +59,11 @@ def main(n, decoder):
 
     batch_size = 100
 
-    rng = np.random.default_rng(0)
+    train_rng = np.random.default_rng(train_seed)
+    test_rng = np.random.default_rng(test_seed)
 
-    train_freqs = rng.uniform(0, 10, size=(num_train,))
-    test_freqs = rng.uniform(0, 10, size=(num_test,))
+    train_freqs = train_rng.uniform(0, 10, size=(num_train,))
+    test_freqs = test_rng.uniform(0, 10, size=(num_test,))
 
     U_train, y_train, s_train = generate_data(train_freqs, m, P)
     U_test, y_test, s_test = generate_data(test_freqs, m, P)
@@ -123,7 +124,7 @@ def main(n, decoder):
         iter(test_dataset),
         optimizer,
         scheduler,
-        20000,
+        iterations,
     )
 
     elapsed = timeit.default_timer() - start
@@ -143,7 +144,25 @@ if __name__ == "__main__":
 
     parser.add_argument("n", type=int)
     parser.add_argument("decoder", type=str)
+    parser.add_argument(
+        "--iterations",
+        type=int,
+        default=20000,
+        help="Number of training iterations.",
+    )
+    parser.add_argument(
+        "--train-seed",
+        type=int,
+        default=0,
+        help="Random seed for synthetic training frequencies.",
+    )
+    parser.add_argument(
+        "--test-seed",
+        type=int,
+        default=12345,
+        help="Random seed for synthetic test frequencies.",
+    )
 
     args = parser.parse_args()
 
-    main(args.n, args.decoder)
+    main(args.n, args.decoder, args.iterations, args.train_seed, args.test_seed)

@@ -18,6 +18,12 @@ class DataGenerator:
     def __iter__(self):
         return self
 
+    def state_dict(self):
+        return {"rng_state": self.rng.bit_generator.state}
+
+    def set_state_dict(self, state_dict):
+        self.rng.bit_generator.state = state_dict["rng_state"]
+
     def __next__(self):
 
         idx = self.rng.choice(

@@ -7,13 +7,13 @@ from data_utils import generate_data
 from ppcfd.models.nomad.antiderivative.nomad_antiderivative import OperatorModel
 
 
-def main(n, decoder):
+def main(n, decoder, test_seed=12345):
 
     P = 500
     m = 500
     num_test = 1000
 
-    rng = np.random.default_rng(123)
+    rng = np.random.default_rng(test_seed)
 
     freqs = rng.uniform(0, 10, size=(num_test,))
 
@@ -67,7 +67,13 @@ if __name__ == "__main__":
 
     parser.add_argument("n", type=int)
     parser.add_argument("decoder", type=str)
+    parser.add_argument(
+        "--test-seed",
+        type=int,
+        default=12345,
+        help="Random seed for synthetic test frequencies.",
+    )
 
     args = parser.parse_args()
 
-    main(args.n, args.decoder)
+    main(args.n, args.decoder, args.test_seed)
