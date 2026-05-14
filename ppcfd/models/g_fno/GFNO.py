@@ -292,7 +292,7 @@ class GNorm(paddle.nn.Module):
     def __init__(self, width, group_size):
         super().__init__()
         self.group_size = group_size
-        self.norm = paddle.nn.InstanceNorm3D(num_features=width)
+        self.norm = paddle.nn.InstanceNorm3D(num_features=width, weight_attr=False, bias_attr=False)
 
     def forward(self, x):
         x = x.view(x.shape[0], -1, self.group_size, x.shape[-2], x.shape[-1])

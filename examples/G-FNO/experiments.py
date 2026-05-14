@@ -144,6 +144,8 @@ parser.add_argument(
     default=4,
     help="spatial downsampling factor for PDEBench radial dam break data",
 )
+parser.add_argument("--debug_initial_state_path", type=str, default=None, help="debug-only path to a Paddle state_dict")
+parser.add_argument("--debug_batch_order_path", type=str, default=None, help="debug-only JSON file with epoch_batches")
 args = parser.parse_args()
 assert args.model_type in [
     "FNO2d",
@@ -369,6 +371,8 @@ elif "radialNO3d" in args.model_type:
     )
 else:
     raise NotImplementedError("Model not recognized")
+if args.debug_initial_state_path is not None:
+    model.set_state_dict(paddle.load(args.debug_initial_state_path))
 if args.strategy == "oneshot":
     x_shape = [batch_size, Sy, Sx, T, initial_step, num_channels]
     x_shape_super = [1, S_super, S_super, T_super, initial_step, num_channels]
@@ -503,6 +507,13 @@ test_rt_loader = paddle.io.DataLoader(
 test_rf_loader = paddle.io.DataLoader(
     dataset=test_rf_data, batch_size=batch_size, shuffle=False
 )
+debug_epoch_batches = None
+if args.debug_batch_order_path is not None:
+    from debug_alignment import DebugEpochBatchLoader, load_debug_epoch_batches
+
+    debug_epoch_batches = load_debug_epoch_batches(args.debug_batch_order_path)
+    assert len(debug_epoch_batches) >= epochs, "debug batch order must cover all epochs"
+    train_loader = DebugEpochBatchLoader(train_data, debug_epoch_batches[0])
 complex_ct = sum(par.size * (1 + par.is_complex()) for par in model.parameters())
 real_ct = sum(par.size for par in model.parameters())
 if args.verbose:
@@ -575,6 +586,8 @@ if args.verbose:
 train_times = []
 eval_times = []
 for ep in range(epochs):
+    if debug_epoch_batches is not None:
+        train_loader = DebugEpochBatchLoader(train_data, debug_epoch_batches[ep])
     model.train()
     t1 = default_timer()
     train_l2 = train_vort_l2 = train_pres_l2 = 0
