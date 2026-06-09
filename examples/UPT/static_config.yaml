@@ -1,10 +1,10 @@
 vars:
-  data: /home/ggbond/baidu_98_CFD/PaddleCFD
+  data: ../..
 
 account_name: <ACCOUNT_NAME>
 
 # path to store logs/checkpoints
-output_path: /home/ggbond/baidu_98_CFD/PaddleCFD/output/UPT
+output_path: ${vars.data}/output/UPT
 # path where pretrained models are stored
 # model_path: <ROOT_PATH>/models
 
