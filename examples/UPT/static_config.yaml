@@ -1,17 +1,17 @@
 vars:
-  data: /home/Userlist/guhexiang/baidu_98_CFD/PaddleCFD/data/UPT
+  data: /home/ggbond/baidu_98_CFD/PaddleCFD
 
 account_name: <ACCOUNT_NAME>
 
 # path to store logs/checkpoints
-output_path: /home/Userlist/guhexiang/baidu_98_CFD/PaddleCFD/output/UPT
+output_path: /home/ggbond/baidu_98_CFD/PaddleCFD/output/UPT
 # path where pretrained models are stored
 # model_path: <ROOT_PATH>/models
 
 # datasets
 global_dataset_paths:
   # mesh_dataset: ${vars.data}/mesh_dataset
-  shapenet_car: ${vars.data}/shapenetcar
+  shapenet_car: ${vars.data}
   # lagrangian_dataset: ${vars.data}/lagrangian_dataset
 master_port: 55555
 
