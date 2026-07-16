@@ -52,24 +52,60 @@ python -m pip install -e .
 
 Use a GPU-enabled PaddlePaddle package for full training and performance evaluation. CPU can be used for syntax checks and small debugging runs, but the default training iterations are set to reproduce the original experiment scale.
 
-## 4. Data
+## 4. Data and Pretrained Checkpoints
+
+The dataset and checkpoint files are hosted on BOS and are not tracked in the repository. Download them before running training, inference, or evaluation, and place each file at the path shown below.
+
+### Datasets
 
 The antiderivative case generates training and test samples on the fly, so no extra dataset is required.
 
-The advection case requires:
+The advection case requires `examples/nomad/advection/pure_advection_traintest.npz`:
 
-```text
-examples/nomad/advection/pure_advection_traintest.npz
+```bash
+cd examples/nomad/advection
+wget https://paddle-org.bj.bcebos.com/paddlecfd/datasets/nomad/pure_advection_traintest.npz
 ```
 
-The shallow water case requires:
+The shallow water case requires `train_SW.npz` and `test_SW.npz` under `examples/nomad/shallowwater/`:
 
-```text
-examples/nomad/shallowwater/train_SW.npz
-examples/nomad/shallowwater/test_SW.npz
+```bash
+cd examples/nomad/shallowwater
+wget https://paddle-org.bj.bcebos.com/paddlecfd/datasets/nomad/train_SW.npz
+wget https://paddle-org.bj.bcebos.com/paddlecfd/datasets/nomad/test_SW.npz
 ```
 
-These dataset files follow the original NOMAD project layout. If they are not present in the working tree, download the NOMAD data archive from the original project and place the files in the paths above.
+### Pretrained Checkpoints
+
+To run inference and evaluation without training from scratch, download the pretrained checkpoints into the `checkpoints/` directory of each case:
+
+```bash
+# antiderivative
+mkdir -p examples/nomad/antiderivative/checkpoints
+wget -P examples/nomad/antiderivative/checkpoints \
+  https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/nomad/nomad_antiderivative.pdparams
+
+# advection
+mkdir -p examples/nomad/advection/checkpoints
+wget -P examples/nomad/advection/checkpoints \
+  https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/nomad/nomad_advection_model.pdparams
+
+# shallow water
+mkdir -p examples/nomad/shallowwater/checkpoints
+wget -P examples/nomad/shallowwater/checkpoints \
+  https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/nomad/nomad_sw_nonlinear_n10.pdparams
+```
+
+Download links summary:
+
+- Datasets
+    - `pure_advection_traintest.npz`: https://paddle-org.bj.bcebos.com/paddlecfd/datasets/nomad/pure_advection_traintest.npz
+    - `train_SW.npz`: https://paddle-org.bj.bcebos.com/paddlecfd/datasets/nomad/train_SW.npz
+    - `test_SW.npz`: https://paddle-org.bj.bcebos.com/paddlecfd/datasets/nomad/test_SW.npz
+- Checkpoints
+    - `nomad_advection_model.pdparams`: https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/nomad/nomad_advection_model.pdparams
+    - `nomad_antiderivative.pdparams`: https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/nomad/nomad_antiderivative.pdparams
+    - `nomad_sw_nonlinear_n10.pdparams`: https://paddle-org.bj.bcebos.com/paddlecfd/checkpoints/nomad/nomad_sw_nonlinear_n10.pdparams
 
 ## 5. Training
 
