@@ -5,7 +5,7 @@ vars:
   lr: 5.0e-4
   batch_size: 32
   max_batch_size: 16
-  epochs: 50
+  epochs: 5
   grid_resolution: 32
 
   optim:

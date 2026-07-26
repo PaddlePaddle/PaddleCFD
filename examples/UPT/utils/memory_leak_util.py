@@ -11,7 +11,8 @@ def get_tensors_in_memory():
         try:
             if type(obj).__name__ != "_reduce_op" and paddle.is_tensor(obj):
                 all_tensors.append(obj)
-                if obj.device != paddle.device("cpu"):
+                # Paddle 3 EagerParamBase exposes ``place`` instead of ``device``.
+                if obj.place.is_gpu_place():
                     cuda_tensors.append(obj)
         except ReferenceError:
             pass
