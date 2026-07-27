@@ -42,6 +42,6 @@ class SingleEvalTrainer(SgdTrainer):
             x = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="x", batch=batch
             )
-            x = x.to(self.model.device, non_blocking=True)
+            x = x.to(self.model.device)
             _ = self.model(x)
             return dict(total=paddle.tensor(0.0)), {}

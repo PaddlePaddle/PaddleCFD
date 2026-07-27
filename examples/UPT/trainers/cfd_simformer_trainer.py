@@ -1,6 +1,5 @@
 from functools import cached_property
 from datasets.collators.cfd_simformer_collator import CfdSimformerCollator
-import kappamodules.utils.tensor_cache as tc
 import paddle
 from callbacks.online_callbacks.update_output_callback import \
     UpdateOutputCallback
@@ -118,7 +117,7 @@ class CfdSimformerTrainer(SgdTrainer):
 
         def to_device(self, item, batch, dataset_mode):
             data = ModeWrapper.get_item(mode=dataset_mode, item=item, batch=batch)
-            data = data.to(self.model.device, non_blocking=True)
+            data = data.to(self.model.device)
             return data
 
         def prepare(self, batch, dataset_mode=None):
@@ -127,7 +126,7 @@ class CfdSimformerTrainer(SgdTrainer):
             mesh_pos = self.to_device(
                 item="mesh_pos", batch=batch, dataset_mode=dataset_mode
             )
-            batch_idx = ctx["batch_idx"].to(self.model.device, non_blocking=True)
+            batch_idx = ctx["batch_idx"].to(self.model.device)
             data = dict(
                 x=self.to_device(item="x", batch=batch, dataset_mode=dataset_mode),
                 geometry2d=self.to_device(
@@ -144,9 +143,9 @@ class CfdSimformerTrainer(SgdTrainer):
                 ),
                 mesh_pos=mesh_pos,
                 batch_idx=batch_idx,
-                unbatch_idx=ctx["unbatch_idx"].to(self.model.device, non_blocking=True),
+                unbatch_idx=ctx["unbatch_idx"].to(self.model.device),
                 unbatch_select=ctx["unbatch_select"].to(
-                    self.model.device, non_blocking=True
+                    self.model.device
                 ),
                 target=self.to_device(
                     item="target", batch=batch, dataset_mode=dataset_mode
@@ -164,7 +163,7 @@ class CfdSimformerTrainer(SgdTrainer):
                 else:
                     flow = "target_to_source"
                     supernode_idxs = ctx["supernode_idxs"].to(
-                        self.model.device, non_blocking=True
+                        self.model.device
                     )
                 mesh_edges = radius_graph(
                     x=mesh_pos,
@@ -182,7 +181,7 @@ class CfdSimformerTrainer(SgdTrainer):
                 assert self.trainer.radius_graph_r is None
                 assert self.trainer.radius_graph_max_num_neighbors is None
                 assert self.trainer.num_supernodes is None
-                mesh_edges = mesh_edges.to(self.model.device, non_blocking=True)
+                mesh_edges = mesh_edges.to(self.model.device)
             data["mesh_edges"] = mesh_edges
             return data
 
@@ -296,7 +295,9 @@ class CfdSimformerTrainer(SgdTrainer):
                     if dynamics_hat_mask.sum() > 0:
                         dynamics_hat_loss = dynamics_hat_loss[dynamics_hat_mask].mean()
                     else:
-                        dynamics_hat_loss = tc.zeros(size=(1,), device=timestep.device)
+                        dynamics_hat_loss = paddle.zeros(shape=(1,), dtype=timestep.dtype).to(
+                            timestep.device
+                        )
                 elif reduction == "mean_per_sample":
                     dynamics_hat_loss[timestep == max_timestep] = 0.0
                     dynamics_hat_loss = dynamics_hat_loss.flatten(start_dim=1).mean(

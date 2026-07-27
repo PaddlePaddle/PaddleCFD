@@ -35,7 +35,7 @@ class OfflineRolloutMeshLossCallback(PeriodicCallback):
     def _forward(self, batch, model, trainer, trainer_model):
         data = trainer_model.prepare(batch, mode="rollout")
         batch, ctx = batch
-        batch_idx = ctx["batch_idx"].to(model.device, non_blocking=True)
+        batch_idx = ctx["batch_idx"].to(model.device)
         assert "target" not in data
         x = data.pop("x")
         assert (

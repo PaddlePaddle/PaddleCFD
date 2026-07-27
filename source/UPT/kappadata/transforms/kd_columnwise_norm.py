@@ -19,7 +19,7 @@ class KDColumnwiseNorm(KDTransform):
         if self.mode == "moment":
             to_sub = x.mean(dim=1).unsqueeze(1)
         elif self.mode == "range":
-            to_sub = x.min(dim=1).values.unsqueeze(1)
+            to_sub = x.min(dim=1).unsqueeze(1)
         else:
             raise NotImplementedError
         if self.inplace:
@@ -29,7 +29,7 @@ class KDColumnwiseNorm(KDTransform):
         if self.mode == "moment":
             to_div = x.std(dim=1).unsqueeze(1) + self.eps
         elif self.mode == "range":
-            to_div = x.max(dim=1).values.unsqueeze(1)
+            to_div = x.max(dim=1).unsqueeze(1)
         else:
             raise NotImplementedError
         if self.inplace:

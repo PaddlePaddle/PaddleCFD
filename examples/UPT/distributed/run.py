@@ -83,7 +83,15 @@ def run_single_or_multiprocess(
             args_tuple = args
         spawn_args = (main_single,) + args_tuple
         # print('spawn_args的内容为:',spawn_args)
-        paddle.distributed.spawn(func=_run_multiprocess, nprocs=world_size, args=spawn_args)
+        spawn_kwargs = {}
+        if accelerator == "gpu":
+            spawn_kwargs["gpus"] = ",".join(device_ids)
+        paddle.distributed.spawn(
+            func=_run_multiprocess,
+            nprocs=world_size,
+            args=spawn_args,
+            **spawn_kwargs,
+        )
      
 
 

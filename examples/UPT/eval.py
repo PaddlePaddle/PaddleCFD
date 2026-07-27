@@ -1,4 +1,4 @@
-# examples/UPT/infer.py
+# examples/UPT/eval.py
 import argparse
 import csv
 import importlib.util
@@ -438,6 +438,7 @@ def main():
     args = parse_args()
     import_runtime_deps()
     root = setup_imports()
+    import paddle_utils  # noqa: F401
 
     from utils.data_container import DataContainer
 

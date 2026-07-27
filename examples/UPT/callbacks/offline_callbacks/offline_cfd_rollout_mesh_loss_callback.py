@@ -35,7 +35,7 @@ class OfflineCfdRolloutMeshLossCallback(PeriodicCallback):
     def _forward(self, batch, model, trainer, trainer_model):
         data = trainer_model.prepare(batch)
         batch, ctx = batch
-        batch_idx = ctx["batch_idx"].to(model.device, non_blocking=True)
+        batch_idx = ctx["batch_idx"].to(model.device)
         target = data.pop("target")
         x = data.pop("x")
         assert x.ndim == 2, "expected data to be of shape (bs * num_points, input_dim)"

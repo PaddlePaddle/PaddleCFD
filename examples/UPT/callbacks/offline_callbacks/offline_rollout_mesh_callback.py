@@ -131,15 +131,9 @@ class OfflineRolloutMeshCallback(PeriodicCallback):
                 for i in range(3)
             ]
         )
-        data_min = (
-            data.flatten(start_dim=1).min(axis=1),
-            data.flatten(start_dim=1).argmin(axis=1),
-        ).values
+        data_min = data.flatten(start_dim=1).min(axis=1)
         data -= data_min.view(-1, 1, 1)
-        data_max = (
-            data.flatten(start_dim=1).max(axis=1),
-            data.flatten(start_dim=1).argmax(axis=1),
-        ).values
+        data_max = data.flatten(start_dim=1).max(axis=1)
         data /= data_max.view(-1, 1, 1)
         data = einops.rearrange(data, "three height width -> (three height) width")
         progress_tensor = paddle.zeros(
@@ -230,27 +224,27 @@ class OfflineRolloutMeshCallback(PeriodicCallback):
         geometry2d = ModeWrapper.get_item(
             mode=self.dataset_mode, item="geometry2d", batch=batch
         )
-        geometry2d = geometry2d.to(model.device, non_blocking=True)
+        geometry2d = geometry2d.to(model.device)
         velocity = ModeWrapper.get_item(
             mode=self.dataset_mode, item="velocity", batch=batch
         )
-        velocity = velocity.to(model.device, non_blocking=True)
+        velocity = velocity.to(model.device)
         pos = ModeWrapper.get_item(mode=self.dataset_mode, item="pos", batch=batch)
-        pos = pos.to(model.device, non_blocking=True)
-        padded_pos = ctx["padded_pos"].to(model.device, non_blocking=True)
-        batch_idx = ctx["batch_idx"].to(model.device, non_blocking=True)
-        unbatch_idx = ctx["unbatch_idx"].to(model.device, non_blocking=True)
-        unbatch_select = ctx["unbatch_select"].to(model.device, non_blocking=True)
+        pos = pos.to(model.device)
+        padded_pos = ctx["padded_pos"].to(model.device)
+        batch_idx = ctx["batch_idx"].to(model.device)
+        unbatch_idx = ctx["unbatch_idx"].to(model.device)
+        unbatch_select = ctx["unbatch_select"].to(model.device)
         edge_index = ModeWrapper.get_item(
             mode=self.dataset_mode, item="edge_index", batch=batch
         )
-        edge_index = edge_index.to(model.device, non_blocking=True)
+        edge_index = edge_index.to(model.device)
         assert (
             x.ndim == 3
         ), "expected data to be of shape (bs * num_points, num_total_timesteps + 1, num_channels)"
         if x.size(1) != self.num_rollout_timesteps + 1:
             x = x[:, : self.num_rollout_timesteps + 1]
-        x = x.to(model.device, non_blocking=True)
+        x = x.to(model.device)
         with trainer.autocast_context:
             if self.use_teacher_forcing:
                 assert self.num_rollout_timesteps + 1 == x.size(1)

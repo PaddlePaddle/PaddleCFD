@@ -171,15 +171,15 @@ class OfflineRollout2dCallback(PeriodicCallback):
         geometry2d = ModeWrapper.get_item(
             mode=self.dataset_mode, item="geometry2d", batch=batch
         )
-        geometry2d = geometry2d.to(model.device, non_blocking=True)
+        geometry2d = geometry2d.to(model.device)
         velocity = ModeWrapper.get_item(
             mode=self.dataset_mode, item="velocity", batch=batch
         )
-        velocity = velocity.to(model.device, non_blocking=True)
+        velocity = velocity.to(model.device)
         assert (
             x.ndim == 5 and x.size(1) == self.num_rollout_timesteps + 1
         ), "expected data to be of shape (bs, num_total_timesteps + 1, num_channels, height, width)"
-        x = x.to(model.device, non_blocking=True)
+        x = x.to(model.device)
         with trainer.autocast_context:
             if self.use_teacher_forcing:
                 assert self.num_rollout_timesteps + 1 == x.size(1)

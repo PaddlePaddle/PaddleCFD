@@ -86,13 +86,13 @@ class CfdBaselineTrainer(SgdTrainer):
 
         def to_device(self, item, batch, dataset_mode):
             data = ModeWrapper.get_item(mode=dataset_mode, item=item, batch=batch)
-            data = data.to(self.model.device, non_blocking=True)
+            data = data.to(self.model.device)
             return data
 
         def prepare(self, batch, dataset_mode=None):
             dataset_mode = dataset_mode or self.trainer.dataset_mode
             batch, ctx = batch
-            batch_idx = ctx["batch_idx"].to(self.model.device, non_blocking=True)
+            batch_idx = ctx["batch_idx"].to(self.model.device)
             data = dict(
                 x=self.to_device(item="x", batch=batch, dataset_mode=dataset_mode),
                 mesh_pos=self.to_device(
@@ -145,7 +145,7 @@ class CfdBaselineTrainer(SgdTrainer):
                 assert self.trainer.radius_graph_r is None
                 assert self.trainer.radius_graph_max_num_neighbors is None
                 mesh_to_grid_edges = mesh_to_grid_edges.to(
-                    self.model.device, non_blocking=True
+                    self.model.device
                 )
             data["mesh_to_grid_edges"] = mesh_to_grid_edges
             if grid_to_query_edges is None:
@@ -168,7 +168,7 @@ class CfdBaselineTrainer(SgdTrainer):
                 assert self.trainer.radius_graph_r is None
                 assert self.trainer.radius_graph_max_num_neighbors is None
                 grid_to_query_edges = grid_to_query_edges.to(
-                    self.model.device, non_blocking=True
+                    self.model.device
                 )
             data["grid_to_query_edges"] = grid_to_query_edges
             return data

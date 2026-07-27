@@ -55,15 +55,9 @@ class OfflineCfdRolloutMeshGifCallback(PeriodicCallback):
                 for i in range(3)
             ]
         )
-        data_min = (
-            data.flatten(start_dim=1).min(axis=1),
-            data.flatten(start_dim=1).argmin(axis=1),
-        ).values
+        data_min = data.flatten(start_dim=1).min(axis=1)
         data -= data_min.view(-1, 1, 1)
-        data_max = (
-            data.flatten(start_dim=1).max(axis=1),
-            data.flatten(start_dim=1).argmax(axis=1),
-        ).values
+        data_max = data.flatten(start_dim=1).max(axis=1)
         data /= data_max.view(-1, 1, 1)
         data = einops.rearrange(data, "three height width -> (three height) width")
         progress_tensor = paddle.zeros(

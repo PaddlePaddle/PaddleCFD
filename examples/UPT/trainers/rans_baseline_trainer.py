@@ -69,7 +69,7 @@ class RansBaselineTrainer(SgdTrainer):
             data = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item=item, batch=batch
             )
-            data = data.to(self.model.device, non_blocking=True)
+            data = data.to(self.model.device)
             return data
 
         def prepare(self, batch):
@@ -97,7 +97,7 @@ class RansBaselineTrainer(SgdTrainer):
             if reduction == "mean_per_sample":
                 _, ctx = batch
                 query_batch_idx = ctx["query_batch_idx"].to(
-                    self.model.device, non_blocking=True
+                    self.model.device
                 )
                 indices, counts = query_batch_idx.unique(return_counts=True)
                 padded_counts = paddle.zeros(

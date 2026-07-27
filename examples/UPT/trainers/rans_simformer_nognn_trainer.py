@@ -54,7 +54,7 @@ class RansSimformerNognnTrainer(SgdTrainer):
             data = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item=item, batch=batch
             )
-            data = data.to(self.model.device, non_blocking=True)
+            data = data.to(self.model.device)
             return data
 
         def prepare(self, batch):
@@ -62,10 +62,10 @@ class RansSimformerNognnTrainer(SgdTrainer):
             return dict(
                 mesh_pos=self.to_device(item="mesh_pos", batch=batch),
                 query_pos=self.to_device(item="query_pos", batch=batch),
-                batch_idx=ctx["batch_idx"].to(self.model.device, non_blocking=True),
-                unbatch_idx=ctx["unbatch_idx"].to(self.model.device, non_blocking=True),
+                batch_idx=ctx["batch_idx"].to(self.model.device),
+                unbatch_idx=ctx["unbatch_idx"].to(self.model.device),
                 unbatch_select=ctx["unbatch_select"].to(
-                    self.model.device, non_blocking=True
+                    self.model.device
                 ),
                 target=self.to_device(item="pressure", batch=batch),
             )
@@ -80,7 +80,7 @@ class RansSimformerNognnTrainer(SgdTrainer):
             if reduction == "mean_per_sample":
                 _, ctx = batch
                 query_batch_idx = ctx["query_batch_idx"].to(
-                    self.model.device, non_blocking=True
+                    self.model.device
                 )
                 indices, counts = query_batch_idx.unique(return_counts=True)
                 padded_counts = paddle.zeros(

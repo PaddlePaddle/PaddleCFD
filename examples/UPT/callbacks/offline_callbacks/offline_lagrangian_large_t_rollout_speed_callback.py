@@ -40,15 +40,15 @@ class OfflineLagrangianLargeTRolloutSpeedCallback(PeriodicCallback):
     def _forward(self, batch, model, trainer, trainer_model):
         batch, ctx = batch
         x = ModeWrapper.get_item(mode=trainer.dataset_mode, item="x", batch=batch)
-        x = x.to(model.device, non_blocking=True)
+        x = x.to(model.device)
         all_pos = ModeWrapper.get_item(
             mode=trainer.dataset_mode, item="all_pos", batch=batch
         )
-        all_pos = all_pos.to(model.device, non_blocking=True)
+        all_pos = all_pos.to(model.device)
         all_vel = ModeWrapper.get_item(
             mode=trainer.dataset_mode, item="all_vel", batch=batch
         )
-        all_vel = all_vel.to(model.device, non_blocking=True)
+        all_vel = all_vel.to(model.device)
         if (
             "const_timestep" in trainer.forward_kwargs
             and trainer.forward_kwargs["const_timestep"]
@@ -58,17 +58,17 @@ class OfflineLagrangianLargeTRolloutSpeedCallback(PeriodicCallback):
             timestep = ModeWrapper.get_item(
                 mode=trainer.dataset_mode, item="timestep", batch=batch
             )
-            timestep = timestep.to(model.device, non_blocking=True)
+            timestep = timestep.to(model.device)
         edge_index = ModeWrapper.get_item(
             mode=trainer.dataset_mode, item="edge_index", batch=batch
         )
-        edge_index = edge_index.to(model.device, non_blocking=True)
-        batch_idx = ctx["batch_idx"].to(model.device, non_blocking=True)
+        edge_index = edge_index.to(model.device)
+        batch_idx = ctx["batch_idx"].to(model.device)
         x = einops.rearrange(
             x, "a num_input_timesteps dim -> a (num_input_timesteps dim)"
         )
-        unbatch_idx = ctx["unbatch_idx"].to(model.device, non_blocking=True)
-        unbatch_select = ctx["unbatch_select"].to(model.device, non_blocking=True)
+        unbatch_idx = ctx["unbatch_idx"].to(model.device)
+        unbatch_select = ctx["unbatch_select"].to(model.device)
         with trainer.autocast_context:
             vel_pred = model.rollout_large_t_timing(
                 x=x,

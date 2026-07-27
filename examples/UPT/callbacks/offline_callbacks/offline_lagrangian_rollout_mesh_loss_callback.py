@@ -47,30 +47,30 @@ class OfflineLagrangianRolloutMeshLossCallback(PeriodicCallback):
     def _forward(self, batch, model, trainer, trainer_model):
         batch, ctx = batch
         x = ModeWrapper.get_item(mode=trainer.dataset_mode, item="x", batch=batch)
-        x = x.to(model.device, non_blocking=True)
+        x = x.to(model.device)
         timestep = ModeWrapper.get_item(
             mode=trainer.dataset_mode, item="timestep", batch=batch
         )
-        timestep = timestep.to(model.device, non_blocking=True)
+        timestep = timestep.to(model.device)
         curr_pos = ModeWrapper.get_item(
             mode=trainer.dataset_mode, item="curr_pos", batch=batch
         )
-        curr_pos = curr_pos.to(model.device, non_blocking=True)
+        curr_pos = curr_pos.to(model.device)
         target_pos = ModeWrapper.get_item(
             mode=trainer.dataset_mode, item="target_pos", batch=batch
         )
-        target_pos = target_pos.to(model.device, non_blocking=True)
+        target_pos = target_pos.to(model.device)
         edge_index = ModeWrapper.get_item(
             mode=trainer.dataset_mode, item="edge_index", batch=batch
         )
-        edge_index = edge_index.to(model.device, non_blocking=True)
-        batch_idx = ctx["batch_idx"].to(model.device, non_blocking=True)
+        edge_index = edge_index.to(model.device)
+        batch_idx = ctx["batch_idx"].to(model.device)
         x = einops.rearrange(
             x,
             "bs num_input_timesteps num_points -> bs (num_input_timesteps num_points)",
         )
-        unbatch_idx = ctx["unbatch_idx"].to(model.device, non_blocking=True)
-        unbatch_select = ctx["unbatch_select"].to(model.device, non_blocking=True)
+        unbatch_idx = ctx["unbatch_idx"].to(model.device)
+        unbatch_select = ctx["unbatch_select"].to(model.device)
         with trainer.autocast_context:
             x_hat, all_vels = model.rollout(
                 x=x,

@@ -86,7 +86,7 @@ class CfdHybridTrainer(SgdTrainer):
 
         def to_device(self, item, batch, dataset_mode):
             data = ModeWrapper.get_item(mode=dataset_mode, item=item, batch=batch)
-            data = data.to(self.model.device, non_blocking=True)
+            data = data.to(self.model.device)
             return data
 
         def prepare(self, batch, dataset_mode=None):
@@ -109,9 +109,9 @@ class CfdHybridTrainer(SgdTrainer):
                 query_pos=self.to_device(
                     item="query_pos", batch=batch, dataset_mode=dataset_mode
                 ),
-                unbatch_idx=ctx["unbatch_idx"].to(self.model.device, non_blocking=True),
+                unbatch_idx=ctx["unbatch_idx"].to(self.model.device),
                 unbatch_select=ctx["unbatch_select"].to(
-                    self.model.device, non_blocking=True
+                    self.model.device
                 ),
                 target=self.to_device(
                     item="target", batch=batch, dataset_mode=dataset_mode
@@ -135,7 +135,7 @@ class CfdHybridTrainer(SgdTrainer):
                 mesh_to_grid_edges = radius(
                     x=data["mesh_pos"],
                     y=data["grid_pos"],
-                    batch_x=ctx["batch_idx"].to(self.model.device, non_blocking=True),
+                    batch_x=ctx["batch_idx"].to(self.model.device),
                     batch_y=grid_batch_idx,
                     r=self.trainer.radius_graph_r,
                     max_num_neighbors=self.trainer.radius_graph_max_num_neighbors,
@@ -144,7 +144,7 @@ class CfdHybridTrainer(SgdTrainer):
                 assert self.trainer.radius_graph_r is None
                 assert self.trainer.radius_graph_max_num_neighbors is None
                 mesh_to_grid_edges = mesh_to_grid_edges.to(
-                    self.model.device, non_blocking=True
+                    self.model.device
                 )
             data["mesh_to_grid_edges"] = mesh_to_grid_edges
             return data

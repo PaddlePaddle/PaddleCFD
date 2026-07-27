@@ -90,43 +90,43 @@ class GnsTrainer(SgdTrainer):
             x = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="x", batch=batch
             )
-            x = x.to(self.model.device, non_blocking=True)
+            x = x.to(self.model.device)
             timestep = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="timestep", batch=batch
             )
-            timestep = timestep.to(self.model.device, non_blocking=True)
+            timestep = timestep.to(self.model.device)
             target_acc = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="target_acc", batch=batch
             )
-            target_acc = target_acc.to(self.model.device, non_blocking=True)
+            target_acc = target_acc.to(self.model.device)
             edge_features = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="edge_features", batch=batch
             )
-            edge_features = edge_features.to(self.model.device, non_blocking=True)
+            edge_features = edge_features.to(self.model.device)
             curr_pos = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="curr_pos", batch=batch
             )
-            curr_pos = curr_pos.to(self.model.device, non_blocking=True)
+            curr_pos = curr_pos.to(self.model.device)
             curr_pos_full = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="curr_pos_full", batch=batch
             )
-            curr_pos_full = curr_pos_full.to(self.model.device, non_blocking=True)
+            curr_pos_full = curr_pos_full.to(self.model.device)
             prev_pos = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="prev_pos", batch=batch
             )
-            prev_pos = prev_pos.to(self.model.device, non_blocking=True)
+            prev_pos = prev_pos.to(self.model.device)
             prev_acc = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="prev_acc", batch=batch
             )
-            prev_acc = prev_acc.to(self.model.device, non_blocking=True)
+            prev_acc = prev_acc.to(self.model.device)
             edge_index = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="edge_index", batch=batch
             )
-            edge_index = edge_index.to(self.model.device, non_blocking=True)
-            batch_idx = ctx["batch_idx"].to(self.model.device, non_blocking=True)
-            unbatch_idx = ctx["unbatch_idx"].to(self.model.device, non_blocking=True)
+            edge_index = edge_index.to(self.model.device)
+            batch_idx = ctx["batch_idx"].to(self.model.device)
+            unbatch_idx = ctx["unbatch_idx"].to(self.model.device)
             unbatch_select = ctx["unbatch_select"].to(
-                self.model.device, non_blocking=True
+                self.model.device
             )
             x = einops.rearrange(
                 x,

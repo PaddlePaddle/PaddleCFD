@@ -59,7 +59,7 @@ class CfdInterpolatedTrainer(SgdTrainer):
 
         def to_device(self, item, batch, dataset_mode):
             data = ModeWrapper.get_item(mode=dataset_mode, item=item, batch=batch)
-            data = data.to(self.model.device, non_blocking=True)
+            data = data.to(self.model.device)
             return data
 
         def prepare(self, batch, dataset_mode=None):

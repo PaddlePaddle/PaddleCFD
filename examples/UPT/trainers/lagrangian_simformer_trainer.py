@@ -2,7 +2,6 @@ import os
 from functools import cached_property
 from datasets.collators.lagrangian_simformer_collator import LagrangianSimformerCollator
 import einops
-import kappamodules.utils.tensor_cache as tc
 import paddle
 from callbacks.online_callbacks.update_output_callback import \
     UpdateOutputCallback
@@ -90,59 +89,59 @@ class LagrangianSimformerTrainer(SgdTrainer):
             x = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="x", batch=batch
             )
-            x = x.to(self.model.device, non_blocking=True)
+            x = x.to(self.model.device)
             timestep = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="timestep", batch=batch
             )
-            timestep = timestep.to(self.model.device, non_blocking=True)
+            timestep = timestep.to(self.model.device)
             target_acc = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="target_acc", batch=batch
             )
-            target_acc = target_acc.to(self.model.device, non_blocking=True)
+            target_acc = target_acc.to(self.model.device)
             target_vel = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="target_vel", batch=batch
             )
-            target_vel = target_vel.to(self.model.device, non_blocking=True)
+            target_vel = target_vel.to(self.model.device)
             curr_pos = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="curr_pos", batch=batch
             )
-            curr_pos = curr_pos.to(self.model.device, non_blocking=True)
+            curr_pos = curr_pos.to(self.model.device)
             curr_pos_full = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="curr_pos_full", batch=batch
             )
-            curr_pos_full = curr_pos_full.to(self.model.device, non_blocking=True)
+            curr_pos_full = curr_pos_full.to(self.model.device)
             prev_pos = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="prev_pos", batch=batch
             )
-            prev_pos = prev_pos.to(self.model.device, non_blocking=True)
+            prev_pos = prev_pos.to(self.model.device)
             prev_acc = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="prev_acc", batch=batch
             )
-            prev_acc = prev_acc.to(self.model.device, non_blocking=True)
+            prev_acc = prev_acc.to(self.model.device)
             edge_index = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="edge_index", batch=batch
             )
-            edge_index = edge_index.to(self.model.device, non_blocking=True)
-            batch_idx = ctx["batch_idx"].to(self.model.device, non_blocking=True)
-            unbatch_idx = ctx["unbatch_idx"].to(self.model.device, non_blocking=True)
+            edge_index = edge_index.to(self.model.device)
+            batch_idx = ctx["batch_idx"].to(self.model.device)
+            unbatch_idx = ctx["unbatch_idx"].to(self.model.device)
             unbatch_select = ctx["unbatch_select"].to(
-                self.model.device, non_blocking=True
+                self.model.device
             )
             target_pos_encode = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="target_pos_encode", batch=batch
             )
             target_pos_encode = target_pos_encode.to(
-                self.model.device, non_blocking=True
+                self.model.device
             )
             perm = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="perm", batch=batch
             )
-            perm = perm.to(self.model.device, non_blocking=True)
+            perm = perm.to(self.model.device)
             edge_index_target = ModeWrapper.get_item(
                 mode=self.trainer.dataset_mode, item="edge_index_target", batch=batch
             )
             edge_index_target = edge_index_target.to(
-                self.model.device, non_blocking=True
+                self.model.device
             )
             x = einops.rearrange(
                 x,
