@@ -25,7 +25,7 @@ class VitBlocks(paddle.nn.Layer):
         self.reset_parameters()
 
     def reset_parameters(self):
-        if self.blocks[-1].init_norms == "torch":
+        if self.blocks[-1].init_norms == "paddle":
             pass
         elif self.blocks[-1].init_norms == "nonaffine":
             init_norms_as_noaffine(self.norm)

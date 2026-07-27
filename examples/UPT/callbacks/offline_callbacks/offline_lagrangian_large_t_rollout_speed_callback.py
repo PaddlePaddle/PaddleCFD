@@ -5,7 +5,7 @@ import kappaprofiler as kp
 import paddle
 from callbacks.base.periodic_callback import PeriodicCallback
 from kappadata.wrappers import ModeWrapper
-from torch_geometric.utils import scatter
+from paddle_geometric.utils import scatter
 from utils.formatting_util import dict_to_string
 
 

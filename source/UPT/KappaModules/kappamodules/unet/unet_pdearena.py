@@ -75,7 +75,7 @@ class AttentionBlock(paddle.nn.Layer):
         n_channels: the number of channels in the input
         n_heads:  the number of heads in multi-head attention
         d_k: the number of dimensions in each head
-        n_groups: the number of groups for [group normalization][torch.nn.GroupNorm]
+        n_groups: the number of groups for [group normalization][paddle.nn.GroupNorm]
 
     """
 

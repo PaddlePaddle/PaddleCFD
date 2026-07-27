@@ -1,7 +1,7 @@
 import einops
 import paddle
 from kappamodules.layers import ContinuousSincosEmbed
-from torch_scatter import segment_csr
+from paddle_scatter import segment_csr
 
 
 class CfdInterpolateGridToMesh(paddle.nn.Layer):

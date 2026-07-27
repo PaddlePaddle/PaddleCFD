@@ -1,10 +1,10 @@
 from typing import Callable, Optional, Union
 
 import paddle
-from torch_geometric.nn.inits import uniform
-from torch_geometric.nn.pool.select import Select, SelectOutput
-from torch_geometric.nn.resolver import activation_resolver
-from torch_geometric.utils import cumsum, scatter
+from paddle_geometric.nn.inits import uniform
+from paddle_geometric.nn.pool.select import Select, SelectOutput
+from paddle_geometric.nn.resolver import activation_resolver
+from paddle_geometric.utils import cumsum, scatter
 
 
 def topk(
@@ -30,7 +30,7 @@ def topk(
 
 class SelectTopK(Select):
     """
-    torch_geometrics.nn.pool.select.topk with a dynamic ratio such that the number of output nodes is constant
+    paddle_geometrics.nn.pool.select.topk with a dynamic ratio such that the number of output nodes is constant
     also removed the parameter "weight" that allowed to learn a weighted sum
     """
 

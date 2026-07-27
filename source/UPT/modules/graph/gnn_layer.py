@@ -1,5 +1,5 @@
 import paddle
-from torch_geometric.nn.conv import MessagePassing
+from paddle_geometric.nn.conv import MessagePassing
 
 
 class GNNLayer(MessagePassing):

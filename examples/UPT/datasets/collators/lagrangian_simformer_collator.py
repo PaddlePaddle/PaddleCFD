@@ -2,8 +2,8 @@ import einops
 import paddle
 from kappadata.collators import KDSingleCollator
 from kappadata.wrappers import ModeWrapper
-from torch_geometric.data import Data
-from torch_geometric.transforms import KNNGraph
+from paddle_geometric.data import Data
+from paddle_geometric.transforms import KNNGraph
 
 
 class LagrangianSimformerCollator(KDSingleCollator):

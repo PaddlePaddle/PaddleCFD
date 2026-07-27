@@ -51,7 +51,7 @@ class OfflineRolloutMeshCallback(PeriodicCallback):
         visualize_velocities=False,
         visualize_velocity_magnitude=True,
         duration_per_frame=100,
-        visualization_backend="torch",
+        visualization_backend="paddle",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -124,7 +124,7 @@ class OfflineRolloutMeshCallback(PeriodicCallback):
         data = paddle.concat([progress_tensor, data], dim=1)
         return paddle_to_pil(data)
     
-    def _tensor_to_pil_torch(self, data, progress, pos):
+    def _tensor_to_pil_paddle(self, data, progress, pos):
         data = paddle.stack(
             [
                 coords_to_image(coords=pos, resolution=self.resolution, weights=data[i])
@@ -157,8 +157,8 @@ class OfflineRolloutMeshCallback(PeriodicCallback):
     def tensor_to_pil(self, data, progress, pos):
         if self.visualization_backend == "matplotlib":
             return self._tensor_to_pil_matplotlib(data=data, progress=progress, pos=pos)
-        if self.visualization_backend == "torch":
-            return self._tensor_to_pil_torch(data=data, progress=progress, pos=pos)
+        if self.visualization_backend == "paddle":
+            return self._tensor_to_pil_paddle(data=data, progress=progress, pos=pos)
         raise NotImplementedError
 
     def visualize(self, idx, trajectories, deltas, pos):

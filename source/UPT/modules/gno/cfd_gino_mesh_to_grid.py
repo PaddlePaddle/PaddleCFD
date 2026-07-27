@@ -5,7 +5,7 @@ from kappamodules.init import (init_truncnormal_zero_bias,
                                init_xavier_uniform_zero_bias)
 from kappamodules.layers import (ContinuousSincosEmbed, LinearProjection,
                                  Residual)
-from torch_scatter import segment_csr
+from paddle_scatter import segment_csr
 
 
 class CfdGinoMeshToGrid(paddle.nn.Layer):

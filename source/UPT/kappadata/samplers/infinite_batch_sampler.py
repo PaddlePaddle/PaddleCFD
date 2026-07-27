@@ -6,7 +6,7 @@ class InfiniteBatchSampler(BatchSampler):
     BatchSampler that keeps fetching batches across epoch boundaries.
     This allows a DataLoader to prefetch batches from the next epoch.
     This is especially useful for small datasets as the default
-    pytorch BatchSampler will always have to wait for the first batch
+    paddle BatchSampler will always have to wait for the first batch
     of EVERY epoch to be ready.
     In the extreme case (batch_size == len(dataset)) the dataloading
     will be fully synchronous (with BatchSampler), independent of how

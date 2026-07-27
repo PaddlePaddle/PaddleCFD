@@ -4,8 +4,8 @@ import sys
 import packaging.version
 import paddle
 
-expected_torch = "2.0.0"
-expected_torchvision = "0.15.0"
+expected_paddle = "2.0.0"
+expected_paddlevision = "0.15.0"
 expected_kappabenchmark = "0.0.10"
 expected_kappaconfig = "1.0.29"
 expected_kappadata = "1.3.78"
@@ -13,7 +13,7 @@ expected_kappamodules = "0.1.24"
 expected_kappaprofiler = "1.0.11"
 expected_kappaschedules = "0.0.18"
 expected_timm = "0.9.2"
-expected_torchmetrics_version = "0.11.0"
+expected_paddlemetrics_version = "0.11.0"
 expected_python_major = 3
 expected_python_minor = 9
 
@@ -31,9 +31,9 @@ def check_versions(verbose):
         and py_version.minor >= expected_python_minor
     ), msg
     log_fn(f"python version: {py_version.major}.{py_version.minor}.{py_version.micro}")
-    log_fn(f"torch version: {paddle.__version__}")
+    log_fn(f"paddle version: {paddle.__version__}")
     assert packaging.version.parse(paddle.__version__) >= packaging.version.parse(
-        expected_torch
+        expected_paddle
     )
 
     # def _check_pip_dependency(actual_version, expected_version, pip_dependency_name):
@@ -68,8 +68,8 @@ def check_versions(verbose):
     # _check_pip_dependency(
     #     KappaModules.kappaschedules.__version__, expected_kappaschedules, "kappaschedules"
     # )
-    # import torchmetrics
+    # import paddlemetrics
 
     # _check_pip_dependency(
-    #     torchmetrics.__version__, expected_torchmetrics_version, "torchmetrics"
+    #     paddlemetrics.__version__, expected_paddlemetrics_version, "paddlemetrics"
     # )

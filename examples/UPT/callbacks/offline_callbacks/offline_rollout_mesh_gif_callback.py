@@ -53,7 +53,7 @@ class OfflineRolloutMeshGifCallback(PeriodicCallback):
         else:
             assert 0 < self.num_rollout_timesteps <= self.dataset.getdim_timestep()
 
-    def _tensor_to_pil_torch(self, data, progress, pos):
+    def _tensor_to_pil_paddle(self, data, progress, pos):
         data = paddle.stack(
             [
                 coords_to_image(coords=pos, resolution=self.resolution, weights=data[i])
@@ -141,7 +141,7 @@ class OfflineRolloutMeshGifCallback(PeriodicCallback):
                 three=3,
             )
             imgs = [
-                self._tensor_to_pil_torch(
+                self._tensor_to_pil_paddle(
                     velocity_magnitude[j],
                     progress=j / max(1, len(velocity_magnitude) - 1),
                     pos=pos,

@@ -3,7 +3,7 @@ import numpy as np
 import paddle
 from kappamodules.layers import (ContinuousSincosEmbed, LinearProjection,
                                  Residual)
-from torch_scatter import segment_csr
+from paddle_scatter import segment_csr
 
 
 class CfdGinoMeshToGridOld(paddle.nn.Layer):

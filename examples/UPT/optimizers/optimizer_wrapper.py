@@ -23,7 +23,7 @@
 #     def __init__(
 #         self,
 #         model,
-#         torch_optim_ctor, # 实际上是传入的优化器构造器（如 partial(paddle.optimizer.AdamW, ...)）
+#         paddle_optim_ctor, # 实际上是传入的优化器构造器（如 partial(paddle.optimizer.AdamW, ...)）
 #         schedule=None,
 #         weight_decay_schedule=None,
 #         clip_grad_value=None,
@@ -44,8 +44,8 @@
         
 #         # 1. 学习率缩放
 #         lr_scaler = create(lr_scaler, lr_scaler_from_kwargs) or LinearLrScaler()
-#         # 兼容 PyTorch 的 "lr" 键名
-#         base_lr = torch_optim_ctor.keywords.get("lr", torch_optim_ctor.keywords.get("learning_rate"))
+#         # 兼容 Paddle 的 "lr" 键名
+#         base_lr = paddle_optim_ctor.keywords.get("lr", paddle_optim_ctor.keywords.get("learning_rate"))
 #         lr_scale_factor = lr_scale_factor or update_counter.effective_batch_size
 #         scaled_lr = lr_scaler.scale_lr(base_lr=base_lr, lr_scale_factor=lr_scale_factor)
         
@@ -53,7 +53,7 @@
 #         self.logger.info(f"scaled lr: {float_to_scientific_notation(scaled_lr, max_precision=2)}")
 #         self.logger.info(f"lr_scaler={lr_scaler}")
 #         self.logger.info(f"lr_scale_factor={lr_scale_factor}")
-#         torch_optim_ctor.keywords["lr"] = scaled_lr
+#         paddle_optim_ctor.keywords["lr"] = scaled_lr
         
 #         # 2. 准备参数组修改器
 #         param_group_modifiers = create_collection(
@@ -119,7 +119,7 @@
 #             p_group = {
 #                 "params": group["params"],
 #                 "learning_rate": scaled_lr * lr_scale,
-#                 "weight_decay": group.get("weight_decay", torch_optim_ctor.keywords.get("weight_decay", 0.01)),
+#                 "weight_decay": group.get("weight_decay", paddle_optim_ctor.keywords.get("weight_decay", 0.01)),
 #                 # 我们在 group 里保留自定义信息，方便 schedule 访问
 #                 "lr_scale": lr_scale,
 #                 "exclude_from_wd": group.get("weight_decay") == 0.0
@@ -135,8 +135,8 @@
 
 #         # 7. 实例化 Paddle 优化器
 #         # 提取超参数并处理参数名差异 (AdamW: eps -> epsilon, betas -> beta1/beta2)
-#         betas = torch_optim_ctor.keywords.get("betas", (0.9, 0.999))
-#         eps = torch_optim_ctor.keywords.get("eps", 1e-8)
+#         betas = paddle_optim_ctor.keywords.get("betas", (0.9, 0.999))
+#         eps = paddle_optim_ctor.keywords.get("eps", 1e-8)
         
 #         self.paddle_optim = paddle.optimizer.AdamW(
 #             learning_rate=scaled_lr,
@@ -145,15 +145,15 @@
 #             beta2=betas[1],
 #             epsilon=eps,
 #             grad_clip=grad_clip,
-#             weight_decay=torch_optim_ctor.keywords.get("weight_decay", 0.01)
+#             weight_decay=paddle_optim_ctor.keywords.get("weight_decay", 0.01)
 #         )
         
-#         # 将 torch_optim 指向 paddle_optim 以保持引用兼容性
-#         self.torch_optim = self.paddle_optim 
+#         # 将 paddle_optim 指向 paddle_optim 以保持引用兼容性
+#         self.paddle_optim = self.paddle_optim
 
 #         # 8. 映射管理
 #         self.param_idx_to_name = Bidict()
-#         # 注意：Paddle 优化器内部存储参数的方式与 PyTorch 不同，这里通过模型参数列表构建映射
+#         # 注意：Paddle 优化器内部存储参数的方式与 Paddle 不同，这里通过模型参数列表构建映射
 #         for idx, (name, _) in enumerate(model.named_parameters()):
 #             self.param_idx_to_name.set_forward(idx, name)
 
@@ -168,7 +168,7 @@
 #             weight_decay_schedule,
 #             batch_size=self.update_counter.effective_batch_size if self.update_counter else None,
 #             updates_per_epoch=self.update_counter.updates_per_epoch if self.update_counter else None,
-#             max_value=torch_optim_ctor.keywords.get("weight_decay", 0.01),
+#             max_value=paddle_optim_ctor.keywords.get("weight_decay", 0.01),
 #         )
 
 #     def _has_param_with_grad(self):
@@ -254,7 +254,7 @@ from .param_group_modifiers import param_group_modifier_from_kwargs
 
 class OptimizerWrapper:
     """
-    wrapper for torch optimizers that also handles
+    wrapper for paddle optimizers that also handles
     - learning rate scaling (with batchsize)
     - creating parameter groups (e.g. excluding bias/norm from weight decay, layerwise lr scaling)
     - stateless learning rate scheduling
@@ -285,7 +285,7 @@ class OptimizerWrapper:
         
         # assert self.clip_grad_value is None or self.clip_grad_value > 0
         # assert self.clip_grad_norm is None or self.clip_grad_norm > 0
-        # assert "lr" in torch_optim_ctor.keywords
+        # assert "lr" in paddle_optim_ctor.keywords
         
         lr_scaler = create(lr_scaler, lr_scaler_from_kwargs) or LinearLrScaler()
         base_lr = paddle_optim_ctor.keywords.get("lr", paddle_optim_ctor.keywords.get("learning_rate"))

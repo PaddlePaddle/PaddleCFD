@@ -34,7 +34,7 @@ class KDSpecAugment(KDStochasticTransform):
             p: float = 1.0,
             fill_value: float = 0.0,
     ):
-        """ torchaudio.functional.functional.mask_along_axis but numpy rng """
+        """ paddleaudio.functional.functional.mask_along_axis but numpy rng """
 
         if axis not in [1, 2]:
             raise ValueError("Only Frequency and Time masking are supported")

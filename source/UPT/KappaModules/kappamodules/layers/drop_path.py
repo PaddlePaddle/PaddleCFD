@@ -8,12 +8,12 @@ class DropPath(paddle.nn.Sequential):
     Examples::
         >>> # use as nn.Sequential module
         >>> sequential_droppath = DropPath(nn.Linear(4, 4), drop_prob=0.2)
-        >>> y = sequential_droppath(torch.randn(10, 4))
+        >>> y = sequential_droppath(paddle.randn(10, 4))
 
         >>> # use as standalone module
         >>> standalone_layer = nn.Linear(4, 4)
         >>> standalone_droppath = DropPath(drop_prob=0.2)
-        >>> y = standalone_droppath(torch.randn(10, 4), standalone_layer)
+        >>> y = standalone_droppath(paddle.randn(10, 4), standalone_layer)
     """
 
     def __init__(

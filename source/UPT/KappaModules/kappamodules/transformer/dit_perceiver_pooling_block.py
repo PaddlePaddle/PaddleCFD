@@ -6,7 +6,7 @@ from .dit_perceiver_block import DitPerceiverBlock
 class DitPerceiverPoolingBlock(paddle.nn.Layer):
     """
     implementation inspired by
-    https://github.com/lucidrains/flamingo-pytorch/blob/main/flamingo_pytorch/flamingo_pytorch.py#L74
+    https://github.com/lucidrains/flamingo-paddle/blob/main/flamingo_paddle/flamingo_paddle.py#L74
     """
 
     def __init__(

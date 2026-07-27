@@ -3,7 +3,7 @@ import paddle
 
 # def segment_csr(src, indptr, reduce="sum", out=None):
 #     """
-#     用 Paddle 模拟 torch_scatter.segment_csr
+#     用 Paddle 模拟 paddle_scatter.segment_csr
 #     src: [N, D] 输入特征
 #     indptr: [M+1] CSR 格式的索引指针 (定义了 M 个段)
 #     reduce: 'sum' | 'mean' | 'add'

@@ -27,7 +27,7 @@ ALL_LAYERS = paddle.nn.Linear, *ALL_CONVS
 
 
 def init_with_scheme(module, scheme):
-    if scheme == "torch":
+    if scheme == "paddle":
         pass
     elif scheme in ["truncnormal", "truncnormal002"]:
         module.apply(init_truncnormal_zero_bias)

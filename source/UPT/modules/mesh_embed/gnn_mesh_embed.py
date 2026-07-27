@@ -1,9 +1,9 @@
 import paddle
 from kappamodules.layers import ContinuousSincosEmbed
 from modules.graph.sag_pool import SAGPoolingFixedNumNodes
-from torch_geometric.data import Data
-from torch_geometric.nn.conv import MessagePassing
-from torch_geometric.nn.pool import SAGPooling
+from paddle_geometric.data import Data
+from paddle_geometric.nn.conv import MessagePassing
+from paddle_geometric.nn.pool import SAGPooling
 
 
 class GNNLayer(MessagePassing):

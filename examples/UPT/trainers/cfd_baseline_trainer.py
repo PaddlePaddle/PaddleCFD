@@ -7,8 +7,8 @@ from callbacks.online_callbacks.update_output_callback import \
 from kappadata.wrappers import ModeWrapper
 from losses import loss_fn_from_kwargs
 from paddle_utils import *
-from torch_geometric.nn.pool import radius
-from torch_scatter import segment_csr
+from paddle_geometric.nn.pool import radius
+from paddle_scatter import segment_csr
 from utils.factory import create
 
 from .base.sgd_trainer import SgdTrainer

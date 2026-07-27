@@ -67,7 +67,7 @@ def post_norm_attention(dim, attn_ctor):
 
 class UnetDenoisingDiffusion(paddle.nn.Layer):
     """
-    reimplementation of https://github.com/lucidrains/denoising-diffusion-pytorch/blob/main/denoising_diffusion_pytorch/denoising_diffusion_pytorch.py
+    reimplementation of https://github.com/lucidrains/denoising-diffusion-paddle/blob/main/denoising_diffusion_paddle/denoising_diffusion_paddle.py
     each block downsamples the input by a factor of 2 while doubling the dimension
     first up and last down block dont scale dimension
     each block consists of 2 residual blocks (each with 2 conv layers) and a linear attention block

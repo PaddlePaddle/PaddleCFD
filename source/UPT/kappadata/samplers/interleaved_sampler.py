@@ -185,7 +185,7 @@ class InterleavedSampler:
             pin_memory: bool = False,
             prefetch_factor: int = None,
     ) -> DataLoader:
-        # the default value of prefetch_factor changed from 2 to None in pytorch 2.0 -> pass via optional kwarg
+        # the default value of prefetch_factor changed from 2 to None in paddle 2.0 -> pass via optional kwarg
         kwargs = {}
         if num_workers > 0 and prefetch_factor is not None:
             kwargs["prefetch_factor"] = prefetch_factor

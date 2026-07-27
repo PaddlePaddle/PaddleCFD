@@ -26,7 +26,7 @@ class Dit(paddle.nn.Layer):
         self.reset_parameters()
 
     def reset_parameters(self):
-        if self.init_weights == "torch":
+        if self.init_weights == "paddle":
             pass
         elif self.init_weights == "xavier_uniform":
             init_xavier_uniform_merged_linear(

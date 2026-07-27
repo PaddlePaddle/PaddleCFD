@@ -3,7 +3,7 @@ from utils.factory import instantiate
 
 def loss_fn_from_kwargs(kind, update_counter=None, **kwargs):
     return instantiate(
-        module_names=[f"losses.{kind}", f"losses.basic.{kind}", "torch.nn"],
+        module_names=[f"losses.{kind}", f"losses.basic.{kind}", "paddle.nn"],
         type_names=[kind.split(".")[-1]],
         optional_kwargs=dict(update_counter=update_counter),
         **kwargs,

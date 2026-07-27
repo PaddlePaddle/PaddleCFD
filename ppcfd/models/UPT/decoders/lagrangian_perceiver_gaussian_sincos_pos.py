@@ -6,7 +6,7 @@ from kappamodules.init import init_xavier_uniform_zero_bias
 from kappamodules.layers import ContinuousSincosEmbed, LinearProjection
 from kappamodules.transformer import DitPerceiverBlock, PerceiverBlock
 from models.base.single_model_base import SingleModelBase
-from torch_geometric.utils import unbatch
+from paddle_geometric.utils import unbatch
 
 
 class LagrangianPerceiverGaussianSincosPos(SingleModelBase):

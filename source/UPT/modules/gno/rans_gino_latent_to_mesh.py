@@ -1,6 +1,6 @@
 import einops
 import paddle
-from torch_scatter import segment_csr
+from paddle_scatter import segment_csr
 
 from .gino_grid_to_mesh import GinoGridToMesh
 

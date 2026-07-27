@@ -4,8 +4,8 @@ import paddle
 from callbacks.online_callbacks.update_output_callback import UpdateOutputCallback
 from kappadata.wrappers import ModeWrapper
 from losses import loss_fn_from_kwargs
-# from torch_scatter import segment_csr
-from torch_scatter import segment_csr
+# from paddle_scatter import segment_csr
+from paddle_scatter import segment_csr
 from utils.factory import create
 
 from .base.sgd_trainer import SgdTrainer

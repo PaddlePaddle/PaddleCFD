@@ -1,4 +1,4 @@
-# adapted from https://github.com/ptrblck/pytorch_misc/blob/master/shared_dict.py
+# adapted from https://github.com/ptrblck/paddle_misc/blob/master/shared_dict.py
 from multiprocessing import Manager
 
 from .cached_dataset import CachedDataset

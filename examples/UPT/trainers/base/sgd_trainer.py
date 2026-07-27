@@ -81,7 +81,7 @@ class SgdTrainer(paddle.nn.Layer):
         sync_batchnorm: bool = True,
         find_unused_params: bool = False,
         static_graph: bool = False,
-        use_torch_compile: bool = False,
+        use_paddle_static: bool = False,
         main_sampler_kwargs: dict = None,
         config_provider: ConfigProviderBase = None,
         summary_provider: SummaryProviderBase = None,
@@ -144,7 +144,7 @@ class SgdTrainer(paddle.nn.Layer):
         self.sync_batchnorm = sync_batchnorm
         self.find_unused_params = find_unused_params
         self.static_graph = static_graph
-        self.use_torch_compile = use_torch_compile
+        self.use_paddle_static = use_paddle_static
         self.exit_on_nan_loss = exit_on_nan_loss
         self.initializer = create(
             initializer, initializer_from_kwargs, path_provider=self.path_provider
@@ -483,16 +483,16 @@ class SgdTrainer(paddle.nn.Layer):
         return model
 
     def wrap_compile(self, ddp_model):
-        if not self.use_torch_compile:
-            self.logger.info(f"torch.compile not used (use_torch_compile == False)")
+        if not self.use_paddle_static:
+            self.logger.info(f"paddle.jit.to_static not used (use_paddle_static == False)")
             return ddp_model
         if is_distributed():
             if self.static_graph:
                 self.logger.info(
-                    f"torch.compile static_graph=True is not supported -> disable torch.compile"
+                    f"paddle.jit.to_static static_graph=True is not supported -> disable paddle.jit.to_static"
                 )
                 return ddp_model
-        self.logger.info(f"wrapping model with torch.compile")
+        self.logger.info(f"wrapping model with paddle.jit.to_static")
         return paddle.jit.to_static(ddp_model)
 
     def before_training(self):

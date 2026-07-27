@@ -84,7 +84,7 @@ class NoopGradScaler:
 
     @staticmethod
     def step(optimizer, *args, **kwargs):
-        """Not Support auto convert *.step, please judge whether it is Pytorch API and convert by yourself"""
+        """Not Support auto convert *.step, please judge whether it is Paddle API and convert by yourself"""
         optimizer.step()
 
     @staticmethod

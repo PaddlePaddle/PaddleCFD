@@ -2,7 +2,7 @@ import paddle
 from paddle.optimizer import Optimizer
 
 class Lion(Optimizer):
-    """https://raw.githubusercontent.com/lucidrains/lion-pytorch/main/lion_pytorch/lion_pytorch.py"""
+    """https://raw.githubusercontent.com/lucidrains/lion-paddle/main/lion_paddle/lion_paddle.py"""
 
     def __init__(self, params, lr=0.0001, betas=(0.9, 0.99), weight_decay=0.0):
         assert lr > 0.0

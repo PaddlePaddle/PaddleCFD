@@ -10,7 +10,7 @@ class TranssolverAttention(paddle.nn.Layer):
     Adapted from https://github.com/thuml/Transolver/blob/main/Car-Design-ShapeNetCar/models/Transolver.py
     - readable reshaping operations via einops
     - merged qkv linear layer for higher GPU utilization
-    - F.scaled_dot_product_attention instead of slow pytorch attention
+    - F.scaled_dot_product_attention instead of slow paddle attention
     - possibility to mask tokens (required to process variable sized inputs)
     """
 

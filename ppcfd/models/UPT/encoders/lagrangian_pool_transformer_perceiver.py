@@ -10,7 +10,7 @@ from modules.gno.cfd_pool import CfdPool
 from modules.gno.cfd_pool_gaussian_sincos_pos import CfdPoolGaussianSincosPos
 from optimizers.param_group_modifiers.exclude_from_wd_by_name_modifier import \
     ExcludeFromWdByNameModifier
-from torch_geometric.utils import to_dense_batch
+from paddle_geometric.utils import to_dense_batch
 
 
 class LagrangianPoolTransformerPerceiver(SingleModelBase):

@@ -6,7 +6,7 @@ import paddle.nn.functional as F
 
 class WeightNormLinear(paddle.nn.Layer):
     """
-    torch.nn.utils.weight_norm(nn.Linear(...)) but with weight_g as buffer when it is fixed
+    paddle.nn.utils.weight_norm(nn.Linear(...)) but with weight_g as buffer when it is fixed
     if weight_g is set to requires_grad=False (as done in DINO, iBOT, MUGS, ...) and during
     training a parent module is unfrozen via
     ```
@@ -58,7 +58,7 @@ class WeightNormLinear(paddle.nn.Layer):
         self.reset_parameters()
 
     def reset_parameters(self):
-        if self.init_weights == "torch":
+        if self.init_weights == "paddle":
             init = nn.initializer.KaimingUniform(negative_slope=math.sqrt(5))
             init(self.weight_v)
             if self.bias is not None:

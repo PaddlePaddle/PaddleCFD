@@ -3,7 +3,7 @@ import numpy as np
 import paddle
 from kappamodules.init.functional import init_xavier_uniform_zero_bias
 from kappamodules.layers import ContinuousSincosEmbed
-from torch_scatter import segment_csr
+from paddle_scatter import segment_csr
 
 
 class RansGinoMeshToGridSdfOg(paddle.nn.Layer):

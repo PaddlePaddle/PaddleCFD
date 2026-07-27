@@ -8,7 +8,7 @@ from itertools import product
 def create(obj_or_kwargs, from_kwargs_fn, instantiate_if_ctor=True, **kwargs):
     """
     avoid boilerplate code when allowing ctor arguments to be either an object or a dict with the object parameters
-    e.g. a model can be instantiated with either act=torch.nn.ReLU or act=dict(kind='relu') and the ctor has to only
+    e.g. a model can be instantiated with either act=paddle.nn.ReLU or act=dict(kind='relu') and the ctor has to only
     call self.act_ctor = create(act, act_ctor_from_kwargs) instead
     """
     if isinstance(obj_or_kwargs, dict):
@@ -87,7 +87,7 @@ def instantiate(
 def type_from_name(module_names, type_names, error_on_not_found=True):
     """
     tries to import type_name from any of the modules identified by module_names
-    e.g. module_names=[loss_functions, torch.nn] type_name=bce_loss will import torch.nn.BCELoss
+    e.g. module_names=[loss_functions, paddle.nn] type_name=bce_loss will import paddle.nn.BCELoss
     """
     for module_name, type_name in product(module_names, type_names):
         module_name = module_name.lower()

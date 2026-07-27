@@ -5,7 +5,7 @@ from kappamodules.init.functional import (init_truncnormal_zero_bias,
                                           init_xavier_uniform_zero_bias)
 from kappamodules.layers import ContinuousSincosEmbed
 from modules.graph.sag_pool import SAGPoolingFixedNumNodes
-from torch_geometric.nn.conv import MessagePassing
+from paddle_geometric.nn.conv import MessagePassing
 
 
 class CfdGnnPool(paddle.nn.Layer):

@@ -2,7 +2,7 @@ import paddle
 from kappamodules.layers import ContinuousSincosEmbed
 from modules.graph.gnn_layer import GNNLayer
 from modules.graph.sag_pool import SAGPoolingFixedNumNodes
-from torch_geometric.data import Data
+from paddle_geometric.data import Data
 
 
 class GNNMeshEmbedV2(paddle.nn.Layer):

@@ -5,7 +5,7 @@ from kappamodules.transformer import Mlp, PerceiverPoolingBlock
 from models.base.single_model_base import SingleModelBase
 from optimizers.param_group_modifiers.exclude_from_wd_by_name_modifier import \
     ExcludeFromWdByNameModifier
-from torch_geometric.utils import to_dense_batch
+from paddle_geometric.utils import to_dense_batch
 
 
 class LagrangianPerceiver(SingleModelBase):

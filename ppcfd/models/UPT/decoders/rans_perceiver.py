@@ -3,7 +3,7 @@ import paddle
 from kappamodules.layers import ContinuousSincosEmbed, LinearProjection
 from kappamodules.transformer import Mlp, PerceiverBlock
 from models.base.single_model_base import SingleModelBase
-# from torch_geometric.utils import unbatch
+# from paddle_geometric.utils import unbatch
 
 def paddle_unbatch(x, batch):
     """

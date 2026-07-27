@@ -6,7 +6,7 @@ from callbacks.online_callbacks.update_output_callback import \
     UpdateOutputCallback
 from kappadata.wrappers import ModeWrapper
 from losses import loss_fn_from_kwargs
-from torch_geometric.nn.pool import radius
+from paddle_geometric.nn.pool import radius
 from utils.factory import create
 
 from .base.sgd_trainer import SgdTrainer

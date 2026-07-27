@@ -8,7 +8,7 @@ import paddle
 import scipy
 from distributed.config import barrier, is_data_rank0
 from kappautils.param_checking import to_2tuple, to_3tuple
-from torch_geometric.nn.pool import radius, radius_graph
+from paddle_geometric.nn.pool import radius, radius_graph
 
 from .base.dataset_base import DatasetBase
 

@@ -9,9 +9,9 @@ import wget
 from distributed.config import barrier, is_data_rank0
 from kappadata.copying.image_folder import \
     copy_imagefolder_from_global_to_local
-from torch_geometric.data import Data
-from torch_geometric.nn.pool import radius, radius_graph
-from torch_geometric.transforms import KNNGraph
+from paddle_geometric.data import Data
+from paddle_geometric.nn.pool import radius, radius_graph
+from paddle_geometric.transforms import KNNGraph
 
 from .base.dataset_base import DatasetBase
 

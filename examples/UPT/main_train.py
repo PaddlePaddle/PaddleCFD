@@ -48,7 +48,7 @@ from distributed.run import run_managed, run_single_or_multiprocess
 from train_stage import train_stage
 from utils.kappaconfig.util import get_stage_hp
 from utils.logging_util import add_global_handlers, log_from_all_ranks
-from utils.pytorch_cuda_timing import cuda_end_event, cuda_start_event
+from utils.paddle_cuda_timing import cuda_end_event, cuda_start_event
 
 
 def main_single(device):

@@ -21,14 +21,14 @@ def get_random_int(generator=None):
 
 def get_random_states():
     return dict(
-        torch_rng_state=paddle.get_rng_state(),
+        paddle_rng_state=paddle.get_rng_state(),
         np_rng_state=np.random.get_state(),
         py_rng_state=random.getstate(),
     )
 
 
-def set_random_states(torch_rng_state, np_rng_state, py_rng_state):
-    paddle.set_rng_state(state_list=torch_rng_state)
+def set_random_states(paddle_rng_state, np_rng_state, py_rng_state):
+    paddle.set_rng_state(state_list=paddle_rng_state)
     np.random.set_state(np_rng_state)
     random.setstate(py_rng_state)
 

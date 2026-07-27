@@ -3,7 +3,7 @@ import paddle
 
 class Sequential(paddle.nn.Sequential):
     """
-    torch.nn.Sequential but one can pass arbitrary arguments
+    paddle.nn.Sequential but one can pass arbitrary arguments
     net = nn.Sequential(...)
     net(a, b) -> this fails
 

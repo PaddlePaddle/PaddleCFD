@@ -97,7 +97,7 @@ class CompositeModelBase(ModelBase):
         #     device = paddle.device(device)
         # assert isinstance(device, paddle.device)
         if isinstance(device, str):
-        # 将 PyTorch 风格的 "cuda" 替换为 Paddle 风格的 "gpu"
+        # 将 Paddle 风格的 "cuda" 替换为 Paddle 风格的 "gpu"
             device = device.replace("cuda", "gpu")
         for sub_model in self.submodels.values():
             sub_model.to(*args, **kwargs, device=device)

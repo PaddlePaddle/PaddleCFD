@@ -4,7 +4,7 @@ from pathlib import Path
 
 import kappaprofiler as kp
 import yaml
-# from torch.distributed import broadcast_object_list
+# from paddle.distributed import broadcast_object_list
 import paddle.distributed as dist
 from wandb.util import generate_id
 

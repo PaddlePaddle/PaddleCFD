@@ -4,7 +4,7 @@ import einops
 import paddle
 from kappamodules.init import init_xavier_uniform_zero_bias
 from kappamodules.layers import ContinuousSincosEmbed
-from torch_geometric.nn.pool import SAGPooling
+from paddle_geometric.nn.pool import SAGPooling
 
 
 class DummyMeshEmbed(paddle.nn.Layer):

@@ -8,7 +8,7 @@ from kappamodules.transformer import (DitBlock, DitPerceiverBlock,
                                       PerceiverBlock)
 from kappamodules.vit import VitBlock
 from models.base.single_model_base import SingleModelBase
-from torch_geometric.utils import unbatch
+from paddle_geometric.utils import unbatch
 
 
 class CfdTransformerPerceiver(SingleModelBase):

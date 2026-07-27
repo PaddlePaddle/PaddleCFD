@@ -9,7 +9,7 @@ from kappadata.copying.image_folder import \
     copy_imagefolder_from_global_to_local
 from kappautils.param_checking import to_2tuple
 from paddle_utils import *
-from torch_geometric.nn.pool import radius, radius_graph
+from paddle_geometric.nn.pool import radius, radius_graph
 from utils.num_worker_heuristic import get_fair_cpu_count
 
 from .base.dataset_base import DatasetBase

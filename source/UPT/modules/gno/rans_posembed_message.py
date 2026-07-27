@@ -1,7 +1,7 @@
 import paddle
 from kappamodules.init.functional import init_xavier_uniform_zero_bias
 from kappamodules.layers import ContinuousSincosEmbed
-from torch_geometric.nn.conv import MessagePassing
+from paddle_geometric.nn.conv import MessagePassing
 
 
 class RansPosembedMessage(MessagePassing):

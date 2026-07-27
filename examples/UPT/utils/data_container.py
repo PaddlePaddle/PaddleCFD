@@ -174,7 +174,7 @@ class DataContainer:
         #     dataset=sampler.dataset,         # 使用 sampler 内部组合好的数据集
         #     batch_sampler=sampler,           # 使用 sampler 作为批采样器
         #     num_workers=num_workers,
-        #     use_shared_memory=pin_memory,    # 对应 torch 的 pin_memory 逻辑
+        #     use_shared_memory=pin_memory,    # 对应 paddle 的 pin_memory 逻辑
         #     return_list=True                 # 确保返回格式正确
         # )
         self.logger.info(

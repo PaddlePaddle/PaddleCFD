@@ -1,15 +1,15 @@
 from typing import Callable, Optional, Tuple, Union
 
 import paddle
-from torch_geometric.nn import GraphConv
-from torch_geometric.nn.pool.connect import FilterEdges
-from torch_geometric.typing import OptTensor
+from paddle_geometric.nn import GraphConv
+from paddle_geometric.nn.pool.connect import FilterEdges
+from paddle_geometric.typing import OptTensor
 
 from .topk import SelectTopK
 
 
 class SAGPoolingFixedNumNodes(paddle.nn.Layer):
-    """torch_geometric.nn.pool.SAGPooling with a dynamic ratio such that the number of output nodes is constant"""
+    """paddle_geometric.nn.pool.SAGPooling with a dynamic ratio such that the number of output nodes is constant"""
 
     def __init__(
         self,
@@ -45,14 +45,14 @@ class SAGPoolingFixedNumNodes(paddle.nn.Layer):
     ) -> Tuple[paddle.Tensor, paddle.Tensor, OptTensor, OptTensor, paddle.Tensor, paddle.Tensor]:
         """
         Args:
-            x (torch.Tensor): The node feature matrix.
-            edge_index (torch.Tensor): The edge indices.
-            edge_attr (torch.Tensor, optional): The edge features.
+            x (paddle.Tensor): The node feature matrix.
+            edge_index (paddle.Tensor): The edge indices.
+            edge_attr (paddle.Tensor, optional): The edge features.
                 (default: :obj:`None`)
-            batch (torch.Tensor, optional): The batch vector
+            batch (paddle.Tensor, optional): The batch vector
                 :math:`\\mathbf{b} \\in {\\{ 0, \\ldots, B-1\\}}^N`, which assigns
                 each node to a specific example. (default: :obj:`None`)
-            attn (torch.Tensor, optional): Optional node-level matrix to use
+            attn (paddle.Tensor, optional): Optional node-level matrix to use
                 for computing attention scores instead of using the node
                 feature matrix :obj:`x`. (default: :obj:`None`)
         """

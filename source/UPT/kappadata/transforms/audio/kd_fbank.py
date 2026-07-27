@@ -1,5 +1,5 @@
 # import einops
-# import torchaudio
+# import paddleaudio
 # from paddle.nn.functional import pad
 #
 # from kappadata.transforms.base.kd_transform import KDTransform
@@ -15,7 +15,7 @@
 #
 #     def __call__(self, x, ctx=None):
 #         assert ctx is not None and "sampling_frequency" in ctx
-#         x = torchaudio.compliance.kaldi.fbank(
+#         x = paddleaudio.compliance.kaldi.fbank(
 #             x,
 #             htk_compat=self.htk_compat,
 #             num_mel_bins=self.num_mel_bins,

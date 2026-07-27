@@ -1,6 +1,6 @@
 # import paddle
 # import yaml
-# import torchaudio
+# import paddleaudio
 # from kappadata.utils.param_checking import to_2tuple
 # from .utils import setup
 #
@@ -36,7 +36,7 @@
 #             ytid = "".join([chr(ord("a") + v) for v in paddle.randint(26, size=(11,), generator=generator)])
 #             # generate waveform
 #             waveform = paddle.randn(1, 16000, generator=generator)
-#             torchaudio.save(split_uri / f"{ytid}.wav", waveform, sample_rate=16000)
+#             paddleaudio.save(split_uri / f"{ytid}.wav", waveform, sample_rate=16000)
 #             # generate labels
 #             num_positive_labels = paddle.randint(1, labels_per_sample_max, size=(1,), generator=generator)
 #             num_positive_labels_total += num_positive_labels.item()

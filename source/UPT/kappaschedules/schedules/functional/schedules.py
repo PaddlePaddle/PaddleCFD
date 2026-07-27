@@ -26,7 +26,7 @@ def inverse_sqrt(step, abs_step):
 def polynomial(step, total_steps, power):
     """
     polynomial schedule from [0 to 1]
-    https://pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.PolynomialLR.html
+    https://paddle.org/docs/stable/generated/paddle.optim.lr_scheduler.PolynomialLR.html
     """
     progress = step / max(1, total_steps - 1)
     return 1 - (1 - progress) ** power

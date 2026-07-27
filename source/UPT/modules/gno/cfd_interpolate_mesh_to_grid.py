@@ -6,8 +6,8 @@ from kappamodules.init import (init_truncnormal_zero_bias,
 from kappamodules.layers import (ContinuousSincosEmbed, LinearProjection,
                                  Residual)
 from paddle_utils import *
-from torch_geometric.nn.unpool.knn_interpolate import knn_interpolate
-from torch_scatter import segment_csr
+from paddle_geometric.nn.unpool.knn_interpolate import knn_interpolate
+from paddle_scatter import segment_csr
 
 
 class CfdInterpolateMeshToGrid(paddle.nn.Layer):
