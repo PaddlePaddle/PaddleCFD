@@ -143,3 +143,106 @@ python main_train.py \
 ```
 
 训练日志和 checkpoint 会写入 `PaddleCFD/output/UPT/stage1/<stage_id>/`。
+
+## 6. 评估与推理
+
+训练完成后，先确认输出目录中存在 `hp_resolved.yaml` 和 checkpoint 文件：
+
+```text
+PaddleCFD/output/UPT/stage1/<stage_id>/hp_resolved.yaml
+PaddleCFD/output/UPT/stage1/<stage_id>/checkpoints/* cp=best_model.loss.test.total model.th
+```
+
+其中 `<stage_id>` 是训练日志中打印的 `stage_id`，例如：
+
+```text
+PaddleCFD/output/UPT/stage1/onmvsf6n
+```
+
+评估脚本为 `examples/UPT/eval.py`，默认支持 ShapeNetCar 的 `rans_simformer_nognn_sdf_model`。下面命令默认使用训练过程中保存的最佳 test loss checkpoint：
+
+```text
+best_model.loss.test.total
+```
+
+### 单样本推理
+
+```bash
+cd "$PADDLECFD_ROOT/examples/UPT"
+export CUDA_VISIBLE_DEVICES=0
+
+python eval.py \
+  --run_dir ../../output/UPT/stage1/<stage_id> \
+  --checkpoint best_model.loss.test.total \
+  --split test \
+  --sample_idx 0 \
+  --device gpu:0
+```
+
+单样本结果默认保存到：
+
+```text
+PaddleCFD/output/UPT/stage1/<stage_id>/inference/test_000000.npz
+```
+
+`.npz` 文件包含 `query_pos`、`prediction`、`target`、`abs_error` 以及该样本的 MSE、RMSE、MAE、relative L2 等指标。
+
+### 小批量评估
+
+建议先评估少量样本，确认 checkpoint 和数据路径无误：
+
+```bash
+cd "$PADDLECFD_ROOT/examples/UPT"
+export CUDA_VISIBLE_DEVICES=0
+
+python eval.py \
+  --run_dir ../../output/UPT/stage1/<stage_id> \
+  --checkpoint best_model.loss.test.total \
+  --split test \
+  --device gpu:0 \
+  --eval \
+  --start_idx 0 \
+  --num_samples 10 \
+  --print_every 1
+```
+
+### 完整 test 集评估
+
+```bash
+cd "$PADDLECFD_ROOT/examples/UPT"
+export CUDA_VISIBLE_DEVICES=0
+
+python eval.py \
+  --run_dir ../../output/UPT/stage1/<stage_id> \
+  --checkpoint best_model.loss.test.total \
+  --split test \
+  --device gpu:0 \
+  --eval \
+  --print_every 10
+```
+
+完整评估默认输出到：
+
+```text
+PaddleCFD/output/UPT/stage1/<stage_id>/inference/test_best_model.loss.test.total/
+```
+
+其中：
+
+- `metrics_test_best_model.loss.test.total.json` 保存整体指标，包括 MSE、RMSE、MAE、global relative L2、mean relative L2 等。
+- `metrics_test_best_model.loss.test.total_per_sample.csv` 保存逐样本指标，便于排序查看最好 / 最差样本。
+
+如果需要同时保存每个样本的预测结果，添加 `--save_predictions`：
+
+```bash
+python eval.py \
+  --run_dir ../../output/UPT/stage1/<stage_id> \
+  --checkpoint best_model.loss.test.total \
+  --split test \
+  --device gpu:0 \
+  --eval \
+  --print_every 10 \
+  --save_predictions
+```
+
+开启 `--save_predictions` 后，会在输出目录下额外生成 `predictions/*.npz`，完整 test 集会占用更多磁盘空间。
