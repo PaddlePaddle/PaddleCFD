@@ -96,6 +96,12 @@ class Trainer(object):
             logger.info("Using nn.parallel.DistributedDataParallel ...")
             for k in self.modules.keys():
                 self.modules[k] = paddle.DataParallel(layers=self.modules[k])
+        # CINN / 动转静总开关
+        if os.environ.get("PHYE2E_USE_CINN", "").lower() in ("1", "true", "yes"):
+            logger.info("PHYE2E_USE_CINN=true: wrapping encoder/decoder with paddle.jit.to_static (CINN will compile) ...")
+            for k in ("encoder", "decoder"):
+                if k in self.modules:
+                    self.modules[k] = paddle.jit.to_static(self.modules[k])
         self.set_optimizer()
         self.scaler = None
         if params.amp >= 0:
@@ -708,6 +714,6 @@ class Trainer(object):
         self.total_loss += loss.item()
         self.optimize(loss)
         self.inner_epoch += 1
-        self.n_equations += len1.size(0)
-        self.stats["processed_e"] += len1.size(0)
+        self.n_equations += len1.shape[0]
+        self.stats["processed_e"] += len1.shape[0]
         self.stats["processed_w"] += (len1 + len2 - 2).sum().item()

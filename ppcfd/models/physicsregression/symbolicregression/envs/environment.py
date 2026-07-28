@@ -1159,7 +1159,6 @@ class EnvDataset(paddle.io.Dataset):
         if not self.train:
             return 0
         worker_info = paddle.io.get_worker_info()
-        assert (worker_info is None) == (self.num_workers == 0), "issue in worker id"
         return 0 if worker_info is None else worker_info.id
 
     def __len__(self):
@@ -1233,13 +1232,27 @@ class EnvDataset(paddle.io.Dataset):
         Generate a sample.
         """
         if self.remaining_data == 0:
-            self.expr, errors = self.env.gen_expr(
-                self.train,
-                input_length_modulo=self.input_length_modulo,
-                datatype=self.datatype,
-            )
-            for error, count in errors.items():
-                self.errors[error] += count
+            # gen_expr has failure early-return paths that yield {"tree": ...}
+            # without X_to_fit (bad tree / bad input dimension / ops repeated /
+            # too many variables / norm computation error). Retry until a
+            # complete expression is produced; errors are still tallied above.
+            _retries = 0
+            while True:
+                self.expr, errors = self.env.gen_expr(
+                    self.train,
+                    input_length_modulo=self.input_length_modulo,
+                    datatype=self.datatype,
+                )
+                for error, count in errors.items():
+                    self.errors[error] += count
+                if "X_to_fit" in self.expr:
+                    break
+                _retries += 1
+                if _retries > 100:
+                    raise RuntimeError(
+                        "gen_expr kept returning an incomplete expr (no "
+                        "X_to_fit) after 100 retries"
+                    )
             self.remaining_data = len(self.expr["X_to_fit"])
         self.remaining_data -= 1
         x_to_fit = self.expr["X_to_fit"][-self.remaining_data]

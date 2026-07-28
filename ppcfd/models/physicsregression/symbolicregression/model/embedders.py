@@ -112,7 +112,7 @@ class LinearPointEmbedder(Embedder):
         Takes: (N_max * (d_in+d_out)*(2+mantissa_len), B, d) tensors
         Returns: (N_max, B, d)
         """
-        max_len, bs, float_descriptor_length, dim = sequences_embeddings.size()
+        max_len, bs, float_descriptor_length, dim = sequences_embeddings.shape
         sequences_embeddings = sequences_embeddings.view(max_len, bs, -1)
         for layer in self.hidden_layers:
             sequences_embeddings = self.activation_fn(layer(sequences_embeddings))

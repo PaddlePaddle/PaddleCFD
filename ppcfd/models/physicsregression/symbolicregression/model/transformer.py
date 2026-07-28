@@ -38,15 +38,15 @@ def get_masks(slen, lengths, causal):
     """
     if __debug__:  # 只在调试模式下检查，避免频繁GPU-CPU同步
         assert paddle.max(lengths).item() <= slen
-    bs = lengths.size(0)
+    bs = lengths.shape[0]
     alen = paddle.arange(slen, dtype=paddle.long, device=lengths.device)
     mask = alen < lengths[:, None]
     if causal:
-        attn_mask = alen[None, None, :].repeat(bs, slen, 1) <= alen[None, :, None]
+        attn_mask = paddle.tile(alen[None, None, :], (bs, slen, 1)) <= alen[None, :, None]
     else:
         attn_mask = mask
-    assert mask.size() == (bs, slen)
-    assert causal is False or attn_mask.size() == (bs, slen, slen)
+    assert tuple(mask.shape) == (bs, slen)
+    assert causal is False or tuple(attn_mask.shape) == (bs, slen, slen)
     return mask, attn_mask
 
 
@@ -79,11 +79,11 @@ class MultiHeadAttention(paddle.nn.Module):
         Mask is (bs, klen) (non-causal) or (bs, klen, klen)
         """
         assert not (use_cache and self.cache is None)
-        bs, qlen, dim = input.size()
+        bs, qlen, dim = input.shape
         if kv is None:
             klen = qlen if not use_cache else self.cache["slen"] + qlen
         else:
-            klen = kv.size(1)
+            klen = kv.shape[1]
         assert dim == self.dim, "Dimensions do not match: %s input vs %s configured" % (
             dim,
             self.dim,
@@ -93,13 +93,11 @@ class MultiHeadAttention(paddle.nn.Module):
 
         def shape(x):
             """projection"""
-            return x.view(bs, -1, self.n_heads, dim_per_head).transpose(1, 2)
+            return x.reshape(bs, -1, self.n_heads, dim_per_head).transpose(1, 2)
 
         def unshape(x):
             """compute context"""
-            return (
-                x.transpose(1, 2).contiguous().view(bs, -1, self.n_heads * dim_per_head)
-            )
+            return x.transpose(1, 2).reshape(bs, -1, self.n_heads * dim_per_head)
 
         q = shape(self.q_lin(input))
         if kv is None:
@@ -127,7 +125,7 @@ class MultiHeadAttention(paddle.nn.Module):
         scores = paddle.matmul(q, k.transpose(2, 3))
         if mask is not None:
             mask_reshape = (bs, 1, qlen, klen) if mask.dim() == 3 else (bs, 1, 1, klen)
-            mask = (mask == 0).view(mask_reshape).expand_as(scores)
+            mask = (mask == 0).reshape(mask_reshape).expand_as(scores)
             scores.masked_fill_(mask, -float("inf"))
         weights = paddle.compat.nn.functional.softmax(scores.float(), dim=-1).type_as(
             scores
@@ -376,15 +374,15 @@ class TransformerModel(paddle.nn.Module):
             `positions` LongTensor(slen, bs), containing word positions
             `dim` LongTensor(slen, bs, 5), containing dimensions
         """
-        slen, bs = x.size()[:2]
-        assert lengths.size(0) == bs
+        slen, bs = x.shape[:2]
+        assert lengths.shape[0] == bs
         if __debug__:  # 只在调试模式下检查，避免频繁GPU-CPU同步
             assert paddle.max(lengths).item() <= slen
         x = x.transpose(0, 1)
         assert (src_enc is None) == (src_len is None)
         if src_enc is not None:
             assert self.is_decoder
-            assert src_enc.size(0) == bs
+            assert src_enc.shape[0] == bs
         assert not (use_cache and self.cache is None)
         if self.is_decoder and units is not None:
             units = units.transpose(0, 1)
@@ -398,7 +396,7 @@ class TransformerModel(paddle.nn.Module):
             # PaddlePaddle: 直接使用 paddle.arange 创建位置张量
             positions = paddle.arange(slen, dtype='int64').unsqueeze(0)
         else:
-            assert positions.size() == (slen, bs)
+            assert tuple(positions.shape) == (slen, bs)
             positions = positions.transpose(0, 1)
         if use_cache:
             _slen = slen - self.cache["slen"]
@@ -454,7 +452,7 @@ class TransformerModel(paddle.nn.Module):
             if TransformerModel.STORE_OUTPUTS and not self.training:
                 self.outputs.append(tensor.detach().cpu())
         if use_cache:
-            self.cache["slen"] += tensor.size(1)
+            self.cache["slen"] += tensor.shape[1]
         tensor = tensor.transpose(0, 1)
         return tensor
 
@@ -466,20 +464,20 @@ class TransformerModel(paddle.nn.Module):
             `y` is a LongTensor of shape (pred_mask.sum(),)
             `get_scores` is a boolean specifying whether we need to return scores
         """
-        x = tensor[pred_mask.unsqueeze(-1).expand_as(tensor)].view(-1, self.dim)
+        x = tensor[pred_mask.unsqueeze(-1).expand_as(tensor)].reshape(-1, self.dim)
         if __debug__:  # 只在调试模式下检查
             assert (y == self.pad_index).sum().item() == 0
-        scores = self.proj(x).view(-1, self.n_words)
+        scores = self.proj(x)
         loss = paddle.nn.functional.cross_entropy(
             input=scores.float(), label=y, reduction="mean"
         )
         next_word = paddle.topk(scores, 1)[1].squeeze(1)
         if y_units is not None:
-            x_dim = tensor[pred_mask.unsqueeze(-1).expand_as(tensor)].view(-1, self.dim)
+            x_dim = tensor[pred_mask.unsqueeze(-1).expand_as(tensor)].reshape(-1, self.dim)
             if __debug__:  # 只在调试模式下检查
                 assert (y_units == self.pad_index).sum().item() == 0
-            latent_units = self.units_dec(x_dim).view(-1, self.dim)
-            scores_units = self.proj(latent_units).view(-1, self.n_words)
+            latent_units = self.units_dec(x_dim).reshape(-1, self.dim)
+            scores_units = self.proj(latent_units)
             loss_units = paddle.nn.functional.cross_entropy(
                 input=scores_units.float(), label=y_units, reduction="mean"
             )
@@ -513,7 +511,7 @@ class TransformerModel(paddle.nn.Module):
             max_len *= 5
         if decode_physical_units is None or decode_physical_units == "single-seq":
             bs = len(src_len)
-            assert src_enc.size(0) == bs
+            assert src_enc.shape[0] == bs
             # PaddlePaddle: 使用 paddle.full 创建填充张量
             generated = paddle.full([max_len, bs], self.pad_index, dtype=src_len.dtype)
             generated[0].fill_(self.eos_index)
@@ -535,7 +533,7 @@ class TransformerModel(paddle.nn.Module):
                     src_len=src_len,
                     use_cache=True,
                 )
-                assert tensor.size() == (1, bs, self.dim)
+                assert tuple(tensor.shape) == (1, bs, self.dim)
                 tensor = tensor.data[-1, :, :].to(self.dtype)
                 scores = self.proj(tensor)
                 if sample_temperature is None:
@@ -547,7 +545,7 @@ class TransformerModel(paddle.nn.Module):
                         ),
                         num_samples=1,
                     ).squeeze(1)
-                assert next_words.size() == (bs,)
+                assert tuple(next_words.shape) == (bs,)
                 generated[cur_len] = next_words * unfinished_sents + self.pad_index * (
                     1 - unfinished_sents
                 )
@@ -557,7 +555,7 @@ class TransformerModel(paddle.nn.Module):
                 next_words_perplexity = next_words_prob[
                     tuple([paddle.arange(bs), next_words])
                 ]
-                assert next_words_perplexity.size() == (bs,)
+                assert tuple(next_words_perplexity.shape) == (bs,)
                 word_perplexity.add_(
                     # PaddlePaddle: 显式类型转换 float32 * int64 -> float32
                     paddle.log(next_words_perplexity.detach()) * unfinished_sents.astype('float32')
@@ -578,7 +576,7 @@ class TransformerModel(paddle.nn.Module):
             return generated[:cur_len], gen_len, None, word_perplexity, None
         elif decode_physical_units == "double-seq":
             bs = len(src_len)
-            assert src_enc.size(0) == bs
+            assert src_enc.shape[0] == bs
             # PaddlePaddle: 使用 paddle.full 创建填充张量
             generated1 = paddle.full([max_len, bs], self.pad_index, dtype=src_len.dtype)
             generated1[0].fill_(self.eos_index)
@@ -604,7 +602,7 @@ class TransformerModel(paddle.nn.Module):
                     use_cache=True,
                     units=generated2[:cur_len],
                 )
-                assert tensor.size() == (1, bs, self.dim)
+                assert tuple(tensor.shape) == (1, bs, self.dim)
                 tensor = tensor.data[-1, :, :].to(self.dtype)
                 scores = self.proj(tensor)
                 if self.use_dimension_mask:
@@ -647,7 +645,7 @@ class TransformerModel(paddle.nn.Module):
                         ),
                         num_samples=1,
                     ).squeeze(1)
-                assert next_words.size() == (bs,)
+                assert tuple(next_words.shape) == (bs,)
                 generated1[cur_len] = next_words * unfinished_sents + self.pad_index * (
                     1 - unfinished_sents
                 )
@@ -675,7 +673,7 @@ class TransformerModel(paddle.nn.Module):
                         .squeeze(-1)
                         .reshape(bs, 5)
                     )
-                assert next_words_dim.size() == (bs, 5)
+                assert tuple(next_words_dim.shape) == (bs, 5)
                 generated2[cur_len] = next_words_dim * unfinished_sents[
                     :, None
                 ] + self.pad_index * (1 - unfinished_sents[:, None])
@@ -701,8 +699,8 @@ class TransformerModel(paddle.nn.Module):
                     next_dimensions_perplexity, dim=1
                 )
                 assert (
-                    next_words_perplexity.size()
-                    == next_dimensions_perplexity.size()
+                    tuple(next_words_perplexity.shape)
+                    == tuple(next_dimensions_perplexity.shape)
                     == (bs,)
                 )
                 word_perplexity.add_(
@@ -752,7 +750,7 @@ class TransformerModel(paddle.nn.Module):
             - False, for regular "arange" positions (LM)
             - True, to reset positions from the new generation (MT)
         """
-        assert src_enc.size(0) == src_len.size(0)
+        assert src_enc.shape[0] == src_len.shape[0]
         assert beam_size >= 1
         bs = len(src_len)
         n_words = self.n_words
@@ -790,17 +788,17 @@ class TransformerModel(paddle.nn.Module):
                 src_len=src_len,
                 use_cache=True,
             )
-            assert tensor.size() == (1, bs * beam_size, self.dim)
+            assert tuple(tensor.shape) == (1, bs * beam_size, self.dim)
             tensor = tensor.data[-1, :, :]
             scores = self.proj(tensor)
             scores = paddle.nn.functional.log_softmax(x=scores.float(), axis=-1)
-            assert scores.size() == (bs * beam_size, n_words)
+            assert tuple(scores.shape) == (bs * beam_size, n_words)
             _scores = scores + beam_scores[:, None].expand_as(scores)
             _scores = _scores.view(bs, beam_size * n_words)
             next_scores, next_words = paddle.topk(
                 _scores, 2 * beam_size, dim=1, largest=True, sorted=True
             )
-            assert next_scores.size() == next_words.size() == (bs, 2 * beam_size)
+            assert tuple(next_scores.shape) == tuple(next_words.shape) == (bs, 2 * beam_size)
             next_batch_beam = []
             for sent_id in range(bs):
                 done[sent_id] = done[sent_id] or generated_hyps[sent_id].is_done(
@@ -988,7 +986,7 @@ class TopKLogitsWarper(LogitsWarper):
     def __call__(
         self, input_ids: paddle.LongTensor, scores: paddle.FloatTensor
     ) -> paddle.FloatTensor:
-        top_k = min(max(self.top_k, self.min_tokens_to_keep), scores.size(-1))
+        top_k = min(max(self.top_k, self.min_tokens_to_keep), scores.shape[-1])
         indices_to_remove = scores < paddle.topk(scores, top_k)[0][..., -1, None]
         scores = scores.masked_fill(indices_to_remove, self.filter_value)
         return scores

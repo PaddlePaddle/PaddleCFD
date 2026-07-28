@@ -30,15 +30,9 @@ Make sure your Python environment already contains a compatible PaddlePaddle bui
 
 A pre-trained model training on 6M synthetic formulas is avaliable from [Google Drive](https://drive.google.com/drive/folders/14M0Ed0gvSKmtuTOornfEoup8l48IfEUW).
 
-PyTorch checkpoints must be converted to a Paddle native model bundle before loading in PaddleCFD:
+The paddle pretrained model is also avaliable at [AIStudio](https://aistudio.baidu.com/modelsdetail/49148?modelId=49148). This model was directly converted from the original PyTorch model.
 
-```bash
-python examples/physics_regression/convert_torch_to_paddle.py \
-  --torch-model ./model.pt \
-  --paddle-model ./model.pdparams
-```
-
-After downloading and converting the pretrained checkpoint, you can play with `example.ipynb` as a demo example.
+After downloading the pretrained checkpoint, you can play with `example.ipynb` as a demo example.
 
 Other data which is necessary for training, evaluation and physics applications can be downloaded from [Google Drive](https://drive.google.com/drive/folders/17rbDLb2ZBgK9DidJtb1nyBFmGtOokhYs), and should be placed in the `data` directory.
 
@@ -70,6 +64,21 @@ The most useful hyper-parameters are presented in `./bash/train.sh`, while the o
 - **`eval_size`**: The number of validation formulas after each training epoch.
 - **`tokens_per_batch`**: The maximum token count per training batch.
 
+### CINN acceleration
+
+CINN ([docs](https://www.paddlepaddle.org.cn/documentation/docs/zh/guides/paddle_v3_features/cinn_cn.html)) is enabled by the `PHYE2E_USE_CINN` environment variable, which wraps the encoder/decoder with `paddle.jit.to_static`; CINN compiles automatically once wrapped. To train with CINN:
+
+```bash
+bash ./bash/train_cinn.sh
+```
+
+`train_small.sh` and `train_small_cinn.sh` are minimal-scale samples for a quick smoke test and a CINN-vs-baseline speedup comparison:
+
+```bash
+bash ./bash/train_small.sh        # baseline (pure dynamic graph)
+bash ./bash/train_small_cinn.sh   # CINN enabled
+```
+
 ## Evaluation
 
 Using our pre-trained model to evaluate, run the following command to evaluate the performance on synthetic dataset or feynman dataset:
@@ -100,10 +109,6 @@ The `physical` directory contains 5 physics application including SSN prediction
 The data for each physics cases can be found from [Google Drive](https://drive.google.com/drive/folders/17rbDLb2ZBgK9DidJtb1nyBFmGtOokhYs), and should also be placed in the `examples/physics_regression/data` directory, as mentioned above.
 
 There are five Jupyter notebooks in the `physical` directory, each corresponding to one of the five real-world physics Symbolic Regression cases in the paper. These notebooks now depend on the PaddleCFD-integrated package under `ppcfd.models.physicsregression`.
-
-## Lisence
-
-This project is covered under the Apache 2.0 License.
 
 ## Citation
 
