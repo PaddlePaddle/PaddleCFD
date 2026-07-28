@@ -164,6 +164,7 @@ PaddleCFD/output/UPT/stage1/onmvsf6n
 ```text
 best_model.loss.test.total
 ```
+已有模型checkpoint样例在 https://aistudio.baidu.com/modelsdetail/45954/space
 
 ### 单样本推理
 
