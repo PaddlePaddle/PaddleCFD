@@ -5,6 +5,58 @@ import paddle
 from .grid import grid
 
 
+def _rot90_safe(x, k=1):
+    # rot90 的 complex 安全 + 动转静友好实现：paddle.rot90 不支持 complex64，
+    # 且 SOT 无法模拟 Tensor.rot90。等价于 paddle.rot90(x, k, axes=[-2, -1])，已数值验证。
+    k %= 4
+    if k == 0:
+        return x
+    if k == 2:
+        return paddle.flip(x, axis=[-2, -1])
+    perm = list(range(len(x.shape)))
+    perm[-2], perm[-1] = perm[-1], perm[-2]
+    if k == 1:
+        return paddle.transpose(paddle.flip(x, axis=[-1]), perm=perm)
+    return paddle.flip(paddle.transpose(x, perm=perm), axis=[-1])
+
+
+def _rot90_real_once(x):
+    # 对实/虚分量做一次 90° 旋转（Hermitian B1+ 路径专用）。
+    perm = list(range(len(x.shape)))
+    perm[-2], perm[-1] = perm[-1], perm[-2]
+    return paddle.transpose(paddle.flip(x, axis=[-1]), perm=perm)
+
+
+def _hermitian_real_imag(self):
+    # 在 float32 实/虚分量上完成 Hermitian 拼接与共轭（虚部取反），
+    # 规避 CINN 不支持的 complex64 concat。返回 (real, imag)，已 squeeze 掉 size=1 的通道维。
+    assert not self.reflection
+    y0 = paddle.as_complex(self.W["y0_modes"])
+    yposx = paddle.as_complex(self.W["yposx_modes"])
+    zero = self.W["00_modes"]
+    real = paddle.concat(
+        [paddle.real(y0), zero, paddle.flip(paddle.real(y0), axis=[-2])],
+        axis=-2,
+    )
+    imag = paddle.concat(
+        [
+            paddle.imag(y0),
+            paddle.zeros_like(zero),
+            -paddle.flip(paddle.imag(y0), axis=[-2]),
+        ],
+        axis=-2,
+    )
+    real = paddle.concat([real, paddle.real(yposx)], axis=-1)
+    imag = paddle.concat([imag, paddle.imag(yposx)], axis=-1)
+    real = paddle.concat(
+        [paddle.flip(paddle.real(yposx), axis=[-2, -1]), real], axis=-1
+    )
+    imag = paddle.concat(
+        [-paddle.flip(paddle.imag(yposx), axis=[-2, -1]), imag], axis=-1
+    )
+    return real.squeeze(axis=1), imag.squeeze(axis=1)
+
+
 class GConv2d(paddle.nn.Module):
     def __init__(
         self,
@@ -117,7 +169,45 @@ class GConv2d(paddle.nn.Module):
             self.eval_build = False
         else:
             return
+        if self.Hermitian and not self.reflection:
+            # 实/虚分量组装，动态图与 CINN/SOT 均可用（主线 GFNO2d_p4，reflection=False）。
+            real, imag = _hermitian_real_imag(self)
+            real_rots = [real]
+            imag_rots = [imag]
+            for _ in range(1, self.rt_group_size):
+                real = _rot90_real_once(real)
+                imag = _rot90_real_once(imag)
+                real = paddle.roll(real, shifts=1, axis=2)
+                imag = paddle.roll(imag, shifts=1, axis=2)
+                real_rots.append(real)
+                imag_rots.append(imag)
+            real_rots = [
+                r.reshape(
+                    [self.out_channels, -1, self.kernel_size_Y, self.kernel_size_Y]
+                )
+                for r in real_rots
+            ]
+            imag_rots = [
+                r.reshape(
+                    [self.out_channels, -1, self.kernel_size_Y, self.kernel_size_Y]
+                )
+                for r in imag_rots
+            ]
+            real = paddle.stack(real_rots, axis=1).reshape(
+                [
+                    self.out_channels * self.group_size,
+                    self.in_channels * self.group_size,
+                    self.kernel_size_Y,
+                    self.kernel_size_Y,
+                ]
+            )
+            imag = paddle.stack(imag_rots, axis=1).reshape(real.shape)
+            self.weights = paddle.complex(
+                real[..., -self.kernel_size_X :], imag[..., -self.kernel_size_X :]
+            )
+            return
         if self.Hermitian:
+            # reflection=True(p4m)：保留原 complex concat 路径，仅动态图
             y0_modes = paddle.as_complex(self.W["y0_modes"])
             yposx_modes = paddle.as_complex(self.W["yposx_modes"])
             self.weights = paddle.cat(
@@ -136,16 +226,16 @@ class GConv2d(paddle.nn.Module):
         else:
             self.weights = self.W[:]
         if self.first_layer or self.last_layer:
-            self.weights = self.weights.repeat(1, self.group_size, 1, 1, 1)
+            self.weights = paddle.tile(self.weights, [1, self.group_size, 1, 1, 1])
             for k in range(1, self.rt_group_size):
-                self.weights[:, k] = self.weights[:, k].rot90(k=k, axes=[-2, -1])
+                self.weights[:, k] = _rot90_safe(self.weights[:, k], k=k)
             if self.reflection:
                 self.weights[:, self.rt_group_size :] = self.weights[
                     :, : self.rt_group_size
                 ].flip(axis=[-2])
             if self.first_layer:
-                self.weights = self.weights.view(
-                    -1, self.in_channels, self.kernel_size_Y, self.kernel_size_Y
+                self.weights = self.weights.reshape(
+                    [-1, self.in_channels, self.kernel_size_Y, self.kernel_size_Y]
                 )
                 if self.B is not None:
                     self.bias = self.B.repeat_interleave(repeats=self.group_size, dim=1)
@@ -155,9 +245,9 @@ class GConv2d(paddle.nn.Module):
                 )
                 self.bias = self.B
         else:
-            self.weights = self.weights.repeat(1, self.group_size, 1, 1, 1, 1)
+            self.weights = paddle.tile(self.weights, [1, self.group_size, 1, 1, 1, 1])
             for k in range(1, self.rt_group_size):
-                self.weights[:, k] = self.weights[:, k - 1].rot90(axes=[-2, -1])
+                self.weights[:, k] = _rot90_safe(self.weights[:, k - 1], k=1)
                 if self.reflection:
                     self.weights[:, k] = paddle.cat(
                         [
@@ -169,12 +259,8 @@ class GConv2d(paddle.nn.Module):
                         dim=2,
                     )
                 else:
-                    self.weights[:, k] = paddle.cat(
-                        [
-                            self.weights[:, k, :, -1].unsqueeze(2),
-                            self.weights[:, k, :, :-1],
-                        ],
-                        dim=2,
+                    self.weights[:, k] = paddle.roll(
+                        self.weights[:, k], shifts=1, axis=2
                     )
             if self.reflection:
                 self.weights[:, self.rt_group_size :] = paddle.cat(
@@ -184,11 +270,13 @@ class GConv2d(paddle.nn.Module):
                     ],
                     dim=3,
                 ).flip(axis=[-2])
-            self.weights = self.weights.view(
-                self.out_channels * self.group_size,
-                self.in_channels * self.group_size,
-                self.kernel_size_Y,
-                self.kernel_size_Y,
+            self.weights = self.weights.reshape(
+                [
+                    self.out_channels * self.group_size,
+                    self.in_channels * self.group_size,
+                    self.kernel_size_Y,
+                    self.kernel_size_Y,
+                ]
             )
             if self.B is not None:
                 self.bias = self.B.repeat_interleave(repeats=self.group_size, dim=1)
@@ -232,27 +320,21 @@ class GSpectralConv2d(paddle.nn.Module):
 
     def forward(self, x):
         batchsize = x.shape[0]
-        freq0_y = (
-            (paddle.fft.fftshift(paddle.fft.fftfreq(n=x.shape[-2])) == 0)
-            .nonzero()
-            .item()
-        )
+        freq0_y = x.shape[-2] // 2
+        # 静态频率索引：数据相关标量，会破坏动转静 full_graph；
+        # 偶数空间尺寸下 fftshift 后零频位于 n//2，等价且可静态求解。
         self.get_weight()
         x_ft = paddle.fft.fftshift(paddle.fft.rfft2(x), dim=-2)
         x_ft = x_ft[..., freq0_y - self.modes + 1 : freq0_y + self.modes, : self.modes]
         out_ft = paddle.zeros(
-            batchsize,
-            self.weights.shape[0],
-            x.size(-2),
-            x.size(-1) // 2 + 1,
+            [batchsize, self.weights.shape[0], x.shape[-2], x.shape[-1] // 2 + 1],
             dtype=paddle.complex64,
-            device=x.device,
         )
         out_ft[
             ..., freq0_y - self.modes + 1 : freq0_y + self.modes, : self.modes
         ] = self.compl_mul2d(x_ft, self.weights)
         x = paddle.fft.irfft2(
-            paddle.fft.ifftshift(out_ft, dim=-2), s=(x.size(-2), x.size(-1))
+            paddle.fft.ifftshift(out_ft, dim=-2), s=(x.shape[-2], x.shape[-1])
         )
         return x
 
@@ -295,9 +377,9 @@ class GNorm(paddle.nn.Module):
         self.norm = paddle.nn.InstanceNorm3D(num_features=width, weight_attr=False, bias_attr=False)
 
     def forward(self, x):
-        x = x.view(x.shape[0], -1, self.group_size, x.shape[-2], x.shape[-1])
+        x = x.reshape([x.shape[0], -1, self.group_size, x.shape[-2], x.shape[-1]])
         x = self.norm(x)
-        x = x.view(x.shape[0], -1, x.shape[-2], x.shape[-1])
+        x = x.reshape([x.shape[0], -1, x.shape[-2], x.shape[-1]])
         return x
 
 
@@ -408,7 +490,7 @@ class GFNO2d(paddle.nn.Module):
         )
 
     def forward(self, x):
-        x = x.view(x.shape[0], x.shape[1], x.shape[2], -1)
+        x = x.reshape([x.shape[0], x.shape[1], x.shape[2], -1])
         x = self.grid(x)
         x = x.permute(0, 3, 1, 2)
         x = self.p(x)

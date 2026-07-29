@@ -1,5 +1,12 @@
 import os
 
+# CINN 动转静单一开关
+_GFNO_USE_CINN = os.environ.get("GFNO_USE_CINN", "0") == "1"
+if _GFNO_USE_CINN:
+    os.environ.setdefault("FLAGS_prim_enable_dynamic", "true")
+    os.environ.setdefault("FLAGS_prim_all", "true")
+    os.environ.setdefault("FLAGS_use_cinn", "true")
+
 import paddle
 from ppcfd.models.g_fno import FNO2d, FNO3d
 from ppcfd.models.g_fno import GCNN2d, GCNN3d
@@ -373,6 +380,10 @@ else:
     raise NotImplementedError("Model not recognized")
 if args.debug_initial_state_path is not None:
     model.set_state_dict(paddle.load(args.debug_initial_state_path))
+if _GFNO_USE_CINN:
+    # SOT(full_graph=False)：GFNO2d 等变权重组装会在前向内重赋值 self.weights，
+    # AST(full_graph=True) 不允许；SOT 保留该动态语义且同样触发 CINN 编译。
+    model = paddle.jit.to_static(model, full_graph=False)
 if args.strategy == "oneshot":
     x_shape = [batch_size, Sy, Sx, T, initial_step, num_channels]
     x_shape_super = [1, S_super, S_super, T_super, initial_step, num_channels]

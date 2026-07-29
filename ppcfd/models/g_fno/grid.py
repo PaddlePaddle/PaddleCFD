@@ -22,15 +22,13 @@ class grid(paddle.nn.Module):
     def twoD_grid(self, x):
         shape = x.shape
         batchsize, size_x, size_y = shape[0], shape[1], shape[2]
-        gridx = (
-            paddle.linspace(0, 1, size_x)
-            .reshape(1, size_x, 1, 1)
-            .repeat([batchsize, 1, size_y, 1])
+        gridx = paddle.tile(
+            paddle.linspace(0, 1, size_x).reshape([1, size_x, 1, 1]),
+            [batchsize, 1, size_y, 1],
         )
-        gridy = (
-            paddle.linspace(0, 1, size_y)
-            .reshape(1, 1, size_y, 1)
-            .repeat([batchsize, size_x, 1, 1])
+        gridy = paddle.tile(
+            paddle.linspace(0, 1, size_y).reshape([1, 1, size_y, 1]),
+            [batchsize, size_x, 1, 1],
         )
         if not self.symmetric:
             grid = paddle.cat((gridx, gridy), dim=-1)
