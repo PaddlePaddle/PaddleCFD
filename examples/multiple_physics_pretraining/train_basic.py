@@ -15,11 +15,19 @@ from contextlib import nullcontext
 # # 是否打印 Program IR 信息 (用于调试)
 # export FLAGS_print_ir=false
 
-# OPEN CINN
-# os.environ["FLAGS_prim_enable_dynamic"] = "true"
-# os.environ["FLAGS_prim_all"] = "true"
-# os.environ["FLAGS_use_cinn"] = "true"
-# os.environ["FLAGS_print_ir"] = "false"
+# 单一 CINN 开关：MPP_USE_CINN（默认 "0"，不启用）。
+#   开 → 显式动转静 + CINN flags
+#   关 → 原版纯动态
+_MPP_USE_CINN = os.environ.get("MPP_USE_CINN", "0") == "1"
+if _MPP_USE_CINN:
+    os.environ["FLAGS_prim_enable_dynamic"] = "true"
+    os.environ["FLAGS_prim_all"] = "true"
+    os.environ["FLAGS_use_cinn"] = "true"
+else:
+    os.environ["FLAGS_prim_enable_dynamic"] = "false"
+    os.environ["FLAGS_prim_all"] = "false"
+    os.environ["FLAGS_use_cinn"] = "false"
+os.environ.setdefault("FLAGS_print_ir", "false")
 
 import einops
 import numpy as np
@@ -113,6 +121,13 @@ class Trainer:
             self.restore_checkpoint(params.pretrained_ckpt_path)
             self.iters = 0
             self.startEpoch = 0
+        # 动转静
+        if os.environ.get("MPP_USE_CINN", "0") == "1":
+            full_graph = getattr(self.params, "to_static_full_graph", True)
+            self.single_print(
+                f"[to_static] wrapping AViT with paddle.jit.to_static, full_graph={full_graph}"
+            )
+            self.model = paddle.jit.to_static(self.model, full_graph=full_graph)
         self.initialize_scheduler(self.params)
 
     def single_print(self, *text):
@@ -288,16 +303,19 @@ class Trainer:
         else:
             self.iters = 0
         if self.params.pretrained:
-            if self.params.freeze_middle:
-                self.model.module.freeze_middle()
-            elif self.params.freeze_processor:
-                self.model.module.freeze_processor()
+            inner = getattr(self.model, "module", self.model)
+            if getattr(self.params, "freeze_middle", False):
+                inner.freeze_middle()
+            elif getattr(self.params, "freeze_processor", False):
+                inner.freeze_processor()
             else:
-                self.model.module.unfreeze()
-            exp_proj = 0
-            for add_on in self.params.append_datasets:
-                exp_proj += len(DSET_NAME_TO_OBJECT[add_on]._specifics()[2])
-            self.model.module.expand_projections(exp_proj)
+                inner.unfreeze()
+            append = getattr(self.params, "append_datasets", None) or []
+            if append:
+                exp_proj = sum(
+                    len(DSET_NAME_TO_OBJECT[add_on]._specifics()[2]) for add_on in append
+                )
+                inner.expand_projections(exp_proj)
         checkpoint = None
         self.model = self.model.to(self.device)
 
@@ -319,6 +337,8 @@ class Trainer:
         grad_counts = defaultdict(lambda: paddle.zeros(1).to(self.device))
         loss_logs = defaultdict(lambda: paddle.zeros(1).to(self.device))
         loss_counts = defaultdict(lambda: paddle.zeros(1).to(self.device))
+        bench_fwd, bench_bwd, bench_opt, bench_step, bench_loss = [], [], [], [], []
+        last_log_nrmse = float("nan")
         self.single_print(
             "train_loader_size", len(self.train_data_loader), len(self.train_dataset)
         )
@@ -354,6 +374,7 @@ class Trainer:
                             input=output, label=tar
                         )
                         log_nrmse = raw_loss.sqrt().mean()
+                        last_log_nrmse = float(log_nrmse.item())
                         logs["train_nrmse"] += log_nrmse
                         loss_logs[dset_type] += loss.item()
                         logs["train_rmse"] += (
@@ -375,6 +396,11 @@ class Trainer:
                             self.scheduler.step()
                         optimizer_step = time.time() - backward_end
                     tr_time += time.time() - model_start
+                    bench_fwd.append(forward_time)
+                    bench_bwd.append(backward_time)
+                    bench_opt.append(optimizer_step or 0.0)
+                    bench_step.append(forward_time + backward_time + (optimizer_step or 0.0))
+                    bench_loss.append(last_log_nrmse)
                     if (
                         self.log_to_screen
                         and batch_idx % self.params.log_interval == 0
@@ -396,6 +422,65 @@ class Trainer:
                             )
                         )
                     data_start = time.time()
+        if self.log_to_screen and bench_fwd:
+            warm = min(int(getattr(self.params, "bench_warmup", 5)), max(1, len(bench_fwd) - 1))
+
+            def _stat(xs):
+                a = np.asarray(xs[warm:], dtype=np.float64)
+                if a.size == 0:
+                    return dict(n=0)
+                return dict(
+                    n=a.size,
+                    mean=float(a.mean()),
+                    median=float(np.median(a)),
+                    std=float(a.std()),
+                    mn=float(a.min()),
+                    mx=float(a.max()),
+                    total=float(a.sum()),
+                )
+
+            sf, sb, so, ss = (
+                _stat(bench_fwd),
+                _stat(bench_bwd),
+                _stat(bench_opt),
+                _stat(bench_step),
+            )
+            self.single_print(
+                "[BENCH] measured={} warmup={} | fwd med={:.4f} mean={:.4f} std={:.4f} "
+                "| bwd med={:.4f} mean={:.4f} | opt med={:.4f} | step med={:.4f} mean={:.4f} std={:.4f} "
+                "| loss0={:.6f} lossN={:.6f}".format(
+                    sf["n"],
+                    warm,
+                    sf["median"],
+                    sf["mean"],
+                    sf["std"],
+                    sb["median"],
+                    sb["mean"],
+                    so["median"],
+                    ss["median"],
+                    ss["mean"],
+                    ss["std"],
+                    bench_loss[warm] if len(bench_loss) > warm else float("nan"),
+                    bench_loss[-1] if bench_loss else float("nan"),
+                )
+            )
+            # 落盘原始逐步计时，便于离线统计分析
+            try:
+                os.makedirs(self.params.experiment_dir, exist_ok=True)
+                np.savez(
+                    os.path.join(self.params.experiment_dir, "bench_timings.npz"),
+                    fwd=np.asarray(bench_fwd),
+                    bwd=np.asarray(bench_bwd),
+                    opt=np.asarray(bench_opt),
+                    step=np.asarray(bench_step),
+                    loss=np.asarray(bench_loss),
+                    warmup=warm,
+                )
+                self.single_print(
+                    f"[BENCH] saved bench_timings.npz to {self.params.experiment_dir}"
+                )
+            except Exception as e:
+                self.single_print(f"[BENCH] failed to save timings: {e}")
         logs = {k: (v / steps) for k, v in logs.items()}
         if paddle.distributed.is_initialized():
             for key in sorted(logs.keys()):
@@ -597,7 +682,9 @@ class Trainer:
             start = time.time()
             tr_time, data_time, train_logs = self.train_one_epoch()
             valid_start = time.time()
-            if epoch == self.params.max_epochs - 1:
+            if getattr(self.params, "bench_mode", False):
+                valid_logs = {"valid_nrmse": 0.0}
+            elif epoch == self.params.max_epochs - 1:
                 valid_logs = self.validate_one_epoch(True)
             else:
                 valid_logs = self.validate_one_epoch()
@@ -612,13 +699,14 @@ class Trainer:
             gc.collect()
             paddle.device.cuda.empty_cache()
             if self.global_rank == 0:
-                if self.params.save_checkpoint:
-                    self.save_checkpoint(self.params.checkpoint_path)
-                if epoch % self.params.checkpoint_save_interval == 0:
-                    self.save_checkpoint(self.params.checkpoint_path + f"_epoch{epoch}")
-                if valid_logs["valid_nrmse"] <= best_valid_loss:
-                    self.save_checkpoint(self.params.best_checkpoint_path)
-                    best_valid_loss = valid_logs["valid_nrmse"]
+                if not getattr(self.params, "bench_mode", False):
+                    if self.params.save_checkpoint:
+                        self.save_checkpoint(self.params.checkpoint_path)
+                    if epoch % self.params.checkpoint_save_interval == 0:
+                        self.save_checkpoint(self.params.checkpoint_path + f"_epoch{epoch}")
+                    if valid_logs["valid_nrmse"] <= best_valid_loss:
+                        self.save_checkpoint(self.params.best_checkpoint_path)
+                        best_valid_loss = valid_logs["valid_nrmse"]
                 cur_time = time.time()
                 self.single_print(
                     f"Time for train {valid_start - start}. For valid: {post_start - valid_start}. For postprocessing:{cur_time - post_start}"

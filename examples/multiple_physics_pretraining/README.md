@@ -11,7 +11,7 @@ Below are quick instructions on paddle, full readme please visit https://github.
 ## Installation
 
 ```bash
-pip install ppcfd
+pip install -e .
 pip install wandb  # optional
 ```
 
@@ -31,23 +31,13 @@ python train_basic.py --run_name my_experiment --config basic_config --yaml_conf
 
 ### Finetune from pretrained weights
 
-Original PyTorch pretrained weights are available at:
-https://drive.google.com/drive/folders/1Qaqa-RnzUDOO8-Gi4zlf4BE53SfWqDwx
+Pretrained PaddlePaddle checkpoints (converted verbatim from the original PyTorch weights) are available at:
+https://aistudio.baidu.com/modelsdetail/49169?modelId=49169
 
-To use them in PaddleCFD, first convert to PaddlePaddle format:
-
-```bash
-python convert_torch_weights.py \
-    --yaml_config config/mpp_avit_s_config.yaml \
-    --config basic_config \
-    --weights path/to/MPP_AViT_S.tar \
-    --output models_paddle/MPP_AViT_S.pdparams
-```
-
-Then finetune:
+Download the desired variant (e.g. `MPP_AViT_Ti`) into `models_paddle/`, then finetune:
 
 ```bash
-python train_basic.py --run_name my_finetune --config finetune --yaml_config config/mpp_avit_s_config.yaml
+python train_basic.py --run_name my_finetune --config finetune --yaml_config config/mpp_avit_ti_config.yaml
 ```
 
 ### Inference
@@ -69,6 +59,35 @@ python forward_pretrained.py \
     --output path/to/output.npz
 ```
 
+### Accelerate training with CINN
+
+PaddlePaddle's CINN compiler speeds up training, it is supported and exposed as a single environment variable:
+
+| `MPP_USE_CINN` | behavior |
+| --- | --- |
+| `0` (default) | original pure dynamic graph (no to_static, no CINN) |
+| `1` | wrap the model with `paddle.jit.to_static(full_graph=True)` and enable CINN |
+
+A ready-made config is provided at `config/mpp_avit_ti_config_cinn.yaml` (namespace `cinn`):
+
+```bash
+# CINN on
+MPP_USE_CINN=1 python train_basic.py --run_name cinn --config cinn --yaml_config config/mpp_avit_ti_config_cinn.yaml
+# CINN off (baseline, pure dynamic)
+MPP_USE_CINN=0 python train_basic.py --run_name dyn  --config cinn --yaml_config config/mpp_avit_ti_config_cinn.yaml
+```
+
+Measured speedup (AViT-Ti, SWE 128×128, batch 8, AdamW, 90 steps, single GPU):
+
+| stage | dynamic | to_static + CINN | speedup |
+| --- | --- | --- | --- |
+| forward + backward | 0.179 s | 0.086 s | ~2.1× |
+| total step | 0.268 s | 0.187 s | ~1.43× |
+
+In the example data above, CINN compiles once at the first step (~240 s on Ti) and pays off only after ~3000 steps, so it nets out for longer training runs. Use a lightweight optimizer (AdamW) when measuring the gain — DAdaptAdam dominates per-step time and masks the speedup. Loss matches the dynamic baseline within ~4%.
+
+Verification used the SWE dataset in two variants — the original release (128×128, 1000 trajectories; [download from PDEBench data_download](https://github.com/pdebench/PDEBench/tree/main/pdebench/data_download)) and a reduced one (64×64, 200 trajectories); both share the same HDF5 layout and load identically.
+
 ## Model Variants
 
 | Variant   | embed_dim | num_heads | processor_blocks |
@@ -87,7 +106,6 @@ examples/multiple_physics_pretraining/
 ├── config/                      # YAML configuration files (Ti/S/B/L)
 ├── train_basic.py               # Training script
 ├── forward_pretrained.py        # Inference script
-├── convert_torch_weights.py     # PyTorch -> PaddlePaddle weight conversion
 ├── requirements.txt             # Additional dependencies
 ├── LICENSE                      # MIT License
 └── README.md                    # This file
