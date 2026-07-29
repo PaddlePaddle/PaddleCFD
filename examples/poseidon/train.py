@@ -9,6 +9,17 @@ import json
 import os
 import random
 
+# CINN 单一开关
+_USE_CINN = os.environ.get("POSEIDON_USE_CINN", "0") == "1"
+if _USE_CINN:
+    os.environ["FLAGS_prim_enable_dynamic"] = "true"
+    os.environ["FLAGS_prim_all"] = "true"
+    os.environ["FLAGS_use_cinn"] = "true"
+else:
+    os.environ["FLAGS_prim_enable_dynamic"] = "false"
+    os.environ["FLAGS_prim_all"] = "false"
+    os.environ["FLAGS_use_cinn"] = "false"
+
 import matplotlib.pyplot as plt
 import numpy as np
 import paddle
@@ -324,6 +335,10 @@ if __name__ == "__main__":
 
     if params.debug_initial_state_path is not None:
         model.set_state_dict(paddle.load(params.debug_initial_state_path))
+
+    if _USE_CINN:
+        model = paddle.jit.to_static(model, full_graph=True)
+        print("[CINN] to_static enabled, full_graph=True")
 
     num_params = get_num_parameters(model)
     num_params_no_embed = get_num_parameters_no_embed(model)

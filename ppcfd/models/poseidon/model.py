@@ -681,7 +681,9 @@ class ScOTLayer(paddle.nn.Layer):
 
     def get_attn_mask(self, height, width, dtype):
         cache_key = (height, width, self.shift_size, self.window_size, str(dtype))
-        if cache_key in self.attn_mask_cache:
+        # to_static(PIR) 下 attn_mask 是 pir.Value，跨 train/eval Program 缓存会致 clone_program IRMapping 丢键（cache_key 不含 Program 身份）。
+        use_cache = paddle.in_dynamic_mode()
+        if use_cache and cache_key in self.attn_mask_cache:
             return self.attn_mask_cache[cache_key]
         if self.shift_size > 0:
             img_mask = paddle.zeros([1, height, width, 1], dtype=dtype)
@@ -710,7 +712,8 @@ class ScOTLayer(paddle.nn.Layer):
             )
         else:
             attn_mask = None
-        self.attn_mask_cache[cache_key] = attn_mask
+        if use_cache:
+            self.attn_mask_cache[cache_key] = attn_mask
         return attn_mask
 
     def maybe_pad(self, hidden_states, height, width):

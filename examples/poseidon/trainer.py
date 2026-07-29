@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import numpy as np
 import paddle
 
-from ppcfd.models.poseidon.model import ConditionalLayerNorm, LayerNorm
+from ppcfd.models.poseidon.model import ConditionalLayerNorm, LayerNorm, ScOTOutput
 
 
 @dataclass
@@ -527,7 +527,13 @@ class Trainer:
             else:
                 raise ValueError("num_ar_steps must be an integer or a list of integers.")
         else:
-            outputs = model(**inputs)
+            if os.environ.get("POSEIDON_USE_CINN", "0") == "1":
+                # to_static(full_graph=True) 下 dataclass(ScOTOutput) 返回 pir.Value 不能 backward；
+                # 改用 return_dict=False 拿 eager tuple 再包装。AR rollout 路径暂不支持 CINN。
+                out_tuple = model(**inputs, return_dict=False)
+                outputs = ScOTOutput(loss=out_tuple[0], output=out_tuple[1])
+            else:
+                outputs = model(**inputs)
         return outputs
 
     def compute_loss(self, model, inputs, return_outputs=False):
@@ -588,13 +594,14 @@ class Trainer:
         for indices in current_batches:
             yield self._collate_indexed_batch(indices)
 
-    def _create_dataloader(self, dataset, batch_size, shuffle):
+    def _create_dataloader(self, dataset, batch_size, shuffle, drop_last=False):
         return paddle.io.DataLoader(
             dataset,
             batch_size=batch_size,
             shuffle=shuffle,
             num_workers=self._effective_num_workers(),
             return_list=True,
+            drop_last=drop_last,
         )
 
     def evaluate(self):
@@ -606,8 +613,14 @@ class Trainer:
         if self.train_dataset is None:
             raise ValueError("train_dataset is required for training.")
         os.makedirs(self.args.output_dir, exist_ok=True)
+        # CINN 动转静下，末 batch 维度变化会触发 retrace + CINN 重编译(~100s/次)；
+        # 故 CINN 模式训练强制 drop_last=True 保证 batch 维度稳定。eval/predict 不受影响。
+        train_drop_last = os.environ.get("POSEIDON_USE_CINN", "0") == "1"
         train_dataloader = self._create_dataloader(
-            self.train_dataset, self.args.per_device_train_batch_size, shuffle=True
+            self.train_dataset,
+            self.args.per_device_train_batch_size,
+            shuffle=True,
+            drop_last=train_drop_last,
         )
         debug_epoch_batches = self._load_debug_epoch_batches()
         if debug_epoch_batches is not None:
