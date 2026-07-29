@@ -1,14 +1,23 @@
 # PROSE-FD
 
-[PROSE-FD: A Multimodal PDE Foundation Model for Learning Multiple Operators for Forecasting Fluid Dynamics](https://arxiv.org/abs/2409.09811). Accepted by 2024 NeurIPS Foundation Models for Science Workshop.
+PROSE-FD is a multimodal PDE foundation model that learns multiple operators for forecasting fluid dynamics. It combines spatio-temporal field data (velocity, pressure, density, etc.) with symbolic equation representations (encoded as token sequences) in a unified Transformer, supporting both data-only (`prose_1to1`) and data+symbol (`prose_2to1`) inference paradigms.
 
-Pretrained PROSE-FD model weights can be found on https://huggingface.co/felix-lyx/prose.
+## Model Architecture
 
-## Import the model
+PROSE-FD (`PROSE_2to1`) is a multimodal Transformer with the following pipeline:
+
+- **Embedder** — patchifies spatial fields and projects them into the embedding dimension (linear or conv patchification), fused with learnable time embeddings and patch position embeddings.
+- **Data Encoder** — a Transformer encoder over the embedded data sequence.
+- **Symbol Encoder** — a Transformer encoder over the encoded symbolic equation token sequence.
+- **Fusion** — cross-modal fusion of the data and symbol representations.
+- **Operator Decoder** — an operator-style decoder (cross-attention from time-space queries to the fused representation) that produces the predicted future fields.
+
+The `prose_1to1` variant drops the symbol branch and conditions on data only. The whole model is configured via Hydra (`configs/`), and the public API is exposed through the `ppcfd.models.prose_fd` package.
+
+### Import the model
 
 ```python
 from omegaconf import OmegaConf
-
 from ppcfd.models.prose_fd import PROSE_2to1, SymbolicEnvironment
 
 model_cfg = OmegaConf.load("examples/prose_fd/configs/model/prose_2to1.yaml")
@@ -25,102 +34,97 @@ model = PROSE_2to1(
 )
 ```
 
-## Quick Start
+## Pretrained Model
 
-### Train
+Pretrained PROSE-FD (PaddlePaddle) weights are available on AI Studio:
 
-Single device, dryrun:
+https://aistudio.baidu.com/modelsdetail/49246?modelId=49246
 
-```bash
-cd examples/prose_fd
-python main.py dryrun=1 use_wandb=0 data=shallow_water_minimal model=prose_2to1 optim=wsd device=gpu:0 batch_size=2 batch_size_eval=1 num_workers=0 num_workers_eval=0 log_eval_plots=-1 exp_name=sw64_single_gpu exp_id=prose_fd_sw64_dryrun data.shallow_water.data_path="/path/to/your/data.h5"
-```
+Load them in training/evaluation with `reload_model=/path/to/prose_fd.pdparams` (or `eval_from_exp=<dir>` for evaluation only).
 
-To launch a model training with modified arguments (arg1,val1), (arg2,val2):
+## Installation
 
-```bash
-python main.py arg1=val1 arg2=val2
-```
-
-For example:
+PROSE-FD is part of PaddleCFD. From the repository root:
 
 ```bash
-python "main.py" \
-    use_wandb=0 \
-    data=shallow_water_minimal \
-    model=prose_2to1 \
-    optim=wsd \
-    device=gpu:0 \
-    max_epoch=5 \
-    n_steps_per_epoch=800 \
-    batch_size=4 \
-    batch_size_eval=6 \
-    num_workers=0 \
-    num_workers_eval=0 \
-    log_eval_plots=-1 \
-    exp_name=sw64_single_gpu \
-    exp_id=prose_fd_sw64_ep5
+pip install -e .                # installs the ppcfd package
+pip install -r requirements.txt
 ```
-
-All default arguments can be found in the `configs` folder, managed using [Hydra](https://hydra.cc/).
-
-Scripts for reproducing the results in the paper are located in the `scripts` folder.
 
 ## Data
 
-The dataset we used are collected from [PDEBench](https://github.com/pdebench/PDEBench), [PDEArena](https://github.com/pdearena/pdearena), and [CFDBench](https://github.com/luo-yining/CFDBench). More details about data preprocessing are included in `data_utils/README.md`.
+PROSE-FD trains on shallow-water (and broader fluids) datasets collected from [PDEBench](https://github.com/pdebench/PDEBench), [PDEArena](https://github.com/pdearena/pdearena) and [CFDBench](https://github.com/luo-yining/CFDBench). Two shallow-water configurations are provided and tested:
 
-## Convert pretrained weights
+| Config | Spatial resolution | Use |
+|---|---|---|
+| `data=shallow_water_minimal` | 64×64 | fast test / single-dataset debugging |
+| `data=fluids` (+ `data.shallow_water.x_num=128`) | 128×128 (PDEBench full) | full multi-operator training |
 
-PyTorch pretrained weights can be converted to PaddlePaddle format:
+Point the loader at your data with `data.shallow_water.data_path=/path/to/2D_rdb_NA_NA.h5`. Preprocessing details live in `data_utils/`.
+
+## Quick Start
+
+Run from `examples/prose_fd/`.
+
+### Test (single GPU, dryrun)
 
 ```bash
-cd examples/prose_fd
-python tools/convert_torch_ckpt_to_paddle.py --torch-ckpt /path/to/model.pth --paddle-ckpt /path/to/model.pdparams
+python main.py dryrun=1 use_wandb=0 data=shallow_water_minimal model=prose_2to1 optim=wsd \
+  device=gpu:0 batch_size=2 batch_size_eval=1 num_workers=0 num_workers_eval=0 \
+  log_eval_plots=-1 exp_name=sw64_smoke data.shallow_water.data_path=/path/to/data.h5
 ```
 
-> Note: `tools/forward_pretrained_paddle.py` is not included in this integration. If needed, please refer to the original repository.
+### Full training
 
-## Extra dependencies for PROSE-FD
+```bash
+python main.py use_wandb=0 data=shallow_water_minimal model=prose_2to1 optim=wsd device=gpu:0 \
+  max_epoch=5 n_steps_per_epoch=800 batch_size=4 num_workers=0 log_eval_plots=-1 \
+  exp_name=sw64_train data.shallow_water.data_path=/path/to/data.h5
+```
 
-- `wandb`: required only if `use_wandb=1`
-- `torch`: required only for `tools/convert_torch_ckpt_to_paddle.py`
+Any argument can be overridden with `key=value`; defaults live in `configs/`.
+
+### CINN 动转静加速
+
+The PaddlePaddle native compiler CINN can accelerate training once the model is converted to a static graph (`paddle.jit.to_static`). This example uses a single environment variable as the switch — it injects the CINN-related FLAGS before `import paddle` and wraps the assembled model with `to_static(full_graph=True)`:
+
+```bash
+PROSE_TO_STATIC=1 python main.py use_wandb=0 data=shallow_water_minimal model=prose_2to1 optim=wsd \
+  device=gpu:0 batch_size=2 num_workers=0 log_eval_plots=-1 \
+  exp_name=sw64_cinn data.shallow_water.data_path=/path/to/data.h5
+```
+
+CINN is active once the log shows `Compiling subgraph with CINN backend`.
+
+Measured speedup (RTX 4060 Ti, batch=2, fp32, shallow-water 64×64, steady-state over 1600 steps):
+
+| Mode | steady-state pure-train step/s |
+|---|---|
+| dynamic graph (baseline) | 1.98 |
+| CINN to_static | 2.11 |
+
+**+6.3% steady-state pure-training speedup.** CINN compiles the graph once (~100s warmup); short runs may look slower end-to-end, but steady-state and long training yield a net win.
 
 ## Directory Structure
 
 ```
 examples/prose_fd/
-├── main.py                         # Training entry point
-├── trainer.py                      # Trainer
-├── evaluate.py                     # Evaluator
-├── dataset.py                      # Dataset registry
-├── configs/                        # Hydra YAML configs
-│   ├── main.yaml                   # Main config
-│   ├── data/                       # Data configs
-│   ├── model/                      # Model configs
-│   ├── optim/                      # Optimizer configs
-│   └── symbol/                     # Symbol configs
-├── data_utils/                     # Data loading & preprocessing
-├── tools/
-│   └── convert_torch_ckpt_to_paddle.py  # Weight conversion
-├── utils/                          # Training utilities
-└── README.md
+├── main.py              # training entry point (CINN FLAGS injected at top)
+├── trainer.py           # trainer (optional PROSE_BENCHMARK pure-train timing)
+├── evaluate.py          # evaluator
+├── dataset.py           # dataset registry
+├── configs/             # Hydra YAML configs (main / data / model / optim / symbol)
+├── data_utils/          # data loading & preprocessing
+└── utils/               # training utilities
 
 ppcfd/models/prose_fd/
-├── __init__.py                     # Public API exports
-├── build_model.py                  # Model factory
-├── transformer.py                  # Transformer encoder/decoder
-├── transformer_wrappers.py         # PROSE_1to1 / PROSE_2to1
-├── attention_utils.py              # Attention layers
-├── embedder.py                     # Input embedders
-├── paddle_utils.py                 # PaddlePaddle utilities
-├── rotary_embedding_paddle.py      # Rotary position embeddings
-├── runtime.py                      # Device helpers
-└── symbol_utils/                   # Symbolic equation encoding
-    ├── environment.py
-    ├── encoders.py
-    ├── generators.py
-    └── node_utils.py
+├── build_model.py            # model factory (to_static wrapping)
+├── transformer_wrappers.py   # PROSE_1to1 / PROSE_2to1
+├── transformer.py            # transformer encoder / decoder / fusion
+├── attention_utils.py        # attention layers
+├── embedder.py               # input embedders (PatchTokensToGrid)
+├── runtime.py                # device helpers
+└── symbol_utils/             # symbolic equation encoding
 ```
 
 ## Citation

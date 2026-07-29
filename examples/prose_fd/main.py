@@ -1,4 +1,15 @@
 import os
+
+# CINN 动转静开关
+if os.environ.get("PROSE_TO_STATIC", "0") == "1":
+    os.environ["FLAGS_prim_enable_dynamic"] = "true"
+    os.environ["FLAGS_prim_all"] = "true"
+    os.environ["FLAGS_use_cinn"] = "true"
+else:
+    os.environ["FLAGS_prim_enable_dynamic"] = "false"
+    os.environ["FLAGS_prim_all"] = "false"
+    os.environ["FLAGS_use_cinn"] = "false"
+
 from pathlib import Path
 
 import hydra

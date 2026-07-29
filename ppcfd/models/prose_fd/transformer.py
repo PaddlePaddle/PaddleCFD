@@ -222,7 +222,7 @@ class TransformerDataDecoder(nn.Module):
             )  # (output_len, bs, dim)
             tgt_output = self.post_proj(decoded).transpose(0, 1)  # (bs, output_len, output_dim)
         else:
-            tgt_mask = _generate_square_subsequent_mask(tgt.size(1), dtype=tgt.dtype)
+            tgt_mask = _generate_square_subsequent_mask(tgt.shape[1], dtype=tgt.dtype)
             decoded = self.transformer_decoder(
                 tgt=tgt, memory=memory, tgt_mask=tgt_mask
             )  # (bs, output_len, dim)
@@ -253,10 +253,10 @@ class TransformerDataDecoder(nn.Module):
 
         """
         cur_len = 1
-        output_len = output_times.size(0)
-        bs = initial.size(0)
-        query_dim = output_times.size(1)
-        data_dim = initial.size(1) - query_dim
+        output_len = output_times.shape[0]
+        bs = initial.shape[0]
+        query_dim = output_times.shape[1]
+        data_dim = initial.shape[1] - query_dim
         generated = paddle.zeros([output_len, bs, data_dim], dtype=initial.dtype)
 
         cache = None
@@ -272,7 +272,7 @@ class TransformerDataDecoder(nn.Module):
                 tgt_batch = tgt.transpose([1, 0, 2])
                 encoded_batch = encoded.transpose([1, 0, 2])
                 tgt_mask = _generate_square_subsequent_mask(
-                    tgt_batch.size(1), dtype=tgt_batch.dtype
+                    tgt_batch.shape[1], dtype=tgt_batch.dtype
                 )
                 decoded = self.transformer_decoder(
                     tgt=tgt_batch, memory=encoded_batch, tgt_mask=tgt_mask
@@ -373,7 +373,7 @@ class DataOperatorDecoder(nn.Module):
                        query_len = output_len * patch_num * patch_num
         """
 
-        bs, output_len, query_dim = times.size()
+        bs, output_len, query_dim = times.shape
 
         if self.time_embed_type == "continuous":
             times = self.time_proj(times)[:, :, None]  # (bs/1, output_len, 1, dim)
@@ -623,7 +623,7 @@ class TransformerSymbolDecoder(nn.Module):
             )  # (output_len, bs, dim)
             return decoded.transpose(0, 1)  # (bs, output_len, dim)
         else:
-            tgt_mask = _generate_square_subsequent_mask(tgt.size(1), dtype=tgt.dtype)
+            tgt_mask = _generate_square_subsequent_mask(tgt.shape[1], dtype=tgt.dtype)
             decoded = self.transformer_decoder(
                 tgt=tgt,
                 memory=memory,
@@ -639,9 +639,9 @@ class TransformerSymbolDecoder(nn.Module):
             pred_mask    BoolTensor (bs, output_len), filled with 1 when we need to predict a word
             y            LongTensor (pred_mask.sum(), )
         """
-        x = output[pred_mask.unsqueeze(-1).expand_as(output)].view(-1, self.dim)
+        x = output[pred_mask.unsqueeze(-1).expand_as(output)].reshape(-1, self.dim)
         assert (y == self.pad_index).sum().item() == 0
-        scores = self.proj(x).view(-1, self.n_words)
+        scores = self.proj(x).reshape(-1, self.n_words)
         loss = F.cross_entropy(scores.astype("float32"), y, reduction="mean")
         return scores, loss
 
@@ -659,7 +659,7 @@ class TransformerSymbolDecoder(nn.Module):
                                      e.g. [5, 6]
 
         """
-        bs = memory.size(0)
+        bs = memory.shape[0]
         if self.config.kv_cache:
             memory = memory.transpose(0, 1)  # (memory_len, bs, dim)
 
@@ -691,7 +691,7 @@ class TransformerSymbolDecoder(nn.Module):
                 )  # (cur_len, bs, dim)
                 scores = self.proj(decoded[-1])  # (bs, n_words)
             else:
-                tgt_mask = _generate_square_subsequent_mask(tgt.size(1), dtype=tgt.dtype)
+                tgt_mask = _generate_square_subsequent_mask(tgt.shape[1], dtype=tgt.dtype)
                 decoded = self.transformer_decoder(
                     tgt=tgt, memory=memory, tgt_mask=tgt_mask
                 )  # (bs, cur_len, dim)
@@ -704,7 +704,7 @@ class TransformerSymbolDecoder(nn.Module):
                 next_words = paddle.multinomial(
                     F.softmax(scores.astype("float32") / sample_temperature, axis=1), num_samples=1
                 ).squeeze(1)
-            # assert next_words.size() == (bs,)
+            # assert next_words.shape == (bs,)
 
             # update generations / lengths / finished sentences / current length
             generated[cur_len] = next_words * unfinished_sents + self.pad_index * (1 - unfinished_sents)
@@ -799,7 +799,7 @@ class TransformerFusion(nn.Module):
         key_padding_mask1: Optional[BoolTensor] (bs, slen1)
         """
 
-        bs = x0.size(0)
+        bs = x0.shape[0]
 
         if self.type_embeddings is not None:
             type0 = paddle.zeros([1, 1], dtype="int64")
@@ -813,9 +813,9 @@ class TransformerFusion(nn.Module):
             fused_mask = None
         else:
             if key_padding_mask0 is None:
-                key_padding_mask0 = paddle.zeros([bs, x0.size(1)], dtype="bool")
+                key_padding_mask0 = paddle.zeros([bs, x0.shape[1]], dtype="bool")
             if key_padding_mask1 is None:
-                key_padding_mask1 = paddle.zeros([bs, x1.size(1)], dtype="bool")
+                key_padding_mask1 = paddle.zeros([bs, x1.shape[1]], dtype="bool")
             fused_mask = paddle.cat([key_padding_mask0, key_padding_mask1], axis=1)  # (bs, slen0+slen1)
 
         if self.transformer_encoder is not None:

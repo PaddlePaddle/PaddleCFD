@@ -11,6 +11,33 @@ from logging import getLogger
 logger = getLogger()
 
 
+class PatchTokensToGrid(paddle.nn.Layer):
+    """b (t h w) d -> (b t) d h w 的 paddle 原生实现。
+
+    替代 einops.Rearrange 层：Paddle 3.3.0 dy2static 对 RearrangeMixin._apply_recipe
+    的同名全局函数捕获有缺陷，to_static 下会崩。
+    https://github.com/PaddlePaddle/Paddle/issues/79579
+    """
+
+    def __init__(self, height, width):
+        super().__init__()
+        self.height = height
+        self.width = width
+
+    def forward(self, x):
+        batch_size = x.shape[0]
+        hidden_dim = x.shape[-1]
+        x = paddle.reshape(
+            x,
+            [batch_size, -1, self.height, self.width, hidden_dim],
+        )
+        x = paddle.transpose(x, [0, 1, 4, 2, 3])
+        return paddle.reshape(
+            x,
+            [-1, hidden_dim, self.height, self.width],
+        )
+
+
 def get_embedder(config, x_num, max_output_dim):
     if config.type == "linear":
         embedder = LinearEmbedder
@@ -28,11 +55,11 @@ def patchify(data: paddle.Tensor, patch_num: int):
     Output:
         (bs, nt, p*p, x*y*d)
     """
-    bs, nt, px, py, d = data.size()
+    bs, nt, px, py, d = data.shape
     p = patch_num
     x = px // p
     y = py // p
-    data = data.view(bs, nt, p, x, p, y, d).permute(0, 1, 2, 4, 3, 5, 6)
+    data = data.reshape(bs, nt, p, x, p, y, d).permute(0, 1, 2, 4, 3, 5, 6)
     data = data.reshape((bs, nt, p * p, x * y * d))
     return data
 
@@ -44,10 +71,10 @@ def depatchify(data: paddle.Tensor, patch_num: int, x: int, y: int, d: int):
     Output:
         (bs, nt, px, py, d)
     """
-    bs = data.size(0)
-    nt = data.size(1)
+    bs = data.shape[0]
+    nt = data.shape[1]
     p = patch_num
-    data = data.view(bs, nt, p, p, x, y, d).permute(0, 1, 2, 4, 3, 5, 6)
+    data = data.reshape(bs, nt, p, p, x, y, d).permute(0, 1, 2, 4, 3, 5, 6)
     data = data.reshape((bs, nt, p * x, p * y, d))
     return data
 
@@ -117,7 +144,7 @@ class LinearEmbedder(paddle.nn.Module):
             data:           Tensor (bs, data_len, dim)      data_len = input_len * patch_num * patch_num
                             embedded data + time embeddings + patch position embeddings
         """
-        bs = data.size(0)
+        bs = data.shape[0]
         data = patchify(data, self.config.patch_num)
         data = self.pre_proj(data)
         time_embeddings = self.time_proj(times)[:, :, None]
@@ -134,9 +161,9 @@ class LinearEmbedder(paddle.nn.Module):
         Output:
             data_output:     Tensor (bs, output_len, x_num, x_num, data_dim)
         """
-        bs = data_output.size(0)
+        bs = data_output.shape[0]
         data_output = self.post_proj(data_output)
-        data_output = data_output.view(
+        data_output = data_output.reshape(
             bs,
             -1,
             self.config.patch_num_output * self.config.patch_num_output,
@@ -235,10 +262,9 @@ class ConvEmbedder(paddle.nn.Module):
                 paddle.nn.GELU(),
                 paddle.compat.nn.Linear(in_features=self.dim, out_features=self.dim),
                 paddle.nn.GELU(),
-                Rearrange(
-                    "b (t h w) d -> (b t) d h w",
-                    h=self.config.patch_num_output,
-                    w=self.config.patch_num_output,
+                PatchTokensToGrid(
+                    self.config.patch_num_output,
+                    self.config.patch_num_output,
                 ),
                 paddle.nn.Conv2DTranspose(
                     in_channels=self.dim,
@@ -270,10 +296,9 @@ class ConvEmbedder(paddle.nn.Module):
             )
         else:
             self.post_proj = paddle.nn.Sequential(
-                Rearrange(
-                    "b (t h w) d -> (b t) d h w",
-                    h=self.config.patch_num_output,
-                    w=self.config.patch_num_output,
+                PatchTokensToGrid(
+                    self.config.patch_num_output,
+                    self.config.patch_num_output,
                 ),
                 paddle.nn.Conv2DTranspose(
                     in_channels=self.dim,
@@ -308,14 +333,14 @@ class ConvEmbedder(paddle.nn.Module):
             data:           Tensor (bs, data_len, dim)      data_len = input_len * patch_num * patch_num
                             embedded data + time embeddings + patch position embeddings
         """
-        bs = data.size(0)
+        bs = data.shape[0]
         data = einops.rearrange(data, "b t h w c -> (b t) c h w")
         data = self.conv_proj(data)
         data = einops.rearrange(data, "(b t) d h w -> b t (h w) d", b=bs)
         if self.time_embed_type == "continuous":
             time_embeddings = self.time_proj(times)[:, :, None]
         else:
-            time_embeddings = self.time_embed[:, : times.size(1)]
+            time_embeddings = self.time_embed[:, : times.shape[1]]
         data = (data + time_embeddings + self.patch_position_embeddings).reshape(
             bs, -1, self.dim
         )
@@ -329,7 +354,7 @@ class ConvEmbedder(paddle.nn.Module):
         Output:
             data_output:     Tensor (bs, output_len, x_num, x_num, data_dim)
         """
-        bs = data_output.size(0)
+        bs = data_output.shape[0]
         data_output = self.post_proj(data_output)
         data_output = einops.rearrange(data_output, "(b t) c h w -> b t h w c", b=bs)
         return data_output
@@ -349,14 +374,14 @@ if __name__ == "__main__":
     data = paddle.randn(bs, input_len, x_num, x_num, data_dim, device=device)
     times = paddle.randn(bs, input_len, 1, device=device)
     data_input = embedder.encode(data, times)
-    print(f"data_input.size() = {data_input.size()!r}")
+    print(f"data_input.shape = {data_input.shape!r}")
     dim = conf.dim_emb
     query_len = conf.embedder.patch_num_output * (
         conf.embedder.patch_num_output // 2 + 1
     )
     data = paddle.randn(bs, query_len, dim, device=device)
     data_output = embedder.decode(data)
-    print(f"data_output.size() = {data_output.size()!r}")
+    print(f"data_output.shape = {data_output.shape!r}")
 
     def count_parameters(model):
         return sum(p.numel() for p in model.parameters() if not p.stop_gradient)

@@ -44,14 +44,14 @@ class MultiheadAttention(paddle.nn.Module):
         need_weights=False,
         rotary_emb=None,
     ):
-        bs, seq_len, _ = query.size()
-        k_len = key.size(1)
+        bs, seq_len, _ = query.shape
+        k_len = key.shape[1]
         q = self.linear_q(query)
         k = self.linear_k(key)
         v = self.linear_v(value)
-        q = q.view(bs, seq_len, self.num_heads, self.head_dim)
-        k = k.view(bs, k_len, self.num_heads, self.head_dim)
-        v = v.view(bs, k_len, self.num_heads, self.head_dim)
+        q = q.reshape(bs, seq_len, self.num_heads, self.head_dim)
+        k = k.reshape(bs, k_len, self.num_heads, self.head_dim)
+        v = v.reshape(bs, k_len, self.num_heads, self.head_dim)
         if rotary_emb is not None:
             q = rotary_emb.rotate_queries_or_keys(q)
             k = rotary_emb.rotate_queries_or_keys(k)
@@ -71,12 +71,12 @@ class MultiheadAttention(paddle.nn.Module):
             check_other=False,
         )
         if key_padding_mask is not None:
-            assert key_padding_mask.shape == (
+            assert tuple(key_padding_mask.shape) == (
                 bs,
                 k_len,
             ), f"expecting key_padding_mask shape of {bs, k_len}, but got {key_padding_mask.shape}"
             # Paddle SDPA requires 4D attn_bias with 2nd-last dim == seq_len
-            key_padding_mask = key_padding_mask.view(bs, 1, 1, k_len).expand(
+            key_padding_mask = key_padding_mask.reshape(bs, 1, 1, k_len).expand(
                 -1, 1, seq_len, -1
             )
             if attn_mask is None:
@@ -354,7 +354,7 @@ class CausalTransformerDecoder(paddle.nn.TransformerDecoder):
                 output = self.norm(output)
             return output
         if cache is None:
-            assert tgt.size(0) == 1
+            assert tgt.shape[0] == 1
         new_token_cache = []
         for i, mod in enumerate(self.layers):
             output = mod(output, memory)
@@ -397,7 +397,7 @@ class CausalTransformerDecoderLayer(paddle.nn.TransformerDecoderLayer):
             return super().forward(
                 tgt,
                 memory,
-                tgt_mask=_generate_square_subsequent_mask(tgt.size(0), dtype=tgt.dtype),
+                tgt_mask=_generate_square_subsequent_mask(tgt.shape[0], dtype=tgt.dtype),
                 memory_mask=memory_mask,
             )
         if self.norm_first:
@@ -539,7 +539,7 @@ class CausalDecoderOnlyLayer(paddle.nn.TransformerEncoderLayer):
                     src,
                     src,
                     src,
-                    attn_mask=_generate_square_subsequent_mask(src.size(0), dtype=src.dtype),
+                    attn_mask=_generate_square_subsequent_mask(src.shape[0], dtype=src.dtype),
                     key_padding_mask=src_key_padding_mask,
                     need_weights=False,
                     is_causal=True,
@@ -562,7 +562,7 @@ class CausalDecoderOnlyLayer(paddle.nn.TransformerEncoderLayer):
         else:
             if first:
                 src_last_tok = src
-                src_mask = _generate_square_subsequent_mask(src.size(0), dtype=src.dtype)
+                src_mask = _generate_square_subsequent_mask(src.shape[0], dtype=src.dtype)
                 is_causal = True
             else:
                 src_last_tok = src[-1:, :, :]
@@ -782,9 +782,9 @@ class SinusoidalPE(paddle.nn.Module):
                       [seq_len, batch_size, embedding_dim] otherwise
         """
         if batch_first:
-            x = x + self.pe[: x.size(1)].transpose(0, 1)
+            x = x + self.pe[: x.shape[1]].transpose(0, 1)
         else:
-            x = x + self.pe[: x.size(0)]
+            x = x + self.pe[: x.shape[0]]
         return self.dropout(x)
 
 
@@ -808,7 +808,7 @@ class LearnablePE(paddle.nn.Module):
                       [seq_len, batch_size, embedding_dim] otherwise
             positions: Tensor [batch_size, seq_len]
         """
-        seq_len = x.size(1) if batch_first else x.size(0)
+        seq_len = x.shape[1] if batch_first else x.shape[0]
         if positions is None:
             positions = paddle.arange(seq_len, dtype="int64").unsqueeze(0)
         pe = self.pe(positions)
@@ -847,7 +847,7 @@ def get_padding_mask(lengths, max_len=None):
     """
     if max_len is None:
         max_len = int(paddle.max(lengths).item())
-    bs = lengths.size(0)
+    bs = lengths.shape[0]
     key_padding_mask = paddle.arange(max_len, dtype=lengths.dtype).expand([bs, max_len]) >= lengths.unsqueeze(1)
     return key_padding_mask
 
@@ -877,7 +877,7 @@ def _get_seq_len(src: paddle.Tensor, batch_first: bool) -> Optional[int]:
     if getattr(src, "is_nested", False):
         return None
     else:
-        src_size = src.size()
+        src_size = src.shape
         if len(src_size) == 2:
             return src_size[0]
         else:
@@ -908,11 +908,11 @@ def _detect_is_causal_mask(
 ) -> bool:
     make_causal = is_causal is True
     if is_causal is None and mask is not None:
-        sz = size if size is not None else mask.size(-2)
+        sz = size if size is not None else mask.shape[-2]
         causal_comparison = _generate_square_subsequent_mask(
             sz, device=mask.device, dtype=mask.dtype
         )
-        if mask.size() == causal_comparison.size():
+        if mask.shape == causal_comparison.shape:
             make_causal = bool((mask == causal_comparison).all())
         else:
             make_causal = False
@@ -945,12 +945,12 @@ class GroupNorm(paddle.nn.Module):
             self.bias = paddle.nn.Parameter(paddle.zeros(1, 1, num_channels))
 
     def forward(self, x):
-        bs, seq_len, d = x.size()
-        x = x.view(bs, seq_len, self.num_groups, d // self.num_groups)
+        bs, seq_len, d = x.shape
+        x = x.reshape(bs, seq_len, self.num_groups, d // self.num_groups)
         mean = paddle.mean(x, dim=-1, keepdim=True)
         var = paddle.var(x, dim=-1, unbiased=False, keepdim=True)
         x = (x - mean) / paddle.sqrt(var + self.eps)
-        x = x.view(bs, seq_len, d)
+        x = x.reshape(bs, seq_len, d)
         if self.affine:
             x = x * self.weight + self.bias
         return x

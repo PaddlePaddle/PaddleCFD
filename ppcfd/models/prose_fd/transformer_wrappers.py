@@ -25,6 +25,7 @@ class PROSE_2to1(paddle.nn.Module):
         self.x_num = x_num
         self.max_output_dim = max_output_dim
         self.embedder = get_embedder(config.embedder, x_num, max_output_dim)
+        self.carry_last_frame = config.get("carry_last_frame", 0)
         self.data_encoder = TransformerDataEncoder(config.data_encoder)
         self.symbol_encoder = TransformerSymbolEncoder(
             config.symbol_encoder, symbol_env.equation_id2word
@@ -52,15 +53,35 @@ class PROSE_2to1(paddle.nn.Module):
         s += f"\tData Decoder:    {sum([p.numel() for p in self.data_decoder.parameters() if not p.stop_gradient]):,}"
         return s
 
-    def forward(self, mode, **kwargs):
+    def forward(
+        self,
+        mode,
+        data_input,
+        input_times,
+        output_times,
+        symbol_input,
+        symbol_padding_mask=None,
+    ):
         """
         Forward function with different forward modes.
         ### Small hack to handle PyTorch distributed.
         """
         if mode == "fwd":
-            return self.fwd(**kwargs)
+            return self.fwd(
+                data_input,
+                input_times,
+                output_times,
+                symbol_input,
+                symbol_padding_mask,
+            )
         elif mode == "generate":
-            return self.fwd(**kwargs)
+            return self.fwd(
+                data_input,
+                input_times,
+                output_times,
+                symbol_input,
+                symbol_padding_mask,
+            )
         else:
             raise Exception(f"Unknown mode: {mode}")
 
@@ -71,7 +92,6 @@ class PROSE_2to1(paddle.nn.Module):
         output_times,
         symbol_input,
         symbol_padding_mask=None,
-        **kwargs,
     ):
         """
         Inputs:
@@ -85,9 +105,9 @@ class PROSE_2to1(paddle.nn.Module):
         Output:
             data_output:     Tensor     (bs, output_len, x_num, x_num, data_dim)
         """
-        if self.config.get("carry_last_frame", 0):
+        if self.carry_last_frame:
             last_frame = data_input[:, -1:].clone()
-        bs = data_input.size(0)
+        bs = data_input.shape[0]
         """
         Step 1: Prepare data input (add time embeddings and patch position embeddings)
             data_input (bs, input_len, x_num, x_num, data_dim) -> (bs, data_len, dim)
@@ -113,13 +133,13 @@ class PROSE_2to1(paddle.nn.Module):
         Step 3: Decode data
         """
         query_emb = self.data_decoder.get_query_emb(output_times)
-        if query_emb.size(0) == 1:
+        if query_emb.shape[0] == 1:
             query_emb = query_emb.expand(bs, -1, -1)
         data_output = self.data_decoder(
             src=fused, query_emb=query_emb, src_key_padding_mask=fused_mask
         )
         data_output = self.embedder.decode(data_output)
-        if self.config.get("carry_last_frame", 0):
+        if self.carry_last_frame:
             data_output = data_output + last_frame
         return data_output
 
@@ -148,19 +168,27 @@ class PROSE_1to1(paddle.nn.Module):
         s += f"\tData Decoder:    {sum([p.numel() for p in self.data_decoder.parameters() if not p.stop_gradient]):,}"
         return s
 
-    def forward(self, mode, **kwargs):
+    def forward(
+        self,
+        mode,
+        data_input,
+        input_times,
+        output_times,
+        symbol_input=None,
+        symbol_padding_mask=None,
+    ):
         """
         Forward function with different forward modes.
         ### Small hack to handle PyTorch distributed.
         """
         if mode == "fwd":
-            return self.fwd(**kwargs)
+            return self.fwd(data_input, input_times, output_times)
         elif mode == "generate":
-            return self.fwd(**kwargs)
+            return self.fwd(data_input, input_times, output_times)
         else:
             raise Exception(f"Unknown mode: {mode}")
 
-    def fwd(self, data_input, input_times, output_times, **kwargs):
+    def fwd(self, data_input, input_times, output_times):
         """
         Inputs:
             data_input:          Tensor     (bs, input_len, x_num, x_num, data_dim)
@@ -170,7 +198,7 @@ class PROSE_1to1(paddle.nn.Module):
         Output:
             data_output:     Tensor     (bs, output_len, x_num, x_num, data_dim)
         """
-        bs = data_input.size(0)
+        bs = data_input.shape[0]
         """
         Step 1: Prepare data input (add time embeddings and patch position embeddings)
             data_input (bs, input_len, x_num, x_num, data_dim) -> (bs, data_len, dim)
@@ -186,7 +214,7 @@ class PROSE_1to1(paddle.nn.Module):
         Step 3: Decode data
         """
         query_emb = self.data_decoder.get_query_emb(output_times)
-        if query_emb.size(0) == 1:
+        if query_emb.shape[0] == 1:
             query_emb = query_emb.expand(bs, -1, -1)
         data_output = self.data_decoder(
             src=data_encoded, query_emb=query_emb, src_key_padding_mask=None

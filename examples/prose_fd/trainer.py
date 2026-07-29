@@ -1,4 +1,5 @@
 import os
+import time
 from logging import getLogger
 
 import numpy as np
@@ -51,6 +52,9 @@ class Trainer(object):
         self.epoch = 0
         self.n_iter = 0
         self.n_total_iter = 0
+        self._bench = os.environ.get("PROSE_BENCHMARK", "0") == "1"
+        self._bench_pure_sec = 0.0
+        self._bench_last_sec = 0.0
         self.reload_checkpoint()
         if not params.eval_only:
             self.dataloader_count = 0
@@ -216,6 +220,14 @@ class Trainer(object):
         max_mem = max_memory_allocated_mb()
         s_mem = "" if max_mem is None else " MEM: {:.2f} MB - ".format(max_mem)
         logger.info(s_iter + s_mem + s_lr)
+        if self._bench and self._bench_pure_sec > self._bench_last_sec:
+            _window_step_s = self.params.print_freq / (
+                self._bench_pure_sec - self._bench_last_sec
+            )
+            self._bench_last_sec = self._bench_pure_sec
+            logger.info(
+                f"BENCH pure_train step/s (last {self.params.print_freq}): {_window_step_s:.4f}"
+            )
 
     def save_checkpoint(self, name, include_optimizer=True):
         """
@@ -458,18 +470,31 @@ class Trainer(object):
         Model output:
             data_output:  (bs, output_len, x_num, x_num, data_dim)
         """
+        if self._bench:
+            paddle.device.cuda.synchronize()
+            _bench_t0 = time.perf_counter()
         with paddle.amp.autocast(
             get_amp_device_type(),
             enabled=bool(params.amp),
             dtype=paddle.bfloat16,
         ):
-            data_output = model("fwd", **model_input)
+            data_output = model(
+                "fwd",
+                model_input["data_input"],
+                model_input["input_times"],
+                model_input["output_times"],
+                model_input.get("symbol_input"),
+                model_input.get("symbol_padding_mask"),
+            )
             if self.params.normalize and self.params.denormalize_for_loss:
                 data_output = data_output * d["std"] + d["mean"]
             data_output = data_output * d["data_mask"]
             data_loss = self.data_loss_fn(data_output, d["data_label"], d["data_mask"])
         self.data_loss += data_loss.item()
         self.optimize(data_loss)
+        if self._bench:
+            paddle.device.cuda.synchronize()
+            self._bench_pure_sec += time.perf_counter() - _bench_t0
         self.inner_epoch += 1
         self.n_iter += 1
         self.n_total_iter += 1

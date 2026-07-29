@@ -1,5 +1,7 @@
 from logging import getLogger
 
+import os
+
 import paddle
 from tabulate import tabulate
 
@@ -65,4 +67,10 @@ def build_model(params, model_config, data_config, symbol_env):
     if not params.cpu:
         for v in modules.values():
             v.to(get_runtime_device())
+    if os.environ.get("PROSE_TO_STATIC", "0") == "1":
+        from paddle.jit import to_static
+
+        logger.info("Wrapping model with paddle.jit.to_static (CINN) ...")
+        for k in list(modules.keys()):
+            modules[k] = to_static(modules[k], full_graph=True)
     return modules
