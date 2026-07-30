@@ -12,7 +12,7 @@ from sklearn.cluster import DBSCAN
 import meshio
 from shapely.geometry import Point,Polygon
 
-import torch
+import paddle
 import numpy as np
 import multiprocessing
 import matplotlib.pyplot as plt
@@ -60,7 +60,7 @@ def generate_object_mask(sol_dir,x_res,y_res):
     wall_points = msh.points[msh.cells_dict['quad'][msh.cell_sets_dict['wall']['quad']]]
     wp_corrected = wall_points[(wall_points[:,:,2]==0)][:,:2][1:-1:2]
     wp_corrected = [(p[0],p[1]) for p in wp_corrected]
-    wp_corrected = torch.tensor(wp_corrected)
+    wp_corrected = paddle.to_tensor(wp_corrected)
 
     clusters = dbscan.fit_predict(wp_corrected)
 
@@ -69,12 +69,15 @@ def generate_object_mask(sol_dir,x_res,y_res):
 
     p_clusters = []
     for cluster_id in set(clusters):
-        cluster_points = torch.cat([wp_corrected[clusters==cluster_id],wp_corrected[clusters==cluster_id][0].view(1,2)])
+        cluster = wp_corrected[clusters == cluster_id]
+        cluster_points = paddle.concat(
+            [cluster, cluster[0].reshape([1, 2])], axis=0
+        )
         p_clusters.append(cluster_points)
 
     polygon_list = [Polygon(sort_points([(p[0].item(),p[1].item()) for p in p_clusters[i]])) for i in range(len(p_clusters))]
 
-    interp = torch.tensor(np.stack((xinterp,yinterp),axis=2)).flatten(0,1)
+    interp = paddle.to_tensor(np.stack((xinterp,yinterp),axis=2)).reshape([-1, 2])
 
     object_mask = []
     for p in tqdm(interp):
@@ -85,7 +88,8 @@ def generate_object_mask(sol_dir,x_res,y_res):
         object_mask.append(mask_value)
 
 
-    object_mask = torch.tensor(object_mask).view(ngridy,ngridx).flip(0)
+    object_mask = paddle.to_tensor(object_mask).reshape([ngridy, ngridx])
+    object_mask = paddle.flip(object_mask, axis=[0])
     return object_mask,len(set(clusters))
 
 
@@ -93,15 +97,15 @@ def generate_object_mask(sol_dir,x_res,y_res):
 
 def readU(arg):
     i,dest = arg
-    return torch.tensor(readvector(dest,str(i),'U'))
+    return np.asarray(readvector(dest,str(i),'U'))
 
 def readp(arg):
     i,dest = arg
-    return torch.tensor(readscalar(dest,str(i),'p'))
+    return np.asarray(readscalar(dest,str(i),'p'))
 
 def readPhi(arg):
     i,dest = arg
-    return torch.tensor(readscalar(dest,str(i),'phi'))
+    return np.asarray(readscalar(dest,str(i),'phi'))
 
 plot_height = 5.0
 def scatter_plot(arg):
@@ -405,7 +409,7 @@ def main():
         #os.system(f"python openfoam_to_image.py --src {work_dir} --dst {solution_dir} --grid_height {y_res} --grid_width {x_res}")
 
         #object_mask = generate_object_mask(work_dir,x_res,y_res)
-        torch.save(object_mask,solution_dir+"object_mask.th")
+        paddle.save(object_mask, solution_dir+"object_mask.th")
 
 
 
@@ -434,33 +438,52 @@ def main():
         
         pool_obj = multiprocessing.Pool()
         
-        U  = pool_obj.map(readU,[(i,work_dir) for i in range(1,max_time_steps+1)])
-        p  = pool_obj.map(readp,[(i,work_dir) for i in range(1,max_time_steps+1)])
+        U = [
+            paddle.to_tensor(value)
+            for value in pool_obj.map(
+                readU, [(i, work_dir) for i in range(1, max_time_steps + 1)]
+            )
+        ]
+        p = [
+            paddle.to_tensor(value)
+            for value in pool_obj.map(
+                readp, [(i, work_dir) for i in range(1, max_time_steps + 1)]
+            )
+        ]
         
 
         pool_obj.close()
+        pool_obj.join()
 
-        U_stacked = torch.stack(U)
+        U_stacked = paddle.stack(U)
         
-        x = torch.tensor(x)
-        y = torch.tensor(y)
-        v = torch.sqrt(U_stacked[:,0,:]**2+U_stacked[:,1,:]**2+U_stacked[:,2,:]**2)
+        x = paddle.to_tensor(x)
+        y = paddle.to_tensor(y)
+        v = paddle.sqrt(U_stacked[:,0,:]**2+U_stacked[:,1,:]**2+U_stacked[:,2,:]**2)
 
         
         if save_raw == 1:
             
             for i in range(len(U)):
-                local_U = U[i].view(3,-1)[:2]
-                local_p = p[i].view(1,-1)
-                torch.save(torch.cat([local_U,local_p],dim=0),solution_dir+('{:0>8}'.format(str(i)))+"_mesh.th")
-            torch.save(x,solution_dir+"x.th")
-            torch.save(y,solution_dir+"y.th")
+                local_U = U[i].reshape([3, -1])[:2]
+                local_p = p[i].reshape([1, -1])
+                paddle.save(paddle.concat([local_U,local_p],axis=0),solution_dir+('{:0>8}'.format(str(i)))+"_mesh.th")
+            paddle.save(x, solution_dir+"x.th")
+            paddle.save(y, solution_dir+"y.th")
 
         shutil.rmtree(work_dir)
         pool_obj = multiprocessing.Pool()
-        img_list = pool_obj.map(scatter_plot,[(i,x,y,v,triangles,mesh_points) for i in range(U_stacked.shape[0])])
+        plot_x = x.numpy()
+        plot_y = y.numpy()
+        plot_v = v.numpy()
+        plot_args = [
+            (i, plot_x, plot_y, plot_v, triangles, mesh_points)
+            for i in range(U_stacked.shape[0])
+        ]
+        img_list = pool_obj.map(scatter_plot, plot_args)
         
         pool_obj.close()
+        pool_obj.join()
 
         for i in range(len(img_list)):
             img_list[i]._min_frame = 0

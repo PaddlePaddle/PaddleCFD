@@ -25,12 +25,12 @@ def parse_args():
     return vars(parser.parse_args())
 
 
-def get_torch_files(root):
+def get_paddle_files(root):
     result = []
     for fname in os.listdir(root):
         uri = root / fname
         if uri.is_dir():
-            result += get_torch_files(uri)
+            result += get_paddle_files(uri)
         elif (
             uri.name.endswith(".th")
             and not uri.name.startswith("coordinates")
@@ -65,7 +65,7 @@ class MeanVarDataset(paddle.io.Dataset):
     def __getitem__(self, idx):
         case_uri = self.case_uris[idx]
         assert case_uri.name.startswith("case_")
-        uris = get_torch_files(case_uri)
+        uris = get_paddle_files(case_uri)
         if len(uris) != 120:
             raise RuntimeError(
                 f"invalid number of uris for case '{case_uri.as_posix()}' len={len(uris)}"

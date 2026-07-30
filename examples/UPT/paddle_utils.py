@@ -51,7 +51,7 @@ _PATCHED = False
 
 
 class _TensorSizeProxy(int):
-    """int-like tensor element count that also supports PyTorch-style size(dim)."""
+
 
     def __new__(cls, tensor):
         obj = int.__new__(cls, math.prod(tensor.shape))
