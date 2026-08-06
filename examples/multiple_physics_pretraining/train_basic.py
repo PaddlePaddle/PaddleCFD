@@ -60,6 +60,7 @@ from ppcfd.models.multiple_physics_pretraining.avit import build_avit
 from ppcfd.models.multiple_physics_pretraining.utils import logging_utils
 from ppcfd.models.multiple_physics_pretraining.utils.schedulers import (
     SimpleSequentialScheduler,
+    dadapt_cosine_scheduler,
 )
 from ppcfd.models.multiple_physics_pretraining.utils.YParams import YParams
 
@@ -228,11 +229,10 @@ class Trainer:
             sched_epochs = params.max_epochs
         if params.scheduler == "cosine":
             if self.params.learning_rate < 0:
-                tmp_lr = paddle.optimizer.lr.CosineAnnealingDecay(
+                tmp_lr = dadapt_cosine_scheduler(
+                    self.optimizer,
+                    sched_epochs * params.epoch_size,
                     last_epoch=self.startEpoch * params.epoch_size - 1,
-                    T_max=sched_epochs * params.epoch_size,
-                    eta_min=params.learning_rate / 100,
-                    learning_rate=self.optimizer.get_lr(),
                 )
                 self.optimizer.set_lr_scheduler(tmp_lr)
                 self.scheduler = tmp_lr
