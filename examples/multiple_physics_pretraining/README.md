@@ -34,7 +34,7 @@ python train_basic.py --run_name my_experiment --config basic_config --yaml_conf
 Pretrained PaddlePaddle checkpoints (converted verbatim from the original PyTorch weights) are available at:
 https://aistudio.baidu.com/modelsdetail/49169?modelId=49169
 
-Download the desired variant (e.g. `MPP_AViT_Ti`) into `models_paddle/`, then finetune:
+Download the desired variant (e.g. `MPP_AViT_Ti`), then point `pretrained_ckpt_path` in the corresponding yaml (e.g. the `finetune` section of `config/mpp_avit_ti_config.yaml`) at where you saved it, and finetune:
 
 ```bash
 python train_basic.py --run_name my_finetune --config finetune --yaml_config config/mpp_avit_ti_config.yaml
@@ -45,7 +45,7 @@ python train_basic.py --run_name my_finetune --config finetune --yaml_config con
 If needed, use follow code to generate test input.
 
 ```bash
-python multiple_physics_pretraining/generate_forward_case.py --output /tmp/case.npz --labels 0,1,2 --bcs 0,0 --output ./forward_case.npz
+python generate_forward_case.py --output ./forward_case.npz --labels 0,1,2 --bcs 0,0
 ```
 
 Then run a test forward case:
@@ -55,7 +55,7 @@ python forward_pretrained.py \
     --yaml_config config/mpp_avit_s_config.yaml \
     --config basic_config \
     --weights path/to/checkpoint.pdparams \
-    --case_npz path/to/input.npz \
+    --case_npz ./forward_case.npz \
     --output path/to/output.npz
 ```
 
