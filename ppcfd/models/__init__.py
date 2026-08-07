@@ -72,3 +72,11 @@ try:
     __all__.append("symbolic_gn")
 except ImportError:
     pass  # Optional dependency
+
+# Multiple Physics Pretraining (MPP) - AViT for spatiotemporal surrogate modeling
+try:
+    from ppcfd.models import multiple_physics_pretraining
+
+    __all__.append("multiple_physics_pretraining")
+except ImportError:
+    pass  # Optional dependency
