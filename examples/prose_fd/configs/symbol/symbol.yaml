@@ -1,0 +1,30 @@
+# whether to use symbol input or not
+symbol_input: 1
+
+# Whether to use sympy parsing (basic simplification)
+use_sympy: false
+
+# Whether to replace log and sqrt by log(abs) and sqrt(abs)
+use_abs: false
+
+# Maximal integer in symbolic expressions
+max_int: 20
+
+# Number of digits in the mantissa
+float_precision: 2
+
+# Number of tokens for the mantissa (must be a divisor of float_precision+1)
+mantissa_len: 1
+
+# Maximal order of magnitude
+max_exponent: 10
+
+# Maximal order of magnitude in prefactors
+max_exponent_prefactor: 1
+
+max_input_dimension: 2
+max_output_dimension: 5
+
+n_words: -1
+
+pad_right: 1 # whether do left or right padding

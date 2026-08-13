@@ -1,0 +1,15 @@
+type: adamw
+
+lr: 1e-4
+weight_decay: 1e-4
+eps: 1e-6
+amsgrad: false
+beta2: 0.95
+
+# scheduler, choose from [cosine, inverse_sqrt, cosine_with_restarts, cosine_with_min_lr, warmup_stable_decay] 
+scheduler_type: warmup_stable_decay
+# min_lr_ratio: 1e-4
+
+warmup: 0.1
+decay: 0.2
+max_iters: ???
