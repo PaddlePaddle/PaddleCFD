@@ -84,7 +84,31 @@ python main.py use_wandb=0 data=shallow_water_minimal model=prose_2to1 optim=wsd
 
 Any argument can be overridden with `key=value`; defaults live in `configs/`.
 
-### CINN 动转静加速
+### Inference / evaluation only
+
+Pure inference (no training loop) is entered with `eval_only=1`. The path to load is given by `eval_from_exp`: if `<eval_from_exp>/checkpoint.pth` exists it is used, otherwise `eval_from_exp` is treated as a weight file directly. So you can point it at either an experiment dump directory or a downloaded `.pdparams` file (e.g. the AI Studio weights linked above).
+
+Standard operator-mode evaluation on the shallow-water config:
+
+```bash
+python main.py eval_only=1 use_wandb=0 data=shallow_water_minimal model=prose_2to1 optim=wsd \
+  device=gpu:0 batch_size_eval=1 num_workers_eval=0 log_eval_plots=-1 \
+  exp_name=sw64_eval eval_from_exp=/path/to/prose_fd.pdparams \
+  data.shallow_water.data_path=/path/to/data.h5
+```
+
+Rollout-in-time evaluation (autoregressive step-by-step extrapolation instead of one-shot operator prediction) — add `rollout=1`:
+
+```bash
+python main.py eval_only=1 rollout=1 use_wandb=0 data=shallow_water_minimal model=prose_2to1 optim=wsd \
+  device=gpu:0 batch_size_eval=1 num_workers_eval=0 log_eval_plots=-1 \
+  exp_name=sw64_rollout eval_from_exp=/path/to/prose_fd.pdparams \
+  data.shallow_water.data_path=/path/to/data.h5
+```
+
+Reported metrics are controlled by `validation_metrics_print` (rel L2, per-step L2, etc.); set `print_outputs=1` to dump predicted-vs-ground-truth figures under `eval_dump_path`.
+
+### CINN accelerated training
 
 The PaddlePaddle native compiler CINN can accelerate training once the model is converted to a static graph (`paddle.jit.to_static`). This example uses a single environment variable as the switch — it injects the CINN-related FLAGS before `import paddle` and wraps the assembled model with `to_static(full_graph=True)`:
 
