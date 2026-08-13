@@ -78,5 +78,10 @@ try:
     from ppcfd.models import prose_fd
 
     __all__.append("prose_fd")
+# Multiple Physics Pretraining (MPP) - AViT for spatiotemporal surrogate modeling
+try:
+    from ppcfd.models import multiple_physics_pretraining
+
+    __all__.append("multiple_physics_pretraining")
 except ImportError:
     pass  # Optional dependency

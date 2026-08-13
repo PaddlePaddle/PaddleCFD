@@ -21,10 +21,14 @@ import re
 import shutil
 import sys
 import sysconfig
-from importlib.util import module_from_spec, spec_from_file_location
+from importlib.util import module_from_spec
+from importlib.util import spec_from_file_location
 
-from setuptools import Extension, setup, find_packages
+from setuptools import Extension
+from setuptools import find_packages
+from setuptools import setup
 from setuptools.command.build_ext import build_ext
+
 
 HERE = pathlib.Path(__file__).absolute().parent
 
@@ -36,13 +40,28 @@ class CMakeExtension(Extension):
         self.target = target if target is not None else name.rpartition(".")[-1]
 
 
+def _detect_rocm():
+    """Detect if ROCm is available."""
+    rocm_path = os.environ.get("ROCM_PATH", os.environ.get("ROCM_HOME", ""))
+    if rocm_path and os.path.isdir(rocm_path):
+        return rocm_path
+    default_rocm = "/opt/rocm"
+    if os.path.isdir(default_rocm):
+        return default_rocm
+    default_dtk = "/opt/dtk"
+    if os.path.isdir(default_dtk):
+        return default_dtk
+    return None
+
+
 class cmake_build_ext(build_ext):
     def build_extension(self, ext):
         if not isinstance(ext, CMakeExtension):
             super().build_extension(ext)
             return
 
-        from cmake import get_paddle_include_paths, get_paddle_library_paths
+        from cmake import get_paddle_include_paths
+        from cmake import get_paddle_library_paths
 
         cmake = shutil.which("cmake")
         if cmake is None:
@@ -63,6 +82,14 @@ class cmake_build_ext(build_ext):
             f"-DPADDLE_LIBRARY_PATH={get_paddle_library_paths.run()}",
         ]
 
+        rocm_path = _detect_rocm()
+        if rocm_path is not None:
+            cmake_args.extend(
+                [
+                    "-DUSE_ROCM=ON",
+                ]
+            )
+
         if platform.system() == "Darwin":
             # Cross-compile support for macOS - respect ARCHFLAGS if set
             archs = re.findall(r"-arch (\S+)", os.environ.get("ARCHFLAGS", ""))
@@ -77,11 +104,7 @@ class cmake_build_ext(build_ext):
             pass
 
         build_args = ["--config", config]
-        if (
-            "CMAKE_BUILD_PARALLEL_LEVEL" not in os.environ
-            and hasattr(self, "parallel")
-            and self.parallel
-        ):
+        if "CMAKE_BUILD_PARALLEL_LEVEL" not in os.environ and hasattr(self, "parallel") and self.parallel:
             build_args.extend(["--parallel", str(self.parallel)])
         else:
             build_args.append("--parallel")
@@ -164,15 +187,11 @@ ext_kwargs = {
     ],
 }
 
-FUSED_SEGMENT_CSR_NO_EXTENSIONS = (
-    bool(os.getenv("FUSED_SEGMENT_CSR_NO_EXTENSIONS", "")) or WINDOWS or MACOS
-)
+FUSED_SEGMENT_CSR_NO_EXTENSIONS = bool(os.getenv("FUSED_SEGMENT_CSR_NO_EXTENSIONS", "")) or WINDOWS or MACOS
 if FUSED_SEGMENT_CSR_NO_EXTENSIONS:
     ext_kwargs.clear()
 
-with vcs_version(
-    name="fused_segment_csr.version", path=(HERE / "fused_segment_csr" / "version.py")
-) as version:
+with vcs_version(name="fused_segment_csr.version", path=(HERE / "fused_segment_csr" / "version.py")) as version:
     setup(
         name="fused_segment_csr",
         version=version.__version__,
