@@ -100,23 +100,64 @@ CINN pays a one-time compilation cost; short runs may be slower end-to-end, but 
 
 ## Datasets
 
-Datasets are HDF5 files (`.nc` / `.h5`) placed at the path given by `--data_path`. Supported problem types:
+### Getting the data
 
-| Category               | Problems                     |
-| ---------------------- | ---------------------------- |
-| **Fluids**             | incompressible, compressible (steady/transient) |
-| **Elliptic**           | Poisson, Helmholtz           |
-| **Wave**               | acoustic                     |
-| **Reaction-Diffusion** | Allen-Cahn                   |
+All datasets are published on the HuggingFace Hub, in two collections:
 
-The dataset is selected by its code identifier in the YAML config (e.g. `fluids.compressible.steady.Airfoil`, `elliptic.poisson.Gaussians`).
+- [Pretraining datasets](https://huggingface.co/collections/camlab-ethz/poseidon-664fa125729c53d8607e209a)
+- [Downstream-task datasets](https://huggingface.co/collections/camlab-ethz/poseidon-downstream-tasks-664fa237cd6b0c097971ef14)
+
+Download one with the Hub CLI and place it under the directory passed to `--data_path` (the launch scripts default to `examples/dataset`):
+
+```bash
+huggingface-cli download camlab-ethz/SE-AF --repo-type dataset --local-dir examples/dataset
+```
+
+### Code identifiers and dataset files
+
+Datasets are HDF5 files (`.nc` / `.h5`). A dataset is selected by its **code identifier** in the YAML config (the `dataset:` field). The mapping to the Hub dataset names / local files:
+
+| Code identifier | Dataset |
+| ---------------- | ------- |
+| `fluids.incompressible.Sines` | NS-Sines |
+| `fluids.incompressible.Gaussians` | NS-Gauss |
+| `fluids.incompressible.ShearLayer` | NS-SL |
+| `fluids.incompressible.PiecewiseConstants` | NS-PwC |
+| `fluids.incompressible.PiecewiseConstants.tracer` | NS-Tracer-PwC |
+| `fluids.incompressible.VortexSheet` | NS-SVS |
+| `fluids.incompressible.BrownianBridge` | NS-BB |
+| `fluids.incompressible.forcing.KolmogorovFlow` | FNS-KF |
+| `fluids.compressible.steady.Airfoil` | SE-AF |
+| `fluids.compressible.Riemann` | CE-RP |
+| `fluids.compressible.RiemannCurved` | CE-CRP |
+| `fluids.compressible.RiemannKelvinHelmholtz` | CE-RPUI |
+| `fluids.compressible.KelvinHelmholtz` | CE-KH |
+| `fluids.compressible.Gaussians` | CE-Gauss |
+| `fluids.compressible.RichtmyerMeshkov` | CE-RM |
+| `fluids.compressible.gravity.RayleighTaylor` | GCE-RT |
+| `elliptic.poisson.Gaussians` | Poisson-Gauss |
+| `elliptic.Helmholtz` | Helmholtz |
+| `wave.Layer` | Wave-Layer |
+| `wave.Gaussians` | Wave-Gauss |
+| `reaction_diffusion.AllenCahn` | ACE |
+
+Two suffixes modify loading: appending `.time` loads a time-independent dataset as a time-dependent (long-time) one, and `.out` loads the out-of-distribution variant with more time steps.
+
+### Verified in this project
+
+| Dataset | Problem | Code identifier |
+| ------- | ------- | --------------- |
+| **SE-AF** | steady compressible flow (airfoil) | `fluids.compressible.steady.Airfoil` |
+| **Poisson-Gauss** | elliptic Poisson equation | `elliptic.poisson.Gaussians` |
+
+Both have been verified end-to-end (train + eval + test) on this codebase, in plain dynamic-graph mode and under CINN acceleration.
 
 ## Training configuration
 
 Training is YAML-driven (`configs/run_small.yaml`). Key fields:
 
 | Field | Meaning |
-|-------|---------|
+| ----- | ------- |
 | `dataset` | Dataset code identifier |
 | `num_trajectories` | Number of training trajectories (`-1` for full set) |
 | `model_name` | Model scale: `T` / `S` / `B` / `L` |
