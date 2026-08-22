@@ -85,6 +85,23 @@ python train.py \
 
 Use `python train.py --help` for the full argument list. `wandb` can be disabled via `WANDB_MODE=disabled`, but the `wandb` package must still be installed (the script imports it).
 
+### Evaluation
+
+Evaluate a trained checkpoint on the test set with `inference.py`. Metrics (loss and relative L1 error statistics) are appended to the CSV file given by `--file`:
+
+```bash
+cd examples/poseidon
+python inference.py \
+  --mode eval \
+  --model_path <CHECKPOINT_PATH> \
+  --dataset fluids.compressible.steady.Airfoil \
+  --data_path <DATA_PATH> \
+  --file eval_results.csv \
+  --ckpt_dir <CHECKPOINT_DIR>
+```
+
+The `--dataset` must match the dataset the checkpoint was trained on (channel count and time conditioning). Use the `.time` suffix for time-conditioned checkpoints. Other modes (`save_samples`, `eval_accumulation_error`, `eval_resolutions`, ...) are available via `python inference.py --help`.
+
 ## CINN acceleration
 
 `POSEIDON_USE_CINN=1` sets the three CINN FLAGS (`prim_enable_dynamic`, `prim_all`, `use_cinn`) before `import paddle` and wraps the model with `paddle.jit.to_static(model, full_graph=True)`. With the switch off (default), training falls back to the original pure dynamic-graph path.
@@ -92,7 +109,7 @@ Use `python train.py --help` for the full argument list. `wandb` can be disabled
 **Verified speedup** (ScOT-T, SE-AF, batch_size=32, steady-state per step, median of 40 steps after warm-up):
 
 | Mode | Steady train step | Speedup |
-|------|-------------------|---------|
+| ---- | ----------------- | ------- |
 | Dynamic graph (baseline) | 273 ms | — |
 | CINN (to_static) | 196 ms | **28.1%** |
 
