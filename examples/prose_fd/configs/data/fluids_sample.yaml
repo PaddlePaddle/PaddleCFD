@@ -1,0 +1,78 @@
+# fluids with different sample rates
+
+types: [shallow_water, incom_ns, com_ns, incom_ns_arena, cfdbench, incom_ns_arena_u]
+
+max_output_dimension: 4
+train_val_test_ratio: [0.8, 0.1, 0.1]
+t_num: 20
+x_num: 128 # how many to use for model input
+
+mixed_length: ${.t_num} # 0 means all have same length, otherwise, pad to t_num
+
+random_start: # randomly select the time starting idx
+  train: true
+  val: false
+  test: false
+  start_max: 40
+
+# whether to share all channels among equations or use c_mask
+tie_fields: 1
+
+sampler:
+  uniform: 0
+  
+  # when uniform=1, the following will be ignored. Otherwise, the probabilities will be normalized
+  shallow_water: 1
+  incom_ns: 2
+  com_ns: 2
+  incom_ns_arena: 4
+  incom_ns_arena_u: 3
+  cfdbench: 1
+
+shallow_water:
+  data_path: /data/shared/dataset/pdebench/2D/shallow-water/2D_rdb_NA_NA.h5
+  t_step: 1 # 5, dt=0.01
+  x_num: 128
+  dim: 1
+  c_mask: [0, 0, 0, 0, 0, 1]
+
+incom_ns:
+  folder: /data/shared/dataset/pdebench/2D/NS_incom
+  t_step: 1 # 10, dt=0.005
+  x_num: 512
+  dim: 3
+  c_mask: [1, 1, 1, 0, 0, 0]
+
+com_ns:
+  folders:
+    rand: /data/shared/dataset/pdebench/2D/CFD/2D_Train_Rand
+    turb: /data/shared/dataset/pdebench/2D/CFD/2D_Train_Turb
+  type: all
+  t_step: 1 # dt=0.05
+  x_num: 128
+  dim: 4
+  c_mask: [1, 1, 0, 1, 1, 0]
+
+incom_ns_arena:
+  folder: /data/shared/dataset/pdearena/NavierStokes-2D-conditioned
+  t_step: 1 # dt=1.5
+  x_num: 128
+  dim: 3
+  c_mask: [1, 1, 1, 0, 0, 0]
+
+incom_ns_arena_u:
+  folder: /data/shared/dataset/pdearena/NavierStokes-2D
+  t_step: 1 # dt=1.5
+  x_num: 128
+  dim: 3
+  c_mask: [1, 1, 1, 0, 0, 0]
+
+cfdbench:
+  data_path:
+    train: /data/shared/dataset/cfdbench/ns2d_cdb_train.hdf5
+    val: /data/shared/dataset/cfdbench/ns2d_cdb_val.hdf5
+    test: /data/shared/dataset/cfdbench/ns2d_cdb_test.hdf5
+  t_step: 1
+  x_num: 128
+  dim: 2 # third dimension is boundary mask, should not be used for loss/error
+  c_mask: [1, 1, 0, 0, 0, 0]

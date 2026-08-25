@@ -1,0 +1,27 @@
+types: [shallow_water]
+
+max_output_dimension: 4
+train_val_test_ratio: [0.8, 0.1, 0.1]
+t_num: 20
+x_num: 64
+
+mixed_length: ${.t_num}
+
+random_start:
+  train: true
+  val: false
+  test: false
+  start_max: 40
+
+tie_fields: 1
+
+sampler:
+  uniform: 1
+  shallow_water: 1
+
+shallow_water:
+  data_path: ./data/shallow_water/2D_rdb_NA_NA.h5
+  t_step: 1
+  x_num: 64
+  dim: 1
+  c_mask: [0, 0, 0, 0, 0, 1]
