@@ -106,6 +106,24 @@ The `--dataset` must match the dataset the checkpoint was trained on (channel co
 
 `POSEIDON_USE_CINN=1` sets the three CINN FLAGS (`prim_enable_dynamic`, `prim_all`, `use_cinn`) before `import paddle` and wraps the model with `paddle.jit.to_static(model, full_graph=True)`. With the switch off (default), training falls back to the original pure dynamic-graph path.
 
+`benchmark_compiler.py` times the two modes against each other on a synthetic batch, so no dataset download is needed. It runs one subprocess per mode (the CINN FLAGS must be set before `import paddle`) and prints a comparison:
+
+```bash
+cd examples/poseidon
+python benchmark_compiler.py                        # both modes, ScOT-T, batch 32, 10 warm-up + 40 timed steps
+python benchmark_compiler.py --model B --steps 60   # larger model, more steps
+python benchmark_compiler.py --modes cinn           # single mode
+python benchmark_compiler.py --time_conditioning    # time-dependent datasets (ConditionalLayerNorm)
+```
+
+The report gives median / mean / min / max ms per step for each mode, the steady-state speedup, the break-even step count (how many steps it takes to repay compilation), and a loss comparison between the two modes. A loss gap above 1% is flagged as a warning: `to_static` numerical divergence invalidates any speedup number.
+
+Notes:
+
+- Warm-up wall time under `cinn` is dominated by compilation, so `--warmup` must stay large enough for the timed window to be steady-state.
+- Like `trainer.py`, the CINN path calls the model with `return_dict=False`: under `to_static(full_graph=True)` the `ScOTOutput` dataclass carries pir Values that cannot `backward()`.
+- Measured this way on one H800 (ScOT-T, batch 4, 2 warm-up + 5 timed steps, synthetic SE-AF-shaped batch): 91.7 ms/step dynamic vs 54.8 ms/step CINN (**40.3% faster**), ~266 s one-time compilation, break-even around 7200 steps, and bit-identical losses between the two modes.
+
 **Verified speedup** (ScOT-T, SE-AF, batch_size=32, steady-state per step, median of 40 steps after warm-up):
 
 | Mode | Steady train step | Speedup |
