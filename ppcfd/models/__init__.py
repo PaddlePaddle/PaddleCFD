@@ -73,6 +73,14 @@ try:
 except ImportError:
     pass  # Optional dependency
 
+# Poseidon - Scientific Operator Transformer
+try:
+    from ppcfd.models import poseidon
+
+    __all__.append("poseidon")
+except ImportError:
+    pass  # Optional dependency
+  
 # PROSE-FD - PROSE for PDE surrogate modeling
 try:
     from ppcfd.models import prose_fd
