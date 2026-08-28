@@ -64,26 +64,34 @@ Core group-equivariant operators:
 
 ## 3. Dataset
 
-`experiments.py` auto-dispatches four data formats from `--data_path` (by filename/extension). Place datasets under a local `data/` directory.
+`experiments.py` auto-dispatches the data format from `--data_path` (by file extension, directory name, or filename prefix). Place all datasets under a local `data/` directory and pass the path to `experiments.py`.
 
-### 3.1 Shallow-water equations SWE (PDEBench verified mainline)
+### 3.1 Supported data sources
 
-From PDEBench's `2D_rdb_NA_NA.h5`; each trajectory has shape `(timesteps, X, Y, 1)`. The rdb branch of `experiments.py` average-pools the spatial dimensions by `--rdb_super_res` / `--rdb_downsample` and requires `--T=24`. Two scales have been verified:
+| Dataset                    | Source                                                                              | Files / format                                                                                                                | Auto-dispatch                    | Dataset-specific flags                                   |
+| -------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | -------------------------------------------------------- |
+| NS (non-symmetric forcing) | [FNO GitHub](https://github.com/neuraloperator/neuraloperator/tree/master)          | `ns_V1e-4_N10000_T30.mat` (10,000 downsampled trajectories) + `ns_data_V1e-4_N20_T50_R256test.mat` (20 super-resolution test) | `.mat` extension                 | `--T=20 --super --super_path=<super .mat>`               |
+| NS-Sym (symmetric forcing) | generated locally, see below                                                        | `ns_V0.001_N1200_T30_cos4.mat` (1,200 trajectories) + `ns_V0.001_N1200_T30_cos4_super.mat` (100 super-resolution test)        | `.mat` extension                 | `--T=10 --super --super_path=<super .mat>`               |
+| SWE (PDEArena)             | [PDEArena data generation instructions](https://microsoft.github.io/pdearena/data/) | `ShallowWater2D/` with `train/valid/test.zarr` and `normstats.pt`                                                             | directory named `ShallowWater2D` | `--T=9 --time_pad --modes=32` (no `--super`)             |
+| SWE (PDEBench)             | [PDEBench GitHub](https://github.com/pdebench/PDEBench), 2D shallow-water           | `2D_rdb_NA_NA.h5`, trajectories of shape `(101, X, Y, 1)` float32                                                             | filename starting with `2D_rdb`  | `--T=24 --rdb_super_res=<native res> --rdb_downsample=4` |
 
-| Scale | Native resolution | Trajectories | `--rdb_super_res` | `--rdb_downsample` | After downsample | `--modes` |
-| ----- | ----------------- | ------------ | ----------------- | ------------------ | ---------------- | --------- |
-| Full  | 128×128           | 1000         | 128               | 4                  | 32×32            | 12        |
-| Small | 64×64             | 200          | 64                | 4                  | 16×16            | 8         |
+NS-Sym is generated with the bundled script (from `examples/G-FNO`):
 
-> `modes` must be ≤ the downsampled resolution (16×16 → modes ≤ 8; 32×32 → modes can be 12).
+```bash
+python "data_generation/navier_stokes/ns_2d_rt.py" --nu=1e-4 --T=30 --N=1200 --save_path="./data" --ntest=100 --period=4 --device=auto
+```
 
-### 3.2 Other datasets
+### 3.2 Tested data: SWE-PDEBench (verified)
 
-- **Navier-Stokes (symmetric forcing)**: generated via `examples/G-FNO/data_generation/navier_stokes/ns_2d_rt.py`:
-  ```bash
-  python "data_generation/navier_stokes/ns_2d_rt.py" --nu=1e-4 --T=30 --N=1200 --save_path="./data" --ntest=100 --period=4 --device=auto
-  ```
-- **NS / PDEArena shallow-water**: follow the upstream sources of each dataset, place them under local `data/`, and pass absolute/relative paths to `experiments.py`.
+The PDEBench shallow-water dataset is the mainline used for development and verification (loss alignment and CINN enablement). The rdb branch average-pools the spatial dimensions by `--rdb_downsample` and requires `--T=24`; `--super` enables the built-in super-resolution test (the loader retains the native-resolution test trajectories, so no `--super_path` is needed). Both scales below have been verified for training in dynamic-graph and CINN modes:
+
+| Scale | Native resolution | Trajectories | Size   | `--rdb_super_res` | `--rdb_downsample` | After downsample | `--modes` |
+| ----- | ----------------- | ------------ | ------ | ----------------- | ------------------ | ---------------- | --------- |
+| Full  | 128×128           | 1000         | ~6.6GB | 128               | 4                  | 32×32            | 12        |
+| Small | 64×64             | 200          | ~333MB | 64                | 4                  | 16×16            | 8         |
+
+> - `modes` must be ≤ the downsampled resolution (16×16 → modes ≤ 8; 32×32 → modes can be 12).
+> - The rdb loader reads all trajectories into memory at once; the full dataset needs roughly 13GB of host RAM. On memory-constrained machines, a subset of trajectories in the same format works identically.
 
 ---
 
@@ -134,6 +142,10 @@ For the full dataset, set `--rdb_super_res=128`, `--modes=12`, and scale `--ntra
 | `--device`   | runtime device                                             | auto (cpu/gpu/...)     |
 
 > Note: to offset the extra parameters introduced by the stabilizer dimension, G-FNO typically **reduces channel width rather than modes** (see the paper, Appendix A.2).
+
+### 5.4 Evaluation
+
+There is no standalone evaluation command. Evaluation runs automatically at the end of every `experiments.py` run: the best-validation checkpoint (`{results_path}/<timestamp>[_<suffix>]/model.pt`, saved whenever validation improves) is reloaded, and the script reports test error, rotation/reflection equivariance errors, mean per-step inference time, and — with `--super` — super-resolution test errors (not supported for PDEArena). Evaluating an existing checkpoint therefore requires a training run; no checkpoint-loading eval entry is provided.
 
 ---
 
