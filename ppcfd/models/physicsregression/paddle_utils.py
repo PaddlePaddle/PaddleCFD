@@ -93,5 +93,33 @@ def _Tensor_max(self, *args, **kwargs):
     return ret
 
 setattr(paddle.Tensor, "_max", _Tensor_max)
+
+
+class TraceableLinear(paddle.compat.nn.Linear):
+    """paddle.compat.nn.Linear 的动转静友好版本。
+
+    compat 版的 forward 走 paddle.compat.nn.functional.linear，其函数体里有
+    get_flags / is_compiled_with_cuda / in_dynamic_or_pir_mode 组成的运行时分支，
+    SOT 无法在符号执行阶段求值，于是每调用一次 Linear 就 break graph 一次。
+    Transformer 的算子几乎全集中在 Linear 前后，断点密集会把子图切碎到
+    MIN_GRAPH_SIZE(默认 10) 以下，整段退回动态图，CINN 完全接不到热点。
+
+    这里改成 matmul + bias 直写。注意 bias 的分支条件必须是构造期就定下的
+    python bool：写成 `if self.bias is not None` 同样会断图，因为 self.bias 是
+    Parameter，SOT 无法在符号执行阶段对它做 is-None 判定。
+    weight 仍是 [out_features, in_features] 布局，已有的权重文件可以直接复用。
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._use_bias = self.bias is not None
+
+    def forward(self, input):
+        out = paddle.matmul(input, self.weight, transpose_y=True)
+        if self._use_bias:
+            out = out + self.bias
+        return out
+
+
 ############################## 相关utils函数，如上 ##############################
 

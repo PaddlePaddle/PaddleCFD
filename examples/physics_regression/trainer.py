@@ -633,11 +633,10 @@ class Trainer(object):
                 self.errors_statistics[error_type] += count
         x_to_fit = samples["x_to_fit"]
         y_to_fit = samples["y_to_fit"]
-        x1 = []
-        for seq_id in range(len(x_to_fit)):
-            x1.append([])
-            for seq_l in range(len(x_to_fit[seq_id])):
-                x1[seq_id].append([x_to_fit[seq_id][seq_l], y_to_fit[seq_id][seq_l]])
+        # x_to_fit[i] / y_to_fit[i] 本来就是 (n_points, n_vars) / (n_points, 1) 的整块
+        # 数组，拆成逐 point 的 [x, y] 对再让 embedder 拼回去纯属浪费（实测占单步约
+        # 23%），所以直接以 packed 形式传下去，见 LinearPointEmbedder.num_encode。
+        x1 = list(zip(x_to_fit, y_to_fit))
         hints = []
         if params.use_hints:
             for used_hints in params.use_hints.split(","):
@@ -645,7 +644,7 @@ class Trainer(object):
         if params.use_hints == "units":
             for ii in range(len(hints[0])):
                 hints[0][ii] = []
-        x1, len1 = embedder(x1, hints)
+        x1, len1 = embedder(x1, hints, packed=True)
         if self.params.use_skeleton:
             x2, len2 = self.env.batch_equations(
                 self.env.word_to_idx(

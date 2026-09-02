@@ -36,17 +36,13 @@ def get_masks(slen, lengths, causal):
     """
     Generate hidden states mask, and optionally an attention mask.
     """
-    if __debug__:  # 只在调试模式下检查，避免频繁GPU-CPU同步
-        assert paddle.max(lengths).item() <= slen
     bs = lengths.shape[0]
-    alen = paddle.arange(slen, dtype=paddle.long, device=lengths.device)
+    alen = paddle.arange(slen, dtype=paddle.long)
     mask = alen < lengths[:, None]
     if causal:
         attn_mask = paddle.tile(alen[None, None, :], (bs, slen, 1)) <= alen[None, :, None]
     else:
         attn_mask = mask
-    assert tuple(mask.shape) == (bs, slen)
-    assert causal is False or tuple(attn_mask.shape) == (bs, slen, slen)
     return mask, attn_mask
 
 
@@ -62,10 +58,10 @@ class MultiHeadAttention(paddle.nn.Module):
         self.dropout = dropout
         self.normalized_attention = normalized_attention
         assert self.dim % self.n_heads == 0
-        self.q_lin = paddle.compat.nn.Linear(dim, dim)
-        self.k_lin = paddle.compat.nn.Linear(src_dim, dim)
-        self.v_lin = paddle.compat.nn.Linear(src_dim, dim)
-        self.out_lin = paddle.compat.nn.Linear(dim, dim)
+        self.q_lin = TraceableLinear(dim, dim)
+        self.k_lin = TraceableLinear(src_dim, dim)
+        self.v_lin = TraceableLinear(src_dim, dim)
+        self.out_lin = TraceableLinear(dim, dim)
         if self.normalized_attention:
             self.attention_scale = paddle.nn.Parameter(
                 paddle.tensor(1.0 / math.sqrt(dim // n_heads))
@@ -79,8 +75,11 @@ class MultiHeadAttention(paddle.nn.Module):
         Mask is (bs, klen) (non-causal) or (bs, klen, klen)
         """
         assert not (use_cache and self.cache is None)
+        
+        kv_is_none = kv is None
+        has_mask = mask is not None
         bs, qlen, dim = input.shape
-        if kv is None:
+        if kv_is_none:
             klen = qlen if not use_cache else self.cache["slen"] + qlen
         else:
             klen = kv.shape[1]
@@ -100,7 +99,7 @@ class MultiHeadAttention(paddle.nn.Module):
             return x.transpose(1, 2).reshape(bs, -1, self.n_heads * dim_per_head)
 
         q = shape(self.q_lin(input))
-        if kv is None:
+        if kv_is_none:
             k = shape(self.k_lin(input))
             v = shape(self.v_lin(input))
         elif not use_cache or self.layer_id not in self.cache:
@@ -109,7 +108,7 @@ class MultiHeadAttention(paddle.nn.Module):
             v = shape(self.v_lin(v))
         if use_cache:
             if self.layer_id in self.cache:
-                if kv is None:
+                if kv_is_none:
                     k_, v_ = self.cache[self.layer_id]
                     k = paddle.cat([k_, k], dim=2)
                     v = paddle.cat([v_, v], dim=2)
@@ -123,10 +122,11 @@ class MultiHeadAttention(paddle.nn.Module):
         else:
             q = q / math.sqrt(dim_per_head)
         scores = paddle.matmul(q, k.transpose(2, 3))
-        if mask is not None:
+        if has_mask:
             mask_reshape = (bs, 1, qlen, klen) if mask.dim() == 3 else (bs, 1, 1, klen)
             mask = (mask == 0).reshape(mask_reshape).expand_as(scores)
-            scores.masked_fill_(mask, -float("inf"))
+            
+            scores = scores.masked_fill(mask, -float("inf"))
         weights = paddle.compat.nn.functional.softmax(scores.float(), dim=-1).type_as(
             scores
         )
@@ -146,10 +146,10 @@ class TransformerFFN(paddle.nn.Module):
         self.dropout = dropout
         self.hidden_layers = hidden_layers
         self.midlin = paddle.nn.ModuleList()
-        self.lin1 = paddle.compat.nn.Linear(in_dim, dim_hidden)
+        self.lin1 = TraceableLinear(in_dim, dim_hidden)
         for i in range(1, self.hidden_layers):
-            self.midlin.append(paddle.compat.nn.Linear(dim_hidden, dim_hidden))
-        self.lin2 = paddle.compat.nn.Linear(dim_hidden, out_dim)
+            self.midlin.append(TraceableLinear(dim_hidden, dim_hidden))
+        self.lin2 = TraceableLinear(dim_hidden, out_dim)
 
     def forward(self, input):
         x = self.lin1(input)
@@ -336,12 +336,12 @@ class TransformerModel(paddle.nn.Module):
         self.cache = None
         if self.with_output:
             assert not self.use_prior_embeddings
-            self.proj = paddle.compat.nn.Linear(self.dim, self.n_words, bias=True)
+            self.proj = TraceableLinear(self.dim, self.n_words, bias=True)
             if params.share_inout_emb and False:
                 self.proj.weight = self.embeddings.weight
         if self.is_decoder and params.decode_physical_units == "double-seq":
-            self.units_enc = paddle.compat.nn.Linear(self.dim * 5, self.dim)
-            self.units_dec = paddle.compat.nn.Linear(self.dim, self.dim * 5)
+            self.units_enc = TraceableLinear(self.dim * 5, self.dim)
+            self.units_dec = TraceableLinear(self.dim, self.dim * 5)
 
     def forward(self, mode, **kwargs):
         """
@@ -376,24 +376,29 @@ class TransformerModel(paddle.nn.Module):
         """
         slen, bs = x.shape[:2]
         assert lengths.shape[0] == bs
-        if __debug__:  # 只在调试模式下检查，避免频繁GPU-CPU同步
-            assert paddle.max(lengths).item() <= slen
+        
         x = x.transpose(0, 1)
         assert (src_enc is None) == (src_len is None)
-        if src_enc is not None:
+        
+        has_src_enc = src_enc is not None
+        has_units = units is not None
+        has_positions = positions is not None
+        has_pos_emb = self.position_embeddings is not None
+        if has_src_enc:
             assert self.is_decoder
             assert src_enc.shape[0] == bs
         assert not (use_cache and self.cache is None)
-        if self.is_decoder and units is not None:
+        if self.is_decoder and has_units:
             units = units.transpose(0, 1)
         mask, attn_mask = get_masks(slen, lengths, causal)
-        if self.is_decoder and src_enc is not None:
+        if self.is_decoder and has_src_enc:
+           
             src_mask = (
-                paddle.arange(paddle.max(src_len), dtype=paddle.long, device=lengths.device)
+                paddle.arange(src_enc.shape[1], dtype=paddle.long)
                 < src_len[:, None]
             )
-        if positions is None:
-            # PaddlePaddle: 直接使用 paddle.arange 创建位置张量
+        if not has_positions:
+            
             positions = paddle.arange(slen, dtype='int64').unsqueeze(0)
         else:
             assert tuple(positions.shape) == (slen, bs)
@@ -404,7 +409,7 @@ class TransformerModel(paddle.nn.Module):
             positions = positions[:, -_slen:]
             mask = mask[:, -_slen:]
             attn_mask = attn_mask[:, -_slen:]
-            if self.is_decoder and units is not None:
+            if self.is_decoder and has_units:
                 units = units[:, -_slen:]
         if TransformerModel.STORE_OUTPUTS and not self.training:
             self.outputs = []
@@ -412,14 +417,14 @@ class TransformerModel(paddle.nn.Module):
             tensor = self.embeddings(x)
         else:
             tensor = x
-        if self.is_decoder and units is not None:
+        if self.is_decoder and has_units:
             units_tensor = self.embeddings(units)
             units_tensor = units_tensor.reshape(
                 (units_tensor.shape[0], units_tensor.shape[1], -1)
             )
             units_tensor = self.units_enc(units_tensor)
             tensor = tensor + units_tensor
-        if self.position_embeddings is not None:
+        if has_pos_emb:
             tensor = tensor + self.position_embeddings(positions).expand_as(tensor)
         tensor = self.layer_norm_emb(tensor)
         tensor = paddle.nn.functional.dropout(
@@ -436,7 +441,7 @@ class TransformerModel(paddle.nn.Module):
             )
             tensor = tensor + attn
             tensor = self.layer_norm1[i](tensor)
-            if self.is_decoder and src_enc is not None:
+            if self.is_decoder and has_src_enc:
                 self.encoder_attn[i].cache = self.cache
                 attn = self.encoder_attn[i](
                     tensor, src_mask, kv=src_enc, use_cache=use_cache
@@ -465,17 +470,15 @@ class TransformerModel(paddle.nn.Module):
             `get_scores` is a boolean specifying whether we need to return scores
         """
         x = tensor[pred_mask.unsqueeze(-1).expand_as(tensor)].reshape(-1, self.dim)
-        if __debug__:  # 只在调试模式下检查
-            assert (y == self.pad_index).sum().item() == 0
+        
+        has_y_units = y_units is not None
         scores = self.proj(x)
         loss = paddle.nn.functional.cross_entropy(
             input=scores.float(), label=y, reduction="mean"
         )
         next_word = paddle.topk(scores, 1)[1].squeeze(1)
-        if y_units is not None:
+        if has_y_units:
             x_dim = tensor[pred_mask.unsqueeze(-1).expand_as(tensor)].reshape(-1, self.dim)
-            if __debug__:  # 只在调试模式下检查
-                assert (y_units == self.pad_index).sum().item() == 0
             latent_units = self.units_dec(x_dim).reshape(-1, self.dim)
             scores_units = self.proj(latent_units)
             loss_units = paddle.nn.functional.cross_entropy(
@@ -567,7 +570,9 @@ class TransformerModel(paddle.nn.Module):
                 if paddle.max(unfinished_sents) == 0:
                     break
             if cur_len == max_len:
-                generated[-1].masked_fill_(unfinished_sents.bool(), self.eos_index)
+                generated[-1] = generated[-1].masked_fill(
+                    unfinished_sents.bool(), self.eos_index
+                )
             assert (generated == self.eos_index).sum() == 2 * bs
             generated = generated.unsqueeze(-1).view(generated.shape[0], bs)
             rows, cols = paddle.nonzero(generated[1:] == self.eos_index, as_tuple=True)
@@ -718,7 +723,9 @@ class TransformerModel(paddle.nn.Module):
                 if paddle.max(unfinished_sents) == 0:
                     break
             if cur_len == max_len:
-                generated1[-1].masked_fill_(unfinished_sents.byte(), self.eos_index)
+                generated1[-1] = generated1[-1].masked_fill(
+                    unfinished_sents.byte(), self.eos_index
+                )
             assert (generated1 == self.eos_index).sum() == 2 * bs
             generated1 = generated1.unsqueeze(-1).view(generated1.shape[0], bs)
             rows, cols = paddle.nonzero(generated1[1:] == self.eos_index, as_tuple=True)

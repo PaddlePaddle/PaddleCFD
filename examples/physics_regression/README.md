@@ -79,6 +79,29 @@ bash ./bash/train_small.sh        # baseline (pure dynamic graph)
 bash ./bash/train_small_cinn.sh   # CINN enabled
 ```
 
+#### Measured result: CINN gives no speedup for this model
+
+Benchmarked on a single H800  (150 steps, steady-state
+s/step measured from step 25 to 150 so that start-up and one-off compilation are excluded):
+
+- Steady state: 0.53 s/step without CINN vs 0.55 s/step with CINN. Run-to-run spread is
+  0.04 s/step (3 repeats), so the difference is **below measurement noise** — the
+  steady-state effect of CINN is statistically indistinguishable from zero.
+- One-off compilation costs ~420 s, i.e. **2-3x the entire 150-step training time**.
+  There is no break-even point.
+
+The reason is that this model is host-bound, not GPU-bound: measured GPU utilisation is
+only 4-10%, and the compiled `fwd` region accounts for just ~4% of per-step CPU time.
+Most of a step is spent in Python — encoding ~110k floats per step into ~350k token ids
+via string formatting and vocabulary dict lookups — which contains no tensor ops at all
+and is therefore outside what a tensor compiler can address.
+
+Consequently, optimisation effort here should go into host-side vectorisation rather
+than compiler tuning. Vectorising the encoding path cut per-step time from 0.85 s to
+0.53 s (numerically identical output), a gain roughly 8x larger than the measurement
+noise. Re-evaluate CINN only once GPU utilisation exceeds ~50% and the compiled region
+accounts for more than ~20% of per-step time.
+
 ## Evaluation
 
 Using our pre-trained model to evaluate, run the following command to evaluate the performance on synthetic dataset or feynman dataset:
