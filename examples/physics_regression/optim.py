@@ -374,7 +374,7 @@ def get_optimizer(parameters, lr, s):
         assert "lr" in optim_params
     else:
         raise Exception('Unknown optimization method: "%s"' % method)
-    expected_args = inspect.getargspec(optim_fn.__init__)[0]
+    expected_args = inspect.getfullargspec(optim_fn.__init__)[0]
     assert expected_args[:2] == ["self", "params"]
     if not all(k in expected_args[2:] for k in optim_params.keys()):
         raise Exception(

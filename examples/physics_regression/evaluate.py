@@ -20,6 +20,24 @@ from ppcfd.models.physicsregression.symbolicregression.model.sklearn_wrapper imp
 from tqdm import tqdm
 
 np.seterr(all="ignore")
+
+
+def _seq_to_numpy(seq):
+    """Ensure a batch of per-expression arrays is numpy, not paddle.Tensor.
+
+    The whole symbolic pipeline downstream (Oracle, GA, MCTS, sklearn_wrapper)
+    is numpy-based, but x_to_fit/y_to_fit may arrive as paddle.Tensor in this
+    ported codebase. Convert once at this boundary instead of patching every
+    numpy call site.
+    """
+    out = []
+    for v in seq:
+        if hasattr(v, "detach"):  # paddle.Tensor
+            v = v.detach().cpu().numpy()
+        out.append(v)
+    return out
+
+
 symbolic_str_dic = {
     "add": "+",
     "mul": "*",
@@ -399,8 +417,8 @@ class Evaluator(object):
                 current_pos += len(samples["x_to_fit"])
                 continue
             time1 = time.time()
-            x_to_fit = samples["x_to_fit"]
-            y_to_fit = samples["y_to_fit"]
+            x_to_fit = _seq_to_numpy(samples["x_to_fit"])
+            y_to_fit = _seq_to_numpy(samples["y_to_fit"])
             infos = samples["infos"]
             tree = samples["tree"]
             real_variables = samples["real_variables"]
@@ -723,6 +741,7 @@ class Evaluator(object):
                         ].extend([[] for _ in range(len(gens))])
                 batch_results = pd.DataFrame.from_dict(batch_results)
                 if first_write:
+                    os.makedirs(os.path.dirname(save_file), exist_ok=True)
                     batch_results.to_csv(save_file, index=False)
                 else:
                     batch_results.to_csv(save_file, mode="a", header=False, index=False)

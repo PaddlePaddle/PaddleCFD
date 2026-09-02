@@ -294,14 +294,20 @@ class Oracle:
             g_pred = xx.grad.detach().cpu().clone().unsqueeze(0).squeeze(0)
             gs_pred = paddle.cat((gs_pred, g_pred), dim=0)
         hs_pred = paddle.zeros((0, num_variables, num_variables))
+
+        def _model_2d(v):
+            # 模型按 2D 批量输入 (1, num_variables) 构建，这里与一阶梯度循环保持一致，
+            # 避免 1D 输入导致二阶反向图退化（LinearV2DoubleGradNode 空 holder）。
+            return model(v.reshape((1, num_variables)))
+
         for x in test_set:
             # 确保输入张量可求导（PaddlePaddle: 必须设置以计算二阶导数）
             xx = paddle.from_numpy(x).float().to(device=self.params.device)
             xx.stop_gradient = False
 
-            # 创建 Hessian 对象
+            # 创建 Hessian 对象（xs 保持 1D 作为求导变量，模型内部 reshape 成 2D）
             h_pred_obj = paddle.incubate.autograd.Hessian(
-                func=model, xs=xx, is_batched=False
+                func=_model_2d, xs=xx, is_batched=False
             )
             # PaddlePaddle: 使用切片操作提取实际的张量矩阵
             h_pred = h_pred_obj[:]
@@ -541,6 +547,14 @@ class Oracle:
         self, model, x, y, median_y, fixed_x, sep_groups, sep_types
     ):
         params = self.params
+        # 本函数下游按 numpy 语义使用 x（.copy()、paddle.from_numpy、布尔索引、切片赋值），
+        # 但 x_to_fit 传进来可能是 paddle.Tensor，这里统一转成 numpy。
+        if isinstance(x, paddle.Tensor):
+            x = x.detach().cpu().numpy()
+        # y 在下游仅用于 y.dtype（numpy .astype 的目标类型），若为 paddle.Tensor
+        # 其 dtype 是 paddle.DataType，numpy 无法识别，这里同样转成 numpy。
+        if isinstance(y, paddle.Tensor):
+            y = y.detach().cpu().numpy()
         if median_y is None:
             median_y = 100000000.0
         new_xs = []
@@ -874,6 +888,12 @@ class Oracle:
         return refined_node
 
     def safely_refine(self, X, y, node_to_refine, _fn, safety_types=["id"]):
+        # X/y 下游走 numpy ufunc（np.sin/np.cos 等）与 refine 的 numpy 拟合，
+        # 但 original_xs/original_ys 可能是 paddle.Tensor，这里在类型边界统一转 numpy。
+        if isinstance(X, paddle.Tensor):
+            X = X.detach().cpu().numpy()
+        if isinstance(y, paddle.Tensor):
+            y = y.detach().cpu().numpy()
         refined_nodes = []
         if _fn == "id":
             pass
