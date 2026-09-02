@@ -8,8 +8,10 @@ hydra-core
 imageio
 matplotlib
 meshio==5.3.4
+numexpr
 numpy>=1.20.0,<2.0.0
 opt-einsum
+openpyxl
 pandas~=2.2.1
 pydantic>=2.5.0
 pyevtk
@@ -27,6 +29,7 @@ seaborn
 numpy-stl
 sympy
 tabulate
+timeout-decorator
 tqdm
 typing-extensions
 uvicorn~=0.34.2
