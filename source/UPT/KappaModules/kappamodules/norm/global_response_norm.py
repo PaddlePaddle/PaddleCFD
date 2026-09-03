@@ -42,8 +42,8 @@ class GlobalResponseNorm(paddle.nn.Layer):
         x_g = paddle.sqrt(paddle.sum(paddle.square(x), axis=self.spatial_dim, keepdim=True))
         x_n = x_g / (x_g.mean(axis=self.channel_dim, keepdim=True) + self.eps)
         return x + paddle.add(
-            self.bias.view(self.wb_shape),
-            1 * self.weight.view(self.wb_shape) * (x * x_n),
+            paddle.reshape(self.bias, shape=self.wb_shape),
+            paddle.reshape(self.weight, shape=self.wb_shape) * (x * x_n),
         )
 
 

@@ -82,6 +82,7 @@ class SgdTrainer(paddle.nn.Layer):
         find_unused_params: bool = False,
         static_graph: bool = False,
         use_paddle_static: bool = False,
+        compiler: str = None,
         main_sampler_kwargs: dict = None,
         config_provider: ConfigProviderBase = None,
         summary_provider: SummaryProviderBase = None,
@@ -145,6 +146,11 @@ class SgdTrainer(paddle.nn.Layer):
         self.find_unused_params = find_unused_params
         self.static_graph = static_graph
         self.use_paddle_static = use_paddle_static
+        if compiler is None:
+            compiler = "to_static" if use_paddle_static else "none"
+        if compiler not in {"none", "to_static", "cinn"}:
+            raise ValueError(f"unsupported compiler mode: {compiler}")
+        self.compiler = compiler
         self.exit_on_nan_loss = exit_on_nan_loss
         self.initializer = create(
             initializer, initializer_from_kwargs, path_provider=self.path_provider
@@ -483,8 +489,8 @@ class SgdTrainer(paddle.nn.Layer):
         return model
 
     def wrap_compile(self, ddp_model):
-        if not self.use_paddle_static:
-            self.logger.info(f"paddle.jit.to_static not used (use_paddle_static == False)")
+        if self.compiler == "none":
+            self.logger.info("compiler mode: none")
             return ddp_model
         if is_distributed():
             if self.static_graph:
@@ -492,8 +498,9 @@ class SgdTrainer(paddle.nn.Layer):
                     f"paddle.jit.to_static static_graph=True is not supported -> disable paddle.jit.to_static"
                 )
                 return ddp_model
-        self.logger.info(f"wrapping model with paddle.jit.to_static")
-        return paddle.jit.to_static(ddp_model)
+        backend = "CINN" if self.compiler == "cinn" else None
+        self.logger.info(f"compiler mode: {self.compiler} (backend={backend})")
+        return paddle.jit.to_static(ddp_model, backend=backend)
 
     def before_training(self):
         pass

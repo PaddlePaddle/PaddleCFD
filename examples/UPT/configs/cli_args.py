@@ -17,6 +17,7 @@ class CliArgs:
     wandb_config: str
     cudnn_benchmark: bool
     cuda_profiling: bool
+    compiler: str
     testrun: bool
     minmodelrun: bool
     mindatarun: bool
@@ -89,6 +90,7 @@ def parse_run_cli_args() -> CliArgs:
         "--no_cuda_profiling", action="store_false", dest="cuda_profiling"
     )
     cuda_profiling_group.set_defaults(cuda_profiling=None)
+    parser.add_argument("--compiler", choices=["none", "cinn"])
     testrun_group = parser.add_mutually_exclusive_group()
     testrun_group.add_argument("--testrun", action="store_true")
     testrun_group.add_argument("--minmodelrun", action="store_true")

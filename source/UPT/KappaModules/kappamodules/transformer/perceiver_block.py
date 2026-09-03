@@ -81,10 +81,15 @@ class PerceiverBlock(paddle.nn.Layer):
         return self.ls2(self.mlp(self.norm2(x)))
 
     def forward(self, q, kv, attn_mask=None):
+        attn_residual = self._attn_residual_path(
+            q,
+            kv=kv,
+            attn_mask=attn_mask,
+        )
         q = self.drop_path1(
             q,
-            residual_path=self._attn_residual_path,
-            residual_path_kwargs=dict(kv=kv, attn_mask=attn_mask),
+            residual=attn_residual,
         )
-        q = self.drop_path2(q, self._mlp_residual_path)
+        mlp_residual = self._mlp_residual_path(q)
+        q = self.drop_path2(q, residual=mlp_residual)
         return q

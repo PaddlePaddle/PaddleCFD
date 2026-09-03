@@ -90,6 +90,8 @@ def main_single(device):
         mindatarun=cli_args.mindatarun,
         mindurationrun=cli_args.mindurationrun,
     )
+    if cli_args.compiler is not None:
+        stage_hp["trainer"]["compiler"] = cli_args.compiler
     train_stage(
         stage_hp=stage_hp, static_config=static_config, cli_args=cli_args, device=device
     )

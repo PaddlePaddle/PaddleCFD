@@ -52,7 +52,7 @@ class ConvNextBlock(paddle.nn.Layer):
         return x
 
     def forward(self, x):
-        return self.drop_path(x, self._forward)
+        return self.drop_path(x, residual=self._forward(x))
 
 
 class ConvNextStage(paddle.nn.Layer):

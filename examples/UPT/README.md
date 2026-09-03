@@ -148,6 +148,55 @@ python main_train.py \
   --hp yamls/shapenetcar/upt/dim768_seq1024sdf512_cnext_lr5e4_sd02_reprcnn_grn_grid32.yaml
 ```
 
+### 可选编译器模式
+
+`--compiler none` 使用默认动态图训练：
+
+```bash
+python main_train.py \
+  --accelerator gpu \
+  --devices 0 \
+  --wandb_mode disabled \
+  --compiler none \
+  --hp yamls/shapenetcar/upt/dim768_seq1024sdf512_cnext_lr5e4_sd02_reprcnn_grn_grid32.yaml
+```
+
+`--compiler cinn` 使用 `paddle.jit.to_static(..., backend="CINN")`：
+
+```bash
+export FLAGS_enable_pir_api=true
+export FLAGS_prim_enable_dynamic=true
+export FLAGS_prim_all=true
+export FLAGS_use_cinn=true
+export ENABLE_FALL_BACK=1
+
+python main_train.py \
+  --accelerator gpu \
+  --devices 0 \
+  --wandb_mode disabled \
+  --compiler cinn \
+  --hp yamls/shapenetcar/upt/dim768_seq1024sdf512_cnext_lr5e4_sd02_reprcnn_grn_grid32.yaml
+```
+
+不传 `--compiler` 时保持原有配置行为。`ENABLE_FALL_BACK=1` 允许暂不支持的算子回退到 Paddle 执行，支持的子图仍由 CINN 编译。
+
+### 动态图与 CINN 性能对比
+
+下面的脚本会在同一张 GPU 上依次运行动态图和 CINN，并比较排除首个预热 epoch 后的稳定 update 时间与吞吐量：
+
+```bash
+python benchmark_cinn.py \
+  --device 0 \
+  --warmup_epochs 1 \
+  --hp yamls/shapenetcar/upt/dim768_seq1024sdf512_cnext_lr5e4_sd02_reprcnn_grn_grid32.yaml
+```
+
+快速验证两种模式都能运行时，可以添加 `--mindurationrun`。正式性能对比应使用完整训练时长，并确保测试期间 GPU 没有其他任务。结果会保存到：
+
+```text
+PaddleCFD/output/UPT/benchmarks/<timestamp>/result.json
+```
+
 训练日志和 checkpoint 会写入 `PaddleCFD/output/UPT/stage1/<stage_id>/`。
 
 ## 6. 评估与推理

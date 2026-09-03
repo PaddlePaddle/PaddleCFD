@@ -1,4 +1,3 @@
-import einops
 import paddle
 
 from kappamodules.init import (init_truncnormal_zero_bias,
@@ -50,20 +49,15 @@ class PerceiverAttention(paddle.nn.Layer):
             kv = paddle.concat([kv, q], dim=1)
         kv = self.kv(kv)
         q = self.q(q)
-        q = einops.rearrange(
+        q = paddle.reshape(
             q,
-            "bs seqlen_q (num_heads head_dim) -> bs num_heads seqlen_q head_dim",
-            num_heads=self.num_heads,
-            head_dim=self.head_dim,
+            shape=[0, 0, self.num_heads, self.head_dim],
         )
-        k, v = einops.rearrange(
+        kv = paddle.reshape(
             kv,
-            "bs seqlen_kv (two num_heads head_dim) -> two bs num_heads seqlen_kv head_dim",
-            two=2,
-            num_heads=self.num_heads,
-            head_dim=self.head_dim,
-        ).unbind(0)
-
+            shape=[0, 0, 2, self.num_heads, self.head_dim],
+        )
+        k, v = paddle.unstack(kv, axis=2)
 
         orig_dtype = q.dtype
         use_bfloat16 = (
@@ -79,17 +73,10 @@ class PerceiverAttention(paddle.nn.Layer):
             if attn_mask is not None:
                 attn_mask = attn_mask.cast(paddle.bfloat16)
 
-        q_transposed = q.transpose([0, 2, 1, 3])  # [4, 1024, 12, 64]
-        k_transposed = k.transpose([0, 2, 1, 3])    # [4, 3586, 12, 64]
-        v_transposed = v.transpose([0, 2, 1, 3])  # [4, 3586, 12, 64]
-        x = F.scaled_dot_product_attention(
-            q_transposed, k_transposed, v_transposed, attn_mask=attn_mask
-        )
+        x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask)
         if x.dtype != orig_dtype:
             x = x.cast(orig_dtype)
-        x = einops.rearrange(
-            x, "bs seqlen num_heads head_dim -> bs seqlen (num_heads head_dim)"
-        )
+        x = paddle.flatten(x, start_axis=2, stop_axis=3)
 
         # scale = 1.0 / paddle.sqrt(paddle.to_tensor(self.head_dim, dtype=q.dtype))
         # attn = paddle.matmul(q, k.transpose([0, 1, 3, 2])) * scale

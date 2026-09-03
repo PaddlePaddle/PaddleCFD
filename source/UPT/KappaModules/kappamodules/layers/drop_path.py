@@ -44,11 +44,22 @@ class DropPath(paddle.nn.Sequential):
     def keep_prob(self):
         return 1.0 - self.drop_prob
 
-    def forward(self, x, residual_path=None, residual_path_kwargs=None):
-        assert (len(self) == 0) ^ (residual_path is None)
+    def forward(
+        self,
+        x,
+        residual_path=None,
+        residual_path_kwargs=None,
+        residual=None,
+    ):
+        if residual is not None:
+            assert len(self) == 0 and residual_path is None
+        else:
+            assert (len(self) == 0) ^ (residual_path is None)
         residual_path_kwargs = residual_path_kwargs or {}
         if self.drop_prob == 0.0 or not self.training:
-            if residual_path is None:
+            if residual is not None:
+                return x + residual
+            elif residual_path is None:
                 return x + super().forward(x, **residual_path_kwargs)
             else:
                 return x + residual_path(x, **residual_path_kwargs)
@@ -63,12 +74,14 @@ class DropPath(paddle.nn.Sequential):
             if self.scale_by_keep:
                 # random_tensor.div_(self.keep_prob)
                 random_tensor = random_tensor / self.keep_prob
-            if residual_path is None:
+            if residual is not None:
+                return x + residual * random_tensor
+            elif residual_path is None:
                 return x + super().forward(x, **residual_path_kwargs) * random_tensor
             else:
                 return x + residual_path(x, **residual_path_kwargs) * random_tensor
         scale = bs / keep_count
-        perm = paddle.randperm(bs, device=x.device)[:keep_count]
+        perm = paddle.randperm(bs)[:keep_count]
         if self.scale_by_keep:
             alpha = scale
         else:
@@ -77,17 +90,21 @@ class DropPath(paddle.nn.Sequential):
             key: (value[perm] if paddle.is_tensor(value) else value)
             for key, value in residual_path_kwargs.items()
         }
-        if residual_path is None:
+        if residual is not None:
+            residual = residual[perm]
+        elif residual_path is None:
             residual = super().forward(x[perm], **residual_path_kwargs)
         else:
             residual = residual_path(x[perm], **residual_path_kwargs)
-        return paddle.index_add(
-            x.flatten(start_dim=1),
-            dim=0,
+        x_flat = paddle.flatten(x, start_axis=1)
+        residual_flat = paddle.flatten(residual.cast(x.dtype), start_axis=1)
+        x_flat = paddle.index_add(
+            x=x_flat,
             index=perm,
-            source=residual.to(x.dtype).flatten(start_dim=1),
-            alpha=alpha,
-        ).view_as(x)
+            axis=0,
+            value=residual_flat * alpha,
+        )
+        return paddle.reshape(x_flat, shape=x.shape)
 
     def extra_repr(self):
         return f"drop_prob={round(self.drop_prob, 3):0.3f}"

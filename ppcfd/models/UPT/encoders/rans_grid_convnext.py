@@ -1,4 +1,3 @@
-import einops
 import numpy as np
 import paddle
 import sys
@@ -99,9 +98,7 @@ class RansGridConvnext(SingleModelBase):
         return modifiers
 
     def forward(self, x):
-        x = einops.rearrange(
-            x, "batch_size height width depth dim -> batch_size dim height width depth"
-        )
+        x = paddle.transpose(x, perm=[0, 4, 1, 2, 3])
         if self.upsample_size is not None:
             target_size = self.upsample_size
             if isinstance(target_size, int):
@@ -119,10 +116,8 @@ class RansGridConvnext(SingleModelBase):
                     align_corners=True,
                 )
         x = self.model(x)
-        x = einops.rearrange(
-            x,
-            "batch_size dim height width depth -> batch_size (height width depth) dim",
-        )
+        x = paddle.transpose(x, perm=[0, 2, 3, 4, 1])
+        x = paddle.flatten(x, start_axis=1, stop_axis=3)
         x = x + self.type_token
         if self.add_pos_tokens:
             x = x + self.pos_tokens.expand(len(x), -1, -1)

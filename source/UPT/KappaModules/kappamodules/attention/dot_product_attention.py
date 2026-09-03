@@ -1,4 +1,3 @@
-import einops
 import paddle
 import paddle.nn.functional as F
 from kappamodules.functional.pos_embed import relative_position_indices
@@ -77,29 +76,26 @@ class DotProductAttention(paddle.nn.Layer):
             x = self.to_channel_last(x)
         else:
             og_shape = None
-        q, k, v = einops.rearrange(
+        qkv = paddle.reshape(
             self.qkv(x),
-            "bs seqlen (three num_heads head_dim) -> three bs num_heads seqlen head_dim",
-            three=3,
-            num_heads=self.num_heads,
-            head_dim=self.head_dim,
-        ).unbind(0)
+            shape=[0, 0, 3, self.num_heads, self.head_dim],
+        )
+        q, k, v = paddle.unstack(qkv, axis=2)
         if self.rel_pos_bias_table is not None:
             assert attn_mask is None
-            seqlen = x.size(1)
+            seqlen = x.shape[1]
             assert self.rel_pos_idx.shape == (
                 seqlen,
                 seqlen,
             ), f"invalid input seqlen {seqlen} (expected {self.rel_pos_idx.shape[0]})"
-            attn_mask = self.rel_pos_bias_table[self.rel_pos_idx.view(-1)].view(
-                *self.rel_pos_idx.shape, -1
+            rel_pos_idx = paddle.reshape(self.rel_pos_idx, shape=[-1])
+            attn_mask = paddle.reshape(
+                self.rel_pos_bias_table[rel_pos_idx],
+                shape=[*self.rel_pos_idx.shape, -1],
             )
-            attn_mask = (
-                einops.rearrange(attn_mask, "... num_heads -> 1 num_heads ...")
-                .contiguous()
-                .to(q.dtype)
-            )
-            
+            attn_mask = paddle.transpose(attn_mask, perm=[2, 0, 1]).unsqueeze(0)
+            attn_mask = attn_mask.cast(q.dtype)
+
         orig_dtype = x.dtype
         if x.dtype == paddle.float32:
             # 使用 bfloat16 是最推荐的，因为它动态范围大，CFD 模拟不容易崩
@@ -108,17 +104,12 @@ class DotProductAttention(paddle.nn.Layer):
             v = v.cast(paddle.bfloat16)
             if attn_mask is not None:
                 attn_mask = attn_mask.cast(paddle.bfloat16)
-        q_transposed = q.transpose([0, 2, 1, 3])  # [4, 1024, 12, 64]
-        k_transposed = k.transpose([0, 2, 1, 3])    # [4, 3586, 12, 64]
-        v_transposed = v.transpose([0, 2, 1, 3])  # [4, 3586, 12, 64]
         x = paddle.nn.functional.scaled_dot_product_attention(
-            q_transposed, k_transposed, v_transposed, attn_mask=attn_mask
+            q, k, v, attn_mask=attn_mask
         )
         if x.dtype != orig_dtype:
             x = x.cast(orig_dtype)
-        x = einops.rearrange(
-            x, "bs seqlen num_heads head_dim -> bs seqlen (num_heads head_dim)"
-        )
+        x = paddle.flatten(x, start_axis=2, stop_axis=3)
 
 
         # scale = 1.0 / paddle.sqrt(paddle.to_tensor(self.head_dim, dtype=q.dtype))
@@ -138,25 +129,29 @@ class DotProductAttention(paddle.nn.Layer):
 
 class DotProductAttention1d(DotProductAttention):
     def to_channel_last(self, x):
-        return einops.rearrange(x, "b c l -> b l c")
+        return paddle.transpose(x, perm=[0, 2, 1])
 
     def to_channel_first(self, x, og_shape):
-        return einops.rearrange(x, "b l c -> b c l")
+        return paddle.transpose(x, perm=[0, 2, 1])
 
 
 class DotProductAttention2d(DotProductAttention):
     def to_channel_last(self, x):
-        return einops.rearrange(x, "b c h w -> b (h w) c")
+        x = paddle.transpose(x, perm=[0, 2, 3, 1])
+        return paddle.flatten(x, start_axis=1, stop_axis=2)
 
     def to_channel_first(self, x, og_shape):
         _, _, h, w = og_shape
-        return einops.rearrange(x, "bs (h w) dim -> bs dim h w", h=h, w=w)
+        x = paddle.reshape(x, shape=[x.shape[0], h, w, x.shape[-1]])
+        return paddle.transpose(x, perm=[0, 3, 1, 2])
 
 
 class DotProductAttention3d(DotProductAttention):
     def to_channel_last(self, x):
-        return einops.rearrange(x, "b c h w d -> b (h w d) c")
+        x = paddle.transpose(x, perm=[0, 2, 3, 4, 1])
+        return paddle.flatten(x, start_axis=1, stop_axis=3)
 
     def to_channel_first(self, x, og_shape):
         _, _, h, w, d = og_shape
-        return einops.rearrange(x, "bs (h w d) dim -> bs dim h w d", h=h, w=w, d=d)
+        x = paddle.reshape(x, shape=[x.shape[0], h, w, d, x.shape[-1]])
+        return paddle.transpose(x, perm=[0, 4, 1, 2, 3])

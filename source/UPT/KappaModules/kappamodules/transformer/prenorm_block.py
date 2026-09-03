@@ -77,10 +77,11 @@ class PrenormBlock(paddle.nn.Layer):
         return self.ls2(self.mlp(self.norm2(x)))
 
     def forward(self, x, attn_mask=None):
+        attn_residual = self._attn_residual_path(x, attn_mask=attn_mask)
         x = self.drop_path1(
             x,
-            residual_path=self._attn_residual_path,
-            residual_path_kwargs=dict(attn_mask=attn_mask),
+            residual=attn_residual,
         )
-        x = self.drop_path2(x, self._mlp_residual_path)
+        mlp_residual = self._mlp_residual_path(x)
+        x = self.drop_path2(x, residual=mlp_residual)
         return x

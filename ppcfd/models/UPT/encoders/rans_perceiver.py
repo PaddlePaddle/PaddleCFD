@@ -1,4 +1,3 @@
-import einops
 import paddle
 from kappamodules.layers import ContinuousSincosEmbed
 from kappamodules.transformer import Mlp, PerceiverPoolingBlock
@@ -104,9 +103,7 @@ class RansPerceiver(SingleModelBase):
         if paddle.all(mask):
             mask = None
         else:
-            mask = einops.rearrange(
-                mask, "batchsize num_nodes -> batchsize 1 1 num_nodes"
-            )
+            mask = mask.unsqueeze(1).unsqueeze(1)
         x = self.mlp(x)
         x = self.block(kv=x, attn_mask=mask)
         if self.add_type_token:

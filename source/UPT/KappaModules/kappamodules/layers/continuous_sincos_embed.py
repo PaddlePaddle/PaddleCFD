@@ -1,4 +1,3 @@
-import einops
 import paddle
 
 
@@ -28,17 +27,15 @@ class ContinuousSincosEmbed(paddle.nn.Layer):
         out_dtype = coords.dtype
         ndim = coords.shape[-1]
         assert self.ndim == ndim
-        out = coords.unsqueeze(-1).to(self.omega.dtype) @ self.omega.unsqueeze(0)
+        out = coords.unsqueeze(-1).cast(self.omega.dtype) @ self.omega.unsqueeze(0)
         emb = paddle.concat([paddle.sin(out), paddle.cos(out)], axis=-1)
         if coords.ndim == 3:
-            emb = einops.rearrange(
-                emb, "bs num_points ndim dim -> bs num_points (ndim dim)"
-            )
+            emb = paddle.flatten(emb, start_axis=2, stop_axis=3)
         elif coords.ndim == 2:
-            emb = einops.rearrange(emb, "num_points ndim dim -> num_points (ndim dim)")
+            emb = paddle.flatten(emb, start_axis=1, stop_axis=2)
         else:
             raise NotImplementedError
-        emb = emb.to(out_dtype)
+        emb = emb.cast(out_dtype)
         if self.padding > 0:
             padding = paddle.zeros([*emb.shape[:-1], self.padding], dtype=emb.dtype)
             emb = paddle.concat([emb, padding], axis=-1)

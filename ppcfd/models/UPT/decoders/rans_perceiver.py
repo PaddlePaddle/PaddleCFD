@@ -1,4 +1,3 @@
-import einops
 import paddle
 from kappamodules.layers import ContinuousSincosEmbed, LinearProjection
 from kappamodules.transformer import Mlp, PerceiverBlock
@@ -70,9 +69,7 @@ class RansPerceiver(SingleModelBase):
         x = self.perceiver(q=query, kv=x)
         x = self.norm(x)
         x = self.pred(x)
-        x = einops.rearrange(
-            x, "batch_size max_num_points dim -> (batch_size max_num_points) dim"
-        )
+        x = paddle.flatten(x, start_axis=0, stop_axis=1)
         unbatched = paddle_unbatch(x, batch=unbatch_idx)
         x = paddle.concat([unbatched[i] for i in unbatch_select])
         return x
