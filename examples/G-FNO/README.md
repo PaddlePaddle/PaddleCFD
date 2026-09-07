@@ -4,7 +4,7 @@
 
 G-FNO (Group Equivariant Fourier Neural Operator) is an operator-learning model for PDE surrogate modeling. Built on top of the Fourier Neural Operator (FNO), it generalizes the core operators (spectral convolution, 1×1 convolution, normalization) into **group-equivariant** versions, so the whole network is strictly equivariant under discrete symmetry groups. Injecting symmetry as an inductive bias notably improves data efficiency and generalization on PDE solving tasks.
 
-This directory provides a PaddlePaddle implementation of G-FNO, covering 2D/3D FNO, GCNN, GFNO, Ghybrid, and radialNO variants, with optional CINN compiler acceleration via dynamic-to-static training.
+This directory provides a PaddlePaddle implementation of G-FNO, covering 2D/3D FNO, GCNN, GFNO, Ghybrid, and radialNO variants, with an optional dynamic-to-static + CINN path (currently a net slowdown — see section 6).
 
 ![G-FNO network](assets/network_visual.png)
 
@@ -13,7 +13,7 @@ This directory provides a PaddlePaddle implementation of G-FNO, covering 2D/3D F
 - **Group equivariance**: strictly equivariant under `p4` (the 4-element rotation group C4) and `p4m` (rotations + reflections, the D4 group); equivariance can be verified from the training log
 - **Spectral integral operator**: group-equivariant frequency-domain convolution with Hermitian spectral kernels; complex parameters are stored as real values and rebuilt on the fly to stay compatible with the Paddle optimizer
 - **Multiple datasets**: supports Navier-Stokes and shallow-water (PDEArena / PDEBench) PDE data
-- **CINN acceleration**: a single environment variable enables dynamic-to-static + CINN compiled training, while the default dynamic-graph behavior is unchanged
+- **Optional CINN path**: a single environment variable switches on dynamic-to-static + CINN compiled training, while the default dynamic-graph behavior is unchanged. 
 
 ### Reference Paper
 
@@ -149,26 +149,34 @@ There is no standalone evaluation command. Evaluation runs automatically at the 
 
 ---
 
-## 6. CINN Dynamic-to-Static Acceleration
+## 6. CINN Dynamic-to-Static
 
-G-FNO supports CINN-compiled dynamic-to-static training acceleration, controlled by a **single environment variable** and disabled by default (pure dynamic graph, unchanged behavior):
+G-FNO supports a CINN-compiled dynamic-to-static training path, controlled by a **single environment variable** and disabled by default (pure dynamic graph, unchanged behavior):
 
 ```bash
 GFNO_USE_CINN=1 python "experiments.py" ...   # enable CINN dynamic-to-static
 ```
 
-When enabled, `experiments.py` automatically sets the relevant primitive/CINN FLAGS and wraps the model with `paddle.jit.to_static(..., full_graph=False)` (SOT). CINN is actually in effect when the log shows `Compiling subgraph with CINN backend`.
+When enabled, `experiments.py` sets the relevant primitive/CINN FLAGS and wraps the model with `paddle.jit.to_static(..., full_graph=False)` (SOT).
 
-**Core speedup data** (PaddlePaddle 3.3.0, single GPU, steady-state pure-training time, excluding data loading and the one-time compile):
+**On `GFNO2d_p4` this path is currently a net slowdown and is not recommended.** Steady-state training time per step (single H100, PaddlePaddle 3.3.1, `width=10`, `batch_size=32`, compile cost excluded):
 
-| Input resolution         | Dynamic (ms/step) | CINN (ms/step) | Steady-state speedup |
-| ------------------------ | ----------------- | -------------- | -------------------- |
-| 16×16 (small SWE)        | 39.2              | 36.2           | ~7.6%                |
-| 32×32 (full downsampled) | 42.2              | 37.3           | ~11.6%               |
+| Configuration           | 16×16 | 32×32 | 64×64 |
+| ----------------------- | ----- | ----- | ----- |
+| Dynamic graph (default) | 25.8  | 25.7  | 26.1  |
+| `to_static` only        | 39.6  | 37.9  | 38.6  |
+| `to_static` + CINN      | 38.2  | 39.1  | 38.9  |
 
-CINN has a one-time compile cost about 1min, so **short runs may take longer overall**; the steady-state per-step gain turns into a net win only after roughly 20k–30k steps. Only `GFNO2d_p4` (`reflection=False`) is verified.
+Accuracy is unaffected (test error differs by <1%, floating-point noise).
 
----
+Reasons:
+
+- **The model is host-bound.** 374 of the 435 ops in one forward pass are the group-equivariant weight reassembly in `GConv2d.get_weight()` — small layout ops (`flip`/`roll`/`transpose`/`concat`/`stack`) whose cost is Python dispatch, not GPU work. Actual math (4 `einsum` + 4 FFT) is only ~4% of the forward pass. Step time is identical at 16×16 and 64×64, so raising the resolution does not help.
+- **The regression comes from `to_static`, not CINN.** The whole ~13 ms is already there without CINN. `get_weight()` builds intermediates into Python lists, which makes SOT break the graph into fragments too small to be converted, so only one CINN subgraph is compiled per run — SOT pays the trace/guard cost and recovers no dispatch cost.
+- **CINN cannot reach the spectral core**, which is `complex64` (unsupported) and uses `einsum` (no `InferSymbolicShapeInterface`). This caps the possible gain at that ~4%.
+
+The fix is to reduce the op count: the C4 lifting is a constant permutation plus sign flips, so a precomputed index tensor with one `index_select` can replace the whole `rot90 → roll → concat` chain. Only `GFNO2d_p4` (`reflection=False`) has been measured; `p4m` variants are dynamic-graph only.
+
 
 ## 7. Import Models From Installed PaddleCFD
 
