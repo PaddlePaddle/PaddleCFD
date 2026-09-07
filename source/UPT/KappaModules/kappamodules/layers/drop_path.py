@@ -70,7 +70,7 @@ class DropPath(paddle.nn.Sequential):
         if self.stochastic_drop_prob or drop_path_delta > self.drop_prob_tolerance:
             shape = (x.shape[0],) + (1,) * (x.ndim - 1)
             # random_tensor = x.new_empty(shape).bernoulli_(p=self.keep_prob)
-            random_tensor = paddle.empty(shape, dtype=x.dtype).bernoulli_(p=self.keep_prob)
+            random_tensor = (paddle.rand(shape, dtype="float32") < self.keep_prob).cast(x.dtype)
             if self.scale_by_keep:
                 # random_tensor.div_(self.keep_prob)
                 random_tensor = random_tensor / self.keep_prob

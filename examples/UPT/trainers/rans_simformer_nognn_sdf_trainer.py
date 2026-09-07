@@ -89,11 +89,9 @@ class RansSimformerNognnSdfTrainer(SgdTrainer):
                 query_batch_idx = ctx["query_batch_idx"].to(
                     self.model.device
                 )
-                indices, counts = query_batch_idx.unique(return_counts=True)
-                padded_counts = paddle.zeros(
-                    shape=[len(indices) + 1], dtype=counts.dtype
+                _, counts = query_batch_idx.unique(return_counts=True)
+                indptr = paddle.concat([counts[:1] * 0, counts], axis=0).cumsum(
+                    axis=0
                 )
-                padded_counts[indices + 1] = counts
-                indptr = padded_counts.cumsum(axis=0)
                 loss = segment_csr(src=loss, indptr=indptr, reduce="mean")
             return dict(total=loss, x_hat=loss), {}
