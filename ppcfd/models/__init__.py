@@ -81,6 +81,14 @@ try:
 except ImportError:
     pass  # Optional dependency
 
+# G-FNO
+try:
+    from ppcfd.models import g_fno
+
+    __all__.append("g_fno")
+except ImportError:
+    pass  # Optional dependency
+  
 # Poseidon - Scientific Operator Transformer
 try:
     from ppcfd.models import poseidon
