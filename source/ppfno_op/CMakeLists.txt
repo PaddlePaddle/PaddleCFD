@@ -36,7 +36,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 
 add_compile_definitions(_GLIBCXX_USE_CXX11_ABI=1)
-add_compile_definitions(PADDLE_WITH_CUDA=1)
+option(USE_ROCM "Build with ROCm/HIP support" OFF)
+
+if(USE_ROCM)
+    add_compile_definitions(PADDLE_WITH_HIP=1)
+    add_compile_definitions(PADDLE_WITH_CUSTOM_KERNEL=1)
+else()
+    add_compile_definitions(PADDLE_WITH_CUDA=1)
+endif()
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)  # -fPIC
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)  # -fvisibility=hidden
@@ -148,72 +155,135 @@ system(
 )
 message(STATUS "Detected Python site packages: \"${PYTHON_SITE_PACKAGES}\"")
 
-find_package(CUDAToolkit REQUIRED)
-
-if(CUDAToolkit_FOUND AND NOT WIN32)
-    message(STATUS "Found CUDA Toolkit, potentially enabling CUDA support.")
-    enable_language(CUDA)
-    set(CMAKE_CUDA_STANDARD "${CMAKE_CXX_STANDARD}")
-    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-    add_definitions(-D__USE_CUDA__)
-
-    string(APPEND CMAKE_CUDA_FLAGS " $ENV{PADDLE_NVCC_FLAGS}")
-
-    # Execute Python code to get and process Paddle's supported CUDA architectures
-    system(
-            STRIP OUTPUT_VARIABLE CMAKE_CUDA_ARCHITECTURES
-            COMMAND "${PYTHON_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/get_nvcc_flags.py"
-    )
-
-    if(CMAKE_CUDA_ARCHITECTURES)
-        message(STATUS "Found Paddle CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
-    else()
-        message(WARNING "CUDA is not available in the detected Paddle, or Paddle is not installed. Building for all available CUDA architectures.")
-        # CMake will default to building for all if CMAKE_CUDA_ARCHITECTURES is not set
+if(USE_ROCM)
+    # ---- ROCm / HIP build path ----
+    set(ROCM_PATH $ENV{ROCM_PATH})
+    if (NOT ROCM_PATH)
+        message(FATAL_ERROR "ROCM_PATH is not set")
     endif()
+    message(STATUS "ROCm path: ${ROCM_PATH}")
 
-    set(CUDA_ARCH_FLAGS "") # No need for cuda_select_nvcc_arch_flags
-    message(STATUS "CMAKE_CUDA_ARCHITECTURES: \"${CMAKE_CUDA_ARCHITECTURES}\"")
+    enable_language(HIP)
+    set(CMAKE_HIP_STANDARD "${CMAKE_CXX_STANDARD}")
+    set(CMAKE_HIP_STANDARD_REQUIRED ON)
+    add_definitions(-D__USE_HIP__ -D__HIP_PLATFORM_AMD__)
 
-    list(APPEND CUDA_NVCC_FLAGS "--expt-relaxed-constexpr" "--expt-extended-lambda")
-    if(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "7.5")
-        if (USE_FP16)
-            message(STATUS "Found CUDA Toolkit with FP16 support, compiling with paddle.cuda.HalfTensor.")
-            string(APPEND CMAKE_CUDA_FLAGS " -DCUDA_HAS_FP16=1"
-                    " -D__CUDA_NO_HALF_OPERATORS__"
-                    " -D__CUDA_NO_HALF_CONVERSIONS__"
-                    " -D__CUDA_NO_HALF2_OPERATORS__"
-                    " -D__CUDA_NO_BFLOAT16_CONVERSIONS__")
+    if(NOT DEFINED AMDGPU_TARGETS)
+        if(NOT "$ENV{AMDGPU_TARGETS}" STREQUAL "")
+            set(AMDGPU_TARGETS "$ENV{AMDGPU_TARGETS}")
         else()
-            message(STATUS "Found CUDA Toolkit with FP16 support, but it is suppressed by the compile options, compiling without paddle.cuda.HalfTensor.")
+            file(WRITE
+                "${CMAKE_CURRENT_BINARY_DIR}/rocm_architectures.sh"
+                "
+                #!/bin/bash
+                set -e
+
+                ARCH=$(rocminfo | grep -E '^\\s*Name:\\s+gfx[0-9]+' | awk '{print $2}' | sort -u)
+
+                if [ -z "$ARCH" ]; then
+                    echo -n "Unknown"
+                    exit 1
+                else
+                    echo -n "$ARCH"
+                    exit 0
+                fi
+                ")
+
+            execute_process(
+                COMMAND bash ${CMAKE_CURRENT_BINARY_DIR}/rocm_architectures.sh
+                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                RESULT_VARIABLE RET
+                OUTPUT_VARIABLE DETECTED_ARCHITECTURES
+                ERROR_VARIABLE ERROR
+            )
+
+            if(RET EQUAL 0)
+                message(STATUS "Building with detected architectures")
+                set(AMDGPU_TARGETS ${DETECTED_ARCHITECTURES})
+            else()
+                message(FATAL_ERROR "Failed to detect ROCM architectures")
+            endif()
         endif()
-    else()
-        message(STATUS "Could not find CUDA Toolkit with FP16 support (version < 7.5), compiling without paddle.cuda.HalfTensor.")
     endif()
 
-    foreach(FLAG ${CUDA_NVCC_FLAGS})
-        string(FIND "${FLAG}" " " flag_space_position)
-        if(NOT flag_space_position EQUAL -1)
-            message(FATAL_ERROR "Found spaces in CUDA_NVCC_FLAGS entry '${FLAG}'")
-        endif()
-        string(APPEND CMAKE_CUDA_FLAGS " ${FLAG}")
-    endforeach()
-    string(STRIP "${CMAKE_CUDA_FLAGS}" CMAKE_CUDA_FLAGS)
-    message(STATUS "CMAKE_CUDA_FLAGS: \"${CMAKE_CUDA_FLAGS}\"")
+    set(CMAKE_HIP_ARCHITECTURES "${AMDGPU_TARGETS}")
+    message(STATUS "HIP target architectures: ${CMAKE_HIP_ARCHITECTURES}")
 
-    if(MSVC)
-        set(CMAKE_CUDA_FLAGS_RELEASE "${CMAKE_CUDA_FLAGS_RELEASE} /O2 /Ob2")
-    else()
-        set(CMAKE_CUDA_FLAGS_RELEASE "${CMAKE_CUDA_FLAGS_RELEASE} -O3")
+    include_directories(${ROCM_PATH}/include)
+
+    if(USE_FP16)
+        message(STATUS "FP16 support enabled for ROCm build.")
+        add_definitions(-DHIP_HAS_FP16=1)
     endif()
 
-    # Ensure the CUDA targets use the defined architectures
-    set(CUDA_SELECT_NVCC_ARCH_FLAGS_CALLED TRUE) # To avoid potential issues if other parts expect this
+    string(APPEND CMAKE_HIP_FLAGS_RELEASE " -O3")
+    message(STATUS "CMAKE_HIP_FLAGS: \"${CMAKE_HIP_FLAGS}\"")
 else()
-    if(NOT CUDAToolkit_FOUND)
-        message(STATUS "CUDA Toolkit not found, build for CPU-only.")
+    # ---- CUDA build path ----
+    find_package(CUDAToolkit REQUIRED)
+
+    if(CUDAToolkit_FOUND AND NOT WIN32)
+        message(STATUS "Found CUDA Toolkit, potentially enabling CUDA support.")
+        enable_language(CUDA)
+        set(CMAKE_CUDA_STANDARD "${CMAKE_CXX_STANDARD}")
+        set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+        add_definitions(-D__USE_CUDA__)
+
+        string(APPEND CMAKE_CUDA_FLAGS " $ENV{PADDLE_NVCC_FLAGS}")
+
+        system(
+                STRIP OUTPUT_VARIABLE CMAKE_CUDA_ARCHITECTURES
+                COMMAND "${PYTHON_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/get_nvcc_flags.py"
+        )
+
+        if(CMAKE_CUDA_ARCHITECTURES)
+            message(STATUS "Found Paddle CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
+        else()
+            message(WARNING "CUDA is not available in the detected Paddle, or Paddle is not installed. Building for all available CUDA architectures.")
+        endif()
+
+        set(CUDA_ARCH_FLAGS "")
+        message(STATUS "CMAKE_CUDA_ARCHITECTURES: \"${CMAKE_CUDA_ARCHITECTURES}\"")
+
+        list(APPEND CUDA_NVCC_FLAGS "--expt-relaxed-constexpr" "--expt-extended-lambda")
+        if(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "7.5")
+            if (USE_FP16)
+                message(STATUS "Found CUDA Toolkit with FP16 support, compiling with paddle.cuda.HalfTensor.")
+                string(APPEND CMAKE_CUDA_FLAGS " -DCUDA_HAS_FP16=1"
+                        " -D__CUDA_NO_HALF_OPERATORS__"
+                        " -D__CUDA_NO_HALF_CONVERSIONS__"
+                        " -D__CUDA_NO_HALF2_OPERATORS__"
+                        " -D__CUDA_NO_BFLOAT16_CONVERSIONS__")
+            else()
+                message(STATUS "Found CUDA Toolkit with FP16 support, but it is suppressed by the compile options, compiling without paddle.cuda.HalfTensor.")
+            endif()
+        else()
+            message(STATUS "Could not find CUDA Toolkit with FP16 support (version < 7.5), compiling without paddle.cuda.HalfTensor.")
+        endif()
+
+        foreach(FLAG ${CUDA_NVCC_FLAGS})
+            string(FIND "${FLAG}" " " flag_space_position)
+            if(NOT flag_space_position EQUAL -1)
+                message(FATAL_ERROR "Found spaces in CUDA_NVCC_FLAGS entry '${FLAG}'")
+            endif()
+            string(APPEND CMAKE_CUDA_FLAGS " ${FLAG}")
+        endforeach()
+        string(STRIP "${CMAKE_CUDA_FLAGS}" CMAKE_CUDA_FLAGS)
+        message(STATUS "CMAKE_CUDA_FLAGS: \"${CMAKE_CUDA_FLAGS}\"")
+
+        if(MSVC)
+            set(CMAKE_CUDA_FLAGS_RELEASE "${CMAKE_CUDA_FLAGS_RELEASE} /O2 /Ob2")
+        else()
+            set(CMAKE_CUDA_FLAGS_RELEASE "${CMAKE_CUDA_FLAGS_RELEASE} -O3")
+        endif()
+
+        set(CUDA_SELECT_NVCC_ARCH_FLAGS_CALLED TRUE)
     else()
-        message(STATUS "CUDA Toolkit found, but build for CPU-only on Windows.")
+        if(NOT CUDAToolkit_FOUND)
+            message(STATUS "CUDA Toolkit not found, build for CPU-only.")
+        else()
+            message(STATUS "CUDA Toolkit found, but build for CPU-only on Windows.")
+        endif()
     endif()
 endif()
 

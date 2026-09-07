@@ -1,0 +1,12 @@
+name: deeponet
+
+basis_dim: 50
+
+
+patch_num: 8 # for input, number of patches per dimension
+patch_num_output: 1 # for output, number of patches per dimension
+
+
+emb_dim: 128
+
+singlebranch: false

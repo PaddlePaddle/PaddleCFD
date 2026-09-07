@@ -1,0 +1,49 @@
+{
+  "case": "antiderivative",
+  "decoder": "nonlinear",
+  "n": 10,
+  "device": "gpu:0",
+  "batch_size": 1024,
+  "points": 500,
+  "warmup": 30,
+  "steps": 200,
+  "repeats": 3,
+  "checkpoint": "/sda/data/Lichenyang/paddleCFD/PaddleCFD/examples/nomad/antiderivative/checkpoints/nomad_antiderivative.pdparams",
+  "dynamic_avg_step_time_s": 0.009101514260012968,
+  "compiler_avg_step_time_s": 0.00672755236174756,
+  "speedup": 1.3528830172912425,
+  "speedup_percent": 35.28830172912425,
+  "dynamic_avg_step_time_s_runs": [
+    0.009120123030152172,
+    0.009095909295137972,
+    0.009088510454748757
+  ],
+  "compiler_avg_step_time_s_runs": [
+    0.006712973084650003,
+    0.0067198477452620866,
+    0.006749836255330592
+  ],
+  "speedup_runs": [
+    1.3585817960459872,
+    1.3535885990201426,
+    1.3464786568075973
+  ],
+  "dynamic_summary": {
+    "mean": 0.009101514260012968,
+    "std": 1.6534825500941456e-05,
+    "min": 0.009088510454748757,
+    "max": 0.009120123030152172
+  },
+  "compiler_summary": {
+    "mean": 0.00672755236174756,
+    "std": 1.9602147192278246e-05,
+    "min": 0.006712973084650003,
+    "max": 0.006749836255330592
+  },
+  "speedup_summary": {
+    "mean": 1.3528830172912425,
+    "std": 0.006082341575255516,
+    "min": 1.3464786568075973,
+    "max": 1.3585817960459872
+  }
+}

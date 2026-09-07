@@ -1,0 +1,126 @@
+defaults:
+  - data: fluids
+  - model: prose_2to1
+  - optim: adamw
+  - symbol: symbol
+  - _self_
+  - override hydra/hydra_logging: none
+  - override hydra/job_logging: none
+
+  
+### Debug
+
+debug: 0
+dryrun: 0
+
+
+### data
+
+input_len: 10 # Length of the input sequence
+use_raw_time: 0 # use original time as positional encodings or fixed times
+
+loss_start_idx: ${.input_len} # (only for autoregressive models) Start index for loss computation, should be in the range [1, input_len]
+
+## data augmentations
+
+noise: 0 # Add noise to data (0 to disable)
+noise_type: additive # Type of noise (select from [additive, multiplicative])
+
+flip: 0 # randomly flip the data in space dimensions
+rotate: 0 # right angle rotations in space dimensions
+
+
+### Training / Evaluation
+
+num_workers: 16
+num_workers_eval: 12
+batch_size: 128
+batch_size_eval: null # Batch size for evaluation (if null, set to 1.5*batch_size)
+
+max_epoch: 40
+n_steps_per_epoch: 4000
+
+save_periodic: 0 # Save the model periodically (0 to disable)
+log_periodic: 100 # Log stats periodically (0 to disable)
+print_freq: 1000 # Print every n steps
+
+compile: 0 # Use torch.compile
+amp: 1 # Use AMP wrapper for mixed precision
+
+# Accumulate model gradients over N iterations (N times larger batch sizes)
+accumulate_gradients: 1
+
+clip_grad_norm: 1.0 # Clip gradients norm (0 to disable)
+
+## loss
+
+loss_weight: none # Reweight data loss, select from [none(mse), l2, linfty]
+normalize: meanvar # normalize input data for model, select from [null, meanvar, range]
+square_loss: 1 # when loss_weight is not none, use relative loss or squared relative loss
+denormalize_for_loss: 0 # compute loss in normalized space or original space (1 -> original space)
+
+## evaluate
+
+eval_only: 0 # Only run evaluations
+rollout: 0 # test model rollout
+eval_size: -1 # Size of test samples (-1 for everything)
+eval_single_file: 0 # Evaluate each file from com_ns separately 
+
+print_outputs: 0 # Print/graph all outputs
+log_eval_plots: 4 # Log evaluation plots for each epoch, each type (-1 to disable)
+
+validation_metrics: _l2_error # Metrics for early stopping/model selection
+
+# Metrics to report (select from _mse, _rmse, _l2_error, _l2_error_first_half, _l2_error_second_half, _l2_error_step_1, _l2_error_step_5, _l2_error_int)
+validation_metrics_print: _l2_error,_l2_error_step_1,_l2_error_step_5,_l2_error_step_10,_l2_error_int
+
+eval_from_exp: null # Path of experiment to use
+reload_model: null # Reload a pretrained model
+reload_checkpoint: null # Reload a pretrained model
+
+overfit_test: 0
+
+
+
+### experiment & logging names
+exp_name: fluids_test
+exp_id: null
+
+use_wandb: 1
+wandb:
+  project: null
+  # entity: null
+  entity: schaefferlab1
+  notes: null
+  name: null
+  id: null
+  log_per_type: true
+
+# Seeds (-1 to use timestamp)
+base_seed: -1
+test_seed: 42
+
+# Saves
+dump_path: null
+eval_dump_path: null
+
+## CPU / Multi-GPU / Multi-Nodes
+device: null
+runtime_device: null
+cpu: 0
+world_size: ???
+global_rank: ???
+local_rank: ???
+n_gpu_per_node: ???
+n_nodes: ???
+node_id: ???
+is_master: ???
+multi_node: ???
+multi_gpu: ???
+
+command: null
+
+hydra:  
+  output_subdir: null
+  run:  
+    dir: .

@@ -65,6 +65,14 @@ try:
 except ImportError:
     pass  # Optional dependency
 
+# PhysicsRegression
+try:
+    from ppcfd.models import physicsregression
+
+    __all__.append("physicsregression")
+except ImportError:
+    pass  # Optional dependency
+
 # Symbolic Graph Networks
 try:
     from ppcfd.models import symbolic_gn
@@ -78,5 +86,29 @@ try:
     from ppcfd.models import g_fno
 
     __all__.append("g_fno")
+except ImportError:
+    pass  # Optional dependency
+  
+# Poseidon - Scientific Operator Transformer
+try:
+    from ppcfd.models import poseidon
+
+    __all__.append("poseidon")
+except ImportError:
+    pass  # Optional dependency
+  
+# PROSE-FD - PROSE for PDE surrogate modeling
+try:
+    from ppcfd.models import prose_fd
+
+    __all__.append("prose_fd")
+except ImportError:
+    pass  # Optional dependency
+    
+# Multiple Physics Pretraining (MPP) - AViT for spatiotemporal surrogate modeling
+try:
+    from ppcfd.models import multiple_physics_pretraining
+
+    __all__.append("multiple_physics_pretraining")
 except ImportError:
     pass  # Optional dependency
