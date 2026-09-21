@@ -112,3 +112,13 @@ try:
     __all__.append("multiple_physics_pretraining")
 except ImportError:
     pass  # Optional dependency
+
+# ClimaX - Climate model for climate projection
+try:
+    from ppcfd.models import climax
+
+    __all__.append("climax")
+except ImportError as e:
+    import warnings
+
+    warnings.warn(f"Failed to import climax: {e}")

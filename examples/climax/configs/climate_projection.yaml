@@ -1,0 +1,73 @@
+seed: 42
+
+# ---------------------------- MODEL -------------------------------------------
+model:
+  lr: 5e-4
+  beta_1: 0.9
+  beta_2: 0.999
+  weight_decay: 1e-5
+  warmup_epochs: 60
+  max_epochs: 600
+  warmup_start_lr: 1e-8
+  eta_min: 1e-8
+  # Optional full initial state (backbone + heads, strict load). When set,
+  # pretrained_path is ignored. Point it at the converted climax_initial
+  # pdparams to reproduce the torch baseline run.
+  init_state_path: ""
+  # Path to the pre-trained MAE checkpoint (pdparams). Leave empty when
+  # init_state_path is set.
+  pretrained_path: ""
+
+  net:
+    class_path: ppcfd.models.climax.climatebench.ClimaXClimateBench
+    init_args:
+      default_vars: [
+        'CO2',
+        'SO2',
+        'CH4',
+        'BC'
+      ]
+      out_vars: "tas" # diurnal_temperature_range, tas, pr, pr90
+      img_size: [32, 64]
+      time_history: 10
+      patch_size: 2
+      embed_dim: 1024
+      depth: 8
+      num_heads: 16
+      mlp_ratio: 4
+      drop_path: 0.1
+      drop_rate: 0.1
+      parallel_patch_embed: False
+      freeze_encoder: True
+
+# ---------------------------- DATA -------------------------------------------
+data:
+  # ClimateBench 5.625deg dataset root (contains train_val/ and test/)
+  root_dir: ./data/climatebench/5.625deg
+  history: 10
+  list_train_simu: [
+    'ssp126',
+    'ssp370',
+    'ssp585',
+    'historical',
+    'hist-GHG',
+    'hist-aer'
+  ]
+  list_test_simu: ['ssp245']
+  variables: [
+      'CO2',
+      'SO2',
+      'CH4',
+      'BC'
+  ]
+  out_variables: 'tas'
+  train_ratio: 0.9
+  batch_size: 1
+  num_workers: 1
+  pin_memory: False
+
+# ---------------------------- TRAIN -------------------------------------------
+train:
+  max_epochs: 50
+  patience: 5 # early stopping on val/w_mse
+  default_root_dir: ./exps/climate_projection
