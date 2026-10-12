@@ -1,0 +1,22 @@
+vars:
+  data: ../..
+
+account_name: <ACCOUNT_NAME>
+
+# path to store logs/checkpoints
+output_path: ${vars.data}/output/UPT
+# path where pretrained models are stored
+# model_path: <ROOT_PATH>/models
+
+# datasets
+global_dataset_paths:
+  # mesh_dataset: ${vars.data}/mesh_dataset
+  shapenet_car: ${vars.data}
+  # lagrangian_dataset: ${vars.data}/lagrangian_dataset
+master_port: 55555
+
+default_wandb_mode: offline
+default_cudnn_benchmark: False
+default_cudnn_deterministic: false
+default_cuda_profiling: false
+default_sync_batchnorm: true
