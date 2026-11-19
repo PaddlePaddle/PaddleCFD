@@ -327,14 +327,15 @@ class Trainer:
                 {"params": params["no_weight_decay"], "weight_decay": 0.0}
             )
         if params["embeddings"]:
-            emb_scheduler = self._create_group_scheduler(
-                num_training_steps, self.args.learning_rate_embedding_recovery
+            # A Paddle param-group learning_rate is a float multiplier of the global
+            # scheduler's current lr, so scale each group by its base lr relative to
+            # the global base lr to keep every group on the same schedule shape.
+            emb_lr = (
+                self.args.learning_rate_embedding_recovery
+                if num_training_steps is None
+                else self.args.learning_rate_embedding_recovery
+                / self.args.learning_rate
             )
-            if emb_scheduler is not None:
-                self._all_lr_schedulers.append(emb_scheduler)
-                emb_lr = emb_scheduler
-            else:
-                emb_lr = self.args.learning_rate_embedding_recovery
             parameter_groups.append(
                 {
                     "params": params["embeddings"],
@@ -343,14 +344,11 @@ class Trainer:
                 }
             )
         if params["time_embedding"]:
-            time_emb_scheduler = self._create_group_scheduler(
-                num_training_steps, self.args.learning_rate_time_embedding
+            time_emb_lr = (
+                self.args.learning_rate_time_embedding
+                if num_training_steps is None
+                else self.args.learning_rate_time_embedding / self.args.learning_rate
             )
-            if time_emb_scheduler is not None:
-                self._all_lr_schedulers.append(time_emb_scheduler)
-                time_emb_lr = time_emb_scheduler
-            else:
-                time_emb_lr = self.args.learning_rate_time_embedding
             parameter_groups.append(
                 {
                     "params": params["time_embedding"],
@@ -374,20 +372,7 @@ class Trainer:
         )
         return self.optimizer
 
-    def _create_group_scheduler(self, num_training_steps, base_lr):
-        """Create a LambdaDecay scheduler with a given base_lr for a parameter group.
-
-        Returns the scheduler instance if num_training_steps is provided, else None.
-        This ensures each group follows the same warmup/decay schedule shape
-        (matching HF Trainer behavior) but scaled by its own base learning rate.
-        """
-        if num_training_steps is None:
-            return None
-        return self.create_scheduler(num_training_steps, base_lr=base_lr)
-
-    def create_scheduler(self, num_training_steps: int, base_lr=None):
-        if base_lr is None:
-            base_lr = self.args.learning_rate
+    def create_scheduler(self, num_training_steps: int):
         warmup_steps = int(num_training_steps * self.args.warmup_ratio)
 
         def lr_lambda(current_step):
@@ -407,7 +392,7 @@ class Trainer:
             raise ValueError(f"Unsupported lr_scheduler_type: {scheduler_type}")
 
         scheduler = paddle.optimizer.lr.LambdaDecay(
-            learning_rate=base_lr,
+            learning_rate=self.args.learning_rate,
             lr_lambda=lr_lambda,
         )
         self.lr_scheduler = scheduler
