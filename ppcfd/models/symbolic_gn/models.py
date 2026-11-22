@@ -157,9 +157,10 @@ class OGN(nn.Layer):
                 all_messages.append(msg)
 
                 # Aggregate messages (sum)
-                aggr_out = paddle.zeros([n, self.msg_dim], dtype=msg.dtype)
-                for i in range(len(col)):
-                    aggr_out[col[i]] += msg[i]
+                aggr_out = paddle.index_add(
+                    paddle.zeros([n, self.msg_dim], dtype=msg.dtype),
+                    paddle.to_tensor(col, dtype="int64"), 0, msg
+                )
 
                 # Update nodes
                 node_input = paddle.concat([x_batch, aggr_out], axis=1)
@@ -560,9 +561,10 @@ class VarOGN(nn.Layer):
                 all_messages.append(msg)
 
                 # Aggregate messages
-                aggr_out = paddle.zeros([n, self.msg_dim], dtype=msg.dtype)
-                for i in range(len(col)):
-                    aggr_out[col[i]] += msg[i]
+                aggr_out = paddle.index_add(
+                    paddle.zeros([n, self.msg_dim], dtype=msg.dtype),
+                    paddle.to_tensor(col, dtype="int64"), 0, msg
+                )
 
                 # Update nodes
                 node_input = paddle.concat([x_batch, aggr_out], axis=1)

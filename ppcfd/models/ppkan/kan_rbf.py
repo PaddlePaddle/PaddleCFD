@@ -46,7 +46,7 @@ class RadialBasisFunctionLayer(paddle.nn.Layer):
         x_unsqueezed = x.unsqueeze(axis=-1)
         rbf_basis = paddle.exp(x=-((x_unsqueezed - self.grid) / ((self.
             max_grid - self.min_grid) / (self.grid_count - 1))) ** 2) # Shape: [batch_size, in_features， grid_count]
-        rbf_basis = rbf_basis.contiguous().view(rbf_basis.shape[0], -1) # Shape: [batch_size, in_features * grid_count]
+        rbf_basis = rbf_basis.reshape([rbf_basis.shape[0], -1]) # Shape: [batch_size, in_features * grid_count]
         
         rbf_output = paddle.mm(input=rbf_basis, mat2=self.rbf_weight) # [batch_size, out_features]
 
