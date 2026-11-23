@@ -5,7 +5,6 @@ import einops
 import numpy as np
 import paddle
 from einops import rearrange
-from einops.layers.paddle import Rearrange
 
 
 def exists(x):
@@ -78,7 +77,9 @@ def Upsample(dim, dim_out=None):
 
 def Downsample(dim, dim_out=None):
     return paddle.nn.Sequential(
-        Rearrange("b c (h p1) (w p2) -> b (c p1 p2) h w", p1=2, p2=2),
+        # same as einops Rearrange("b c (h p1) (w p2) -> b (c p1 p2) h w", p1=2, p2=2),
+        # which to_static cannot trace
+        paddle.nn.PixelUnshuffle(2),
         paddle.nn.Conv2D(in_channels=dim * 4, out_channels=default(dim_out, dim), kernel_size=1),
     )
 
