@@ -1,8 +1,13 @@
 import paddle
-from kappamodules.layers import ContinuousSincosEmbed, LinearProjection
-from kappamodules.transformer import Mlp, PerceiverBlock
+from kappamodules.layers import ContinuousSincosEmbed
+from kappamodules.layers import LinearProjection
+from kappamodules.transformer import Mlp
+from kappamodules.transformer import PerceiverBlock
 from models.base.single_model_base import SingleModelBase
+
+
 # from paddle_geometric.utils import unbatch
+
 
 def paddle_unbatch(x, batch):
     """
@@ -11,22 +16,22 @@ def paddle_unbatch(x, batch):
     """
     if batch is None:
         return [x]
-    
+
     # 获取每个样本的节点数量
     batch_size = int(batch.max()) + 1
     counts = paddle.bincount(batch, minlength=batch_size)
-    
+
     # 拆分数据
     unbatched = []
     start = 0
     for count in counts:
         count = int(count)
         if count > 0:
-            unbatched.append(x[start:start+count])
+            unbatched.append(x[start : start + count])
         else:
             unbatched.append(paddle.empty([0, x.shape[1]], dtype=x.dtype))
         start += count
-    
+
     return unbatched
 
 
@@ -38,7 +43,7 @@ class RansPerceiver(SingleModelBase):
         init_weights="xavier_uniform",
         init_last_proj_zero=False,
         use_last_norm=False,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.dim = dim
@@ -55,14 +60,10 @@ class RansPerceiver(SingleModelBase):
             init_weights=init_weights,
         )
         _, output_dim = self.output_shape
-        self.norm = (
-            paddle.nn.LayerNorm(dim, eps=1e-06)
-            if use_last_norm
-            else paddle.nn.Identity()
-        )
+        self.norm = paddle.nn.LayerNorm(dim, eps=1e-06) if use_last_norm else paddle.nn.Identity()
         self.pred = LinearProjection(dim, output_dim, init_weights=init_weights)
 
-    def forward(self, x, query_pos, unbatch_idx, unbatch_select):
+    def forward(self, x, query_pos, unbatch_idx, unbatch_select, query_keep_indices=None):
         x = self.proj(x)
         query_pos_embed = self.pos_embed(query_pos)
         query = self.query_mlp(query_pos_embed)
@@ -70,6 +71,10 @@ class RansPerceiver(SingleModelBase):
         x = self.norm(x)
         x = self.pred(x)
         x = paddle.flatten(x, start_axis=0, stop_axis=1)
-        unbatched = paddle_unbatch(x, batch=unbatch_idx)
-        x = paddle.concat([unbatched[i] for i in unbatch_select])
+        if query_keep_indices is not None:
+            if query_pos.shape[0] != 1:
+                x = paddle.gather(x, query_keep_indices, axis=0)
+        else:
+            unbatched = paddle_unbatch(x, batch=unbatch_idx)
+            x = paddle.concat([unbatched[i] for i in unbatch_select])
         return x

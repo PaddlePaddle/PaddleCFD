@@ -17,7 +17,7 @@ def paddle_pad_sequence(sequences, batch_first=True, padding_value=0.0):
         # 填充列表格式：[倒数第一维开头, 倒数第一维结束, 倒数第二维开头, 倒数第二维结束...]
         # 这里倒数第一维（D）不补，倒数第二维（L）末尾补 (max_len - s.shape[0])
         pad_size = [0, 0, 0, max_len - s.shape[0]] 
-        padded_s = F.pad(s, pad=pad_size, value=padding_value)
+        padded_s = F.pad(s, pad=pad_size, value=padding_value, pad_from_left_axis=False)
         padded_seqs.append(padded_s)
     
     # 3. 堆叠成一个 Batch
@@ -65,6 +65,23 @@ class RansSimformerNognnCollator(KDSingleCollator):
             start = end
             cur_batch_idx += 1
         ctx["batch_idx"] = batch_idx
+        # Compute layout from host-side lengths, outside the compiled forward.
+        max_mesh_len = max(mesh_lens)
+        dense_indices, dense_mask = [], []
+        offset = 0
+        for length in mesh_lens:
+            dense_indices.append(list(range(offset, offset + length)) + [0] * (max_mesh_len - length))
+            dense_mask.append([True] * length + [False] * (max_mesh_len - length))
+            offset += length
+        ctx["mesh_dense_indices"] = paddle.to_tensor(dense_indices, dtype="int64")
+        ctx["mesh_dense_mask"] = (
+            paddle.to_tensor(dense_mask, dtype="bool")
+            if any(length != max_mesh_len for length in mesh_lens) else None
+        )
+        ctx["query_keep_indices"] = paddle.to_tensor(
+            [i * max(query_lens) + j for i, length in enumerate(query_lens) for j in range(length)],
+            dtype="int64",
+        )
         query_batch_idx = paddle.empty([sum(query_lens)], dtype=paddle.int64)
         start = 0
         cur_query_batch_idx = 0

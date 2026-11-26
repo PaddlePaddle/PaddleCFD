@@ -74,6 +74,9 @@ class RansSimformerNognnSdfTrainer(SgdTrainer):
                 unbatch_select=ctx["unbatch_select"].to(
                     self.model.device
                 ),
+                mesh_dense_indices=ctx["mesh_dense_indices"].to(self.model.device) if "mesh_dense_indices" in ctx else None,
+                mesh_dense_mask=ctx["mesh_dense_mask"].to(self.model.device) if ctx.get("mesh_dense_mask") is not None else None,
+                query_keep_indices=ctx["query_keep_indices"].to(self.model.device) if "query_keep_indices" in ctx else None,
                 target=self.to_device(item="pressure", batch=batch),
             )
 

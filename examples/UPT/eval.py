@@ -183,23 +183,41 @@ def denormalize(tensor, dataset, device):
     return tensor * dataset.std.to(device) + dataset.mean.to(device)
 
 
-def infer_sample(model, dataset, wrapped_dataset, collator, sample_idx, device):
+def prepare_sample_inputs(wrapped_dataset, collator, sample_idx, device):
+    """Collate one sample and move all model inputs to the target device."""
     batch, ctx = collator([wrapped_dataset[sample_idx]])
-
-    with paddle.no_grad():
-        prediction = model(
-            mesh_pos=batch_item(batch, "mesh_pos", device),
-            sdf=batch_item(batch, "sdf", device),
-            query_pos=batch_item(batch, "query_pos", device),
-            batch_idx=ctx["batch_idx"].to(device),
-            unbatch_idx=ctx["unbatch_idx"].to(device),
-            unbatch_select=ctx["unbatch_select"].to(device),
-        )["x_hat"].squeeze(1)
-
+    model_inputs = {
+        "mesh_pos": batch_item(batch, "mesh_pos", device),
+        "sdf": batch_item(batch, "sdf", device),
+        "query_pos": batch_item(batch, "query_pos", device),
+        "batch_idx": ctx["batch_idx"].to(device),
+        "unbatch_idx": ctx["unbatch_idx"].to(device),
+        "unbatch_select": ctx["unbatch_select"].to(device),
+        "mesh_dense_indices": ctx["mesh_dense_indices"].to(device) if "mesh_dense_indices" in ctx else None,
+        "mesh_dense_mask": ctx["mesh_dense_mask"].to(device) if ctx.get("mesh_dense_mask") is not None else None,
+        "query_keep_indices": ctx["query_keep_indices"].to(device) if "query_keep_indices" in ctx else None,
+    }
     target = batch_item(batch, "pressure", device).squeeze(1)
+    query_pos = model_inputs["query_pos"][0, : len(target)]
+    return model_inputs, target, query_pos
+
+
+def forward_model(model, model_inputs):
+    """Run the model forward path shared by evaluation and benchmarking."""
+    with paddle.no_grad():
+        return model(**model_inputs)["x_hat"].squeeze(1)
+
+
+def infer_sample(model, dataset, wrapped_dataset, collator, sample_idx, device):
+    model_inputs, target, query_pos = prepare_sample_inputs(
+        wrapped_dataset=wrapped_dataset,
+        collator=collator,
+        sample_idx=sample_idx,
+        device=device,
+    )
+    prediction = forward_model(model=model, model_inputs=model_inputs)
     prediction = denormalize(prediction, dataset, device)
     target = denormalize(target, dataset, device)
-    query_pos = batch_item(batch, "query_pos", device)[0, : len(prediction)]
     return prediction, target, query_pos
 
 
