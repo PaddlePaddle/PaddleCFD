@@ -1,9 +1,10 @@
 import paddle
-
-from kappamodules.init import (init_truncnormal_zero_bias,
-                               init_xavier_uniform_merged_linear,
-                               init_xavier_uniform_zero_bias)
 import paddle.nn.functional as F
+
+from kappamodules.init import init_truncnormal_zero_bias
+from kappamodules.init import init_xavier_uniform_merged_linear
+from kappamodules.init import init_xavier_uniform_zero_bias
+
 
 class PerceiverAttention(paddle.nn.Layer):
     def __init__(
@@ -61,17 +62,26 @@ class PerceiverAttention(paddle.nn.Layer):
 
         orig_dtype = q.dtype
         use_bfloat16 = (
-            q.dtype == paddle.float32
-            and paddle.is_compiled_with_cuda()
-            and paddle.device.cuda.device_count() > 0
+            q.dtype == paddle.float32 and paddle.is_compiled_with_cuda() and paddle.device.cuda.device_count() > 0
         )
         if use_bfloat16:
             # Prefer bfloat16 on CUDA for speed while keeping CPU path in float32.
             q = q.cast(paddle.bfloat16)
             k = k.cast(paddle.bfloat16)
             v = v.cast(paddle.bfloat16)
-            if attn_mask is not None:
-                attn_mask = attn_mask.cast(paddle.bfloat16)
+
+        if attn_mask is not None:
+            # SDPA takes additive bias; bool True denotes a valid key.
+            if attn_mask.dtype == paddle.bool:
+                attn_mask = paddle.where(
+                    attn_mask,
+                    paddle.zeros_like(attn_mask, dtype=q.dtype),
+                    paddle.full_like(attn_mask, float("-inf"), dtype=q.dtype),
+                )
+            else:
+                attn_mask = attn_mask.cast(q.dtype)
+            # This FlashAttention implementation requires the actual query length.
+            attn_mask = paddle.expand(attn_mask, [q.shape[0], attn_mask.shape[1], q.shape[1], k.shape[1]])
 
         x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask)
         if x.dtype != orig_dtype:
